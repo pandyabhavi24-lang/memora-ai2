@@ -1,0 +1,4 @@
+ALEX CHEN - SENIOR SOFTWARE ENGINEER RESUME
+Experience: Software Engineering Intern at Google (Summer 2025). Worked on cloud infrastructure and distributed vector databases.
+Education: B.S. Computer Science. Completed Internship Certificate of Excellence.
+Skills: Python, FastAPI, React, C++, Machine Learning, PyTorch, Vector Search.

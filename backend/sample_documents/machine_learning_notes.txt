@@ -1,0 +1,4 @@
+CHAPTER 4: DEEP LEARNING & MACHINE LEARNING LECTURE NOTES
+Topics covered: Convolutional Neural Networks (CNNs), Vision Transformers (ViT), Gradient Descent, Backpropagation.
+Supervised Learning vs Unsupervised Learning. Loss functions: Cross Entropy, Mean Squared Error.
+Frameworks: PyTorch, TensorFlow, Scikit-learn.

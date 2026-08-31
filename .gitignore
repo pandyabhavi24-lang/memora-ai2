@@ -1,0 +1,33 @@
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Secrets
+.env
+*.env
+
+# Node
+node_modules/
+
+# Build
+dist/
+build/
+.vite/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# FAISS generated files
+*.faiss
+*.index
+
+# OS
+.DS_Store
+Thumbs.db

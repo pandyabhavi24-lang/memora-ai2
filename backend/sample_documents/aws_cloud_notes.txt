@@ -1,0 +1,3 @@
+AWS CLOUD COMPUTING STUDY GUIDE & NOTES
+Key AWS Services: EC2, S3 bucket storage, Lambda serverless functions, DynamoDB, RDS PostgreSQL.
+Cloud Security best practices, IAM roles, VPC peering, and CloudWatch monitoring.
