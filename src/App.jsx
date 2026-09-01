@@ -12,6 +12,7 @@ import { Dashboard } from './pages/Dashboard';
 import { SemanticSearch } from './pages/SemanticSearch';
 import { SearchResults } from './pages/SearchResults';
 import { Settings } from './pages/Settings';
+import { Organization } from './pages/Organization';
 
 export default function App() {
   return (
@@ -46,6 +47,14 @@ export default function App() {
             element={
               <MainLayout>
                 <SearchResults />
+              </MainLayout>
+            }
+          />
+          <Route
+            path="/organize"
+            element={
+              <MainLayout>
+                <Organization />
               </MainLayout>
             }
           />

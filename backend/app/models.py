@@ -35,6 +35,7 @@ class File(Base):
 
     folder = relationship("Folder", back_populates="files")
     chunks = relationship("Chunk", back_populates="file", cascade="all, delete-orphan")
+    suggestions = relationship("OrganizationSuggestion", back_populates="file", cascade="all, delete-orphan")
 
 
 class Chunk(Base):
@@ -69,3 +70,68 @@ class SearchHistory(Base):
     result_count = Column(Integer, nullable=False)
     execution_time_ms = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ==========================================
+# MODULE 2 MODELS - INTELLIGENT ORGANIZATION
+# ==========================================
+
+class OrganizationCategory(Base):
+    __tablename__ = "organization_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    suggestions = relationship("OrganizationSuggestion", back_populates="category")
+
+
+class OrganizationSuggestion(Base):
+    __tablename__ = "organization_suggestions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("organization_categories.id", ondelete="CASCADE"), nullable=False)
+    confidence = Column(Integer, nullable=False)  # 0 to 100
+    confidence_level = Column(String, nullable=False)  # High, Medium, Low
+    reason = Column(Text, nullable=False)
+    status = Column(String, default="pending", index=True)  # pending, accepted, rejected, edited
+    created_at = Column(DateTime, default=datetime.utcnow)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    file = relationship("File", back_populates="suggestions")
+    category = relationship("OrganizationCategory", back_populates="suggestions")
+
+
+class DuplicateGroup(Base):
+    __tablename__ = "duplicate_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_key = Column(String, unique=True, index=True, nullable=False)
+    file_a_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"), nullable=False)
+    file_b_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"), nullable=False)
+    detection_type = Column(String, nullable=False)  # exact, similar
+    similarity = Column(Float, nullable=False)  # e.g., 96.0 or 100.0
+    status = Column(String, default="unresolved", index=True)  # unresolved, kept_both, resolved
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    file_a = relationship("File", foreign_keys=[file_a_id])
+    file_b = relationship("File", foreign_keys=[file_b_id])
+
+
+class FileOperation(Base):
+    __tablename__ = "file_operations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("files.id", ondelete="SET NULL"), nullable=True)
+    source_path = Column(String, nullable=False)
+    destination_path = Column(String, nullable=False)
+    operation_type = Column(String, nullable=False, default="move")  # move, copy
+    status = Column(String, nullable=False, default="pending")  # pending, completed, failed, reverted
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    file = relationship("File")

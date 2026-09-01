@@ -5,6 +5,7 @@ import {
   LayoutDashboard, 
   Search, 
   FolderSearch, 
+  FolderTree,
   RefreshCw, 
   Settings, 
   ShieldCheck, 
@@ -17,6 +18,7 @@ export const Sidebar = () => {
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'AI Search', path: '/search', icon: Search },
+    { label: 'Organize', path: '/organize', icon: FolderTree },
     { label: 'Scanned Folders', path: '/folders', icon: FolderSearch },
     { label: 'Settings', path: '/settings', icon: Settings },
   ];

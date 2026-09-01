@@ -114,3 +114,113 @@ class StatisticsResponse(BaseModel):
     searches: int
     recent_files: List[FileResponse]
     recent_searches: List[SearchHistoryItem]
+
+
+# ==========================================
+# MODULE 2 SCHEMAS - INTELLIGENT ORGANIZATION
+# ==========================================
+
+class CategoryResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    is_active: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+class CategoryOverviewItem(BaseModel):
+    category: str
+    fileCount: int
+    totalFiles: int
+    percentage: float
+
+
+class SuggestionItemResponse(BaseModel):
+    id: str
+    db_id: int
+    file_id: int
+    filename: str
+    type: str
+    currentPath: str
+    suggestedCategory: str
+    confidence: int
+    confidenceLevel: str
+    reason: str
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class SuggestionUpdate(BaseModel):
+    status: Optional[str] = None  # Accepted, Rejected, Edited, Pending
+    suggestedCategory: Optional[str] = None
+
+
+class AnalyzeRequest(BaseModel):
+    folder_id: Optional[int] = None
+    folder_path: Optional[str] = None
+
+
+class AnalysisSummaryResponse(BaseModel):
+    files_analyzed: int
+    suggestions_generated: int
+    high_confidence: int
+    duplicate_groups: int
+
+
+class OrganizationPreviewItem(BaseModel):
+    id: str
+    file_id: int
+    filename: str
+    currentPath: str
+    suggestedCategory: str
+    proposedPath: str
+    operation: str = "move"
+
+
+class OrganizationPreviewResponse(BaseModel):
+    items: List[OrganizationPreviewItem]
+    total_files: int
+
+
+class OrganizationApplyRequest(BaseModel):
+    suggestion_ids: Optional[List[str]] = None
+
+
+class OrganizationApplyResponse(BaseModel):
+    status: str
+    files_moved: int
+    errors: List[str] = []
+    message: str
+
+
+class DuplicateFileDetail(BaseModel):
+    filename: str
+    path: str
+    size: str
+
+
+class DuplicateGroupResponse(BaseModel):
+    id: str
+    fileA: DuplicateFileDetail
+    fileB: DuplicateFileDetail
+    similarity: float
+    detectionType: str
+    status: str
+
+
+class FileOperationResponse(BaseModel):
+    id: int
+    file_id: Optional[int]
+    filename: str
+    source_path: str
+    destination_path: str
+    operation_type: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

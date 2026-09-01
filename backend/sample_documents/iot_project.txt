@@ -1,4 +1,0 @@
-INTERNET OF THINGS (IoT) FINAL YEAR COLLEGE PROJECT DOCUMENTATION
-Project Title: Smart Agriculture Monitoring System using ESP32 and MQTT protocol.
-Sensors used: DHT11 temperature sensor, Soil moisture sensor, LDR light sensor.
-Cloud backend receives sensor metrics via MQTT broker and triggers automated irrigation pumps.

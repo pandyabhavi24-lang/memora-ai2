@@ -3,10 +3,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import engine, Base
+from .database import engine, SessionLocal, Base
 from .ai.faiss_manager import faiss_manager
 from .services.embedding_service import embedding_service
-from .routes import health, folders, files, scan, search, statistics
+from .services.organization_service import organization_service
+from .routes import health, folders, files, scan, search, statistics, organization
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +26,13 @@ async def lifespan(app: FastAPI):
     try:
         embedding_service.load_model()
         logger.info(f"FAISS index ready with {faiss_manager.index.ntotal} vectors.")
+        
+        # Seed default organization categories
+        db = SessionLocal()
+        try:
+            organization_service.seed_categories(db)
+        finally:
+            db.close()
     except Exception as e:
         logger.error(f"Error during startup initialization: {e}", exc_info=True)
     yield
@@ -61,6 +69,7 @@ app.include_router(files.router)
 app.include_router(scan.router)
 app.include_router(search.router)
 app.include_router(statistics.router)
+app.include_router(organization.router)
 
 @app.get("/")
 def root():
