@@ -188,11 +188,13 @@ class OrganizationPreviewResponse(BaseModel):
 
 class OrganizationApplyRequest(BaseModel):
     suggestion_ids: Optional[List[str]] = None
+    operation_type: Optional[str] = "move"
 
 
 class OrganizationApplyResponse(BaseModel):
     status: str
-    files_moved: int
+    files_moved: int = 0
+    files_copied: int = 0
     errors: List[str] = []
     message: str
 

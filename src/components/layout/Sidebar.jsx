@@ -79,9 +79,9 @@ export const Sidebar = () => {
         <div className="flex items-center justify-between px-3 py-2 text-xs text-gray-400 bg-gray-950/60 rounded-lg border border-gray-800/50 font-mono">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Local FAISS
+            Local Vector Index
           </span>
-          <span className="text-gray-500">2.4k files</span>
+          <span className="text-gray-500">Active</span>
         </div>
       </div>
     </aside>

@@ -102,7 +102,7 @@ export const Scanning = () => {
             <div className="p-3 rounded-xl bg-gray-900/60 border border-gray-800">
               <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-1">
                 <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                <span>FAISS Vectors</span>
+                <span>Vector Index</span>
               </div>
               <div className="text-base font-bold text-white font-mono">
                 {scanState.vectorsIndexed} Vectors

@@ -111,7 +111,9 @@ def apply_organization(
     This is the ONLY operation that modifies files on disk.
     """
     try:
-        result = organization_service.apply_organization(db)
+        selected_ids = req.suggestion_ids if req else None
+        operation_type = req.operation_type if req and req.operation_type else "move"
+        result = organization_service.apply_organization(db, selected_ids=selected_ids, operation_type=operation_type)
         return result
     except Exception as e:
         logger.error(f"Error applying organization plan: {e}", exc_info=True)

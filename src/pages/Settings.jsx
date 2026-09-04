@@ -37,7 +37,7 @@ export const Settings = () => {
       />
 
       {/* Settings Tab Navigation Bar */}
-      <div className="flex items-center gap-2 border-b border-gray-800 pb-3">
+      <div className="flex items-center gap-2 border-b border-gray-800 pb-3 overflow-x-auto custom-scrollbar flex-nowrap shrink-0">
         {[
           { id: 'general', label: 'General & Theme', icon: Palette },
           { id: 'folders', label: 'Folder Management', icon: Folder },
@@ -51,7 +51,7 @@ export const Settings = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
                 isActive
                   ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 shadow-sm'
                   : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
@@ -173,8 +173,8 @@ export const Settings = () => {
 
           <div className="p-4 rounded-xl bg-gray-900/80 border border-gray-800 text-xs font-mono space-y-1 text-gray-300">
             <div>Application: Memora AI Desktop</div>
-            <div>Version: 1.0.0 Phase 2 Frontend</div>
-            <div>Stack: React 19 + Electron 34 + Tailwind CSS</div>
+            <div>Version: 1.0.0 Desktop</div>
+            <div>Stack: React 19 + Electron 43 + Tailwind CSS</div>
             <div>Architecture: Decoupled REST Service Boundary</div>
           </div>
         </div>

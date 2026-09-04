@@ -31,6 +31,20 @@ DEFAULT_CATEGORIES = [
     ("Other", "Miscellaneous files, system text notes, and unclassified log data.")
 ]
 
+def is_subpath(child_path: Path, parent_path: Path) -> bool:
+    r"""
+    Windows-safe path containment check.
+    Returns True if child_path is strictly inside or equal to parent_path,
+    handling drive-letter casing differences (e.g. c:\ vs C:\) safely.
+    """
+    try:
+        norm_child = os.path.normcase(os.path.abspath(str(child_path)))
+        norm_parent = os.path.normcase(os.path.abspath(str(parent_path)))
+        return os.path.commonpath([norm_child, norm_parent]) == norm_parent
+    except Exception:
+        return False
+
+
 class OrganizationService:
     def seed_categories(self, db: Session) -> List[OrganizationCategory]:
         """Ensure default categories are seeded in the database."""
@@ -169,11 +183,21 @@ class OrganizationService:
             sug.reviewed_at = datetime.utcnow()
 
         if category_name:
-            cat = db.query(OrganizationCategory).filter(OrganizationCategory.name == category_name).first()
-            if cat:
-                sug.category_id = cat.id
-                sug.status = "edited"
-                sug.reviewed_at = datetime.utcnow()
+            clean_name = category_name.strip()
+            cat = db.query(OrganizationCategory).filter(OrganizationCategory.name == clean_name).first()
+            if not cat:
+                cat = OrganizationCategory(
+                    name=clean_name,
+                    description=f"Custom category: {clean_name}",
+                    is_active=True
+                )
+                db.add(cat)
+                db.flush()
+                logger.info(f"Created new custom organization category: '{clean_name}'")
+
+            sug.category_id = cat.id
+            sug.status = "edited"
+            sug.reviewed_at = datetime.utcnow()
 
         db.commit()
         db.refresh(sug)
@@ -184,6 +208,7 @@ class OrganizationService:
         Determines (root_dir, dest_dir, dest_file) for a file and target category.
         Ensures destination path is ALWAYS calculated relative to the ORIGINAL SCANNED ROOT,
         preventing nested paths like java/Work/Work/Finance/file.pdf.
+        Safely supports hierarchical categories such as "ed/kt".
         """
         src_path = Path(file_obj.path).resolve()
 
@@ -192,16 +217,26 @@ class OrganizationService:
             root_dir = Path(file_obj.folder.path).resolve()
         else:
             # Fallback if folder model is missing:
-            # Check if immediate parent is an active category folder name
             all_cat_names = set(DEFAULT_CATEGORY_DESCRIPTIONS.keys())
             if src_path.parent.name in all_cat_names:
                 root_dir = src_path.parent.parent
             else:
                 root_dir = src_path.parent
 
-        dest_dir = (root_dir / category_name).resolve()
-        dest_file = dest_dir / src_path.name
+        # Clean category_name to handle subcategory paths like "ed/kt" safely
+        clean_cat = category_name.strip().lstrip('/\\')
+        parts = [p for p in clean_cat.replace('\\', '/').split('/') if p and p != '..']
 
+        dest_dir = root_dir
+        for p in parts:
+            dest_dir = dest_dir / p
+        dest_dir = dest_dir.resolve()
+
+        # Path traversal protection: ensure dest_dir is within root_dir
+        if not is_subpath(dest_dir, root_dir):
+            dest_dir = (root_dir / "Other").resolve()
+
+        dest_file = dest_dir / src_path.name
         return root_dir, dest_dir, dest_file
 
     def generate_preview(self, db: Session) -> List[Dict[str, Any]]:
@@ -214,7 +249,7 @@ class OrganizationService:
         for sug in suggestions:
             if sug.status in ["accepted", "edited", "pending"]:
                 file_obj = sug.file
-                category_name = sug.category.name
+                category_name = sug.category.name if sug.category else "Other"
 
                 root_dir, dest_dir, dest_file = self._get_scanned_root_and_target_path(file_obj, category_name)
 
@@ -230,17 +265,54 @@ class OrganizationService:
 
         return preview_items
 
-    def apply_organization(self, db: Session, selected_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    def apply_organization(
+        self,
+        db: Session,
+        selected_ids: Optional[List[str]] = None,
+        operation_type: str = "move"
+    ) -> Dict[str, Any]:
         """
-        Performs safe file movement for approved suggestions with conflict handling & DB path updates.
+        Performs safe file movement or copying for approved suggestions with conflict handling & DB path updates.
         Destination is calculated relative to scanned root, ensuring idempotency and preventing nested paths.
         """
-        query = db.query(OrganizationSuggestion).filter(
-            OrganizationSuggestion.status.in_(["accepted", "edited"])
-        )
+        op_type = "copy" if operation_type and operation_type.lower() == "copy" else "move"
+
+        query = db.query(OrganizationSuggestion)
+        if selected_ids is not None:
+            clean_ids = []
+            for sid in selected_ids:
+                raw_id = str(sid).replace("s-", "")
+                if raw_id.isdigit():
+                    clean_ids.append(int(raw_id))
+            if clean_ids:
+                query = query.filter(OrganizationSuggestion.id.in_(clean_ids))
+            else:
+                # Explicit empty selection [] means organize NOTHING
+                return {
+                    "status": "success",
+                    "files_moved": 0,
+                    "files_copied": 0,
+                    "errors": [],
+                    "message": "No selected files to organize."
+                }
+        else:
+            query = query.filter(OrganizationSuggestion.status.in_(["accepted", "edited", "pending"]))
+
+        # Do NOT process rejected suggestions
+        query = query.filter(OrganizationSuggestion.status != "rejected")
         suggestions = query.all()
 
+        if not suggestions:
+            return {
+                "status": "success",
+                "files_moved": 0,
+                "files_copied": 0,
+                "errors": ["No matching database suggestions found for selected IDs."],
+                "message": "No files were organized because selected suggestions were not found in database."
+            }
+
         files_moved = 0
+        files_copied = 0
         errors = []
 
         for sug in suggestions:
@@ -254,26 +326,26 @@ class OrganizationService:
                 errors.append(err)
                 continue
 
-            category_name = sug.category.name
+            category_name = sug.category.name if sug.category else "Other"
             root_dir, dest_dir, dest_file = self._get_scanned_root_and_target_path(file_obj, category_name)
 
-            # Idempotency check: If file is ALREADY in target category destination folder, skip move
+            # Idempotency check: If file is ALREADY in target category destination folder, skip move/copy
             if src_path == dest_file:
-                logger.info(f"File '{src_path.name}' is already in target location '{dest_file}'. Skipping move.")
+                logger.info(f"File '{src_path.name}' is already in target location '{dest_file}'. Skipping operation.")
+                sug.status = "accepted"
                 continue
 
-            # Safety check 2: Path traversal protection
-            try:
-                dest_dir.resolve()
-            except Exception as e:
-                err = f"Path resolution error for {dest_dir}: {e}"
+            # Safety check 2: Windows-safe path traversal protection
+            if not is_subpath(dest_dir, root_dir):
+                err = f"Path traversal error for {dest_dir}"
+                logger.error(err)
                 errors.append(err)
                 continue
 
-            # Create destination folder under scanned root
+            # Create destination folder under scanned root (handles nested subdirectories like ed/kt)
             dest_dir.mkdir(parents=True, exist_ok=True)
 
-            # Safety check 3: Conflict resolution (append number if target exists)
+            # Safety check 3: Conflict resolution (append counter if target exists)
             if dest_file.exists() and dest_file != src_path:
                 stem = src_path.stem
                 ext = src_path.suffix
@@ -286,29 +358,36 @@ class OrganizationService:
                 file_id=file_obj.id,
                 source_path=str(src_path),
                 destination_path=str(dest_file),
-                operation_type="move",
+                operation_type=op_type,
                 status="pending"
             )
             db.add(op_record)
             db.flush()
 
-            # Perform file move safely
+            # Perform file move or copy safely
             try:
-                shutil.move(str(src_path), str(dest_file))
-                
-                # Update file model path in database
-                file_obj.path = str(dest_file)
-                file_obj.name = dest_file.name
-                file_obj.updated_at = datetime.utcnow()
+                if op_type == "copy":
+                    shutil.copy2(str(src_path), str(dest_file))
+                    files_copied += 1
+                    logger.info(f"Successfully copied '{src_path.name}' to '{dest_file}'")
+                else:
+                    shutil.move(str(src_path), str(dest_file))
+                    # Update file model path in database for move
+                    file_obj.path = str(dest_file)
+                    file_obj.name = dest_file.name
+                    file_obj.updated_at = datetime.utcnow()
+                    files_moved += 1
+                    logger.info(f"Successfully moved '{src_path.name}' to '{dest_file}'")
+
+                sug.status = "accepted"
+                sug.reviewed_at = datetime.utcnow()
 
                 op_record.status = "completed"
                 op_record.completed_at = datetime.utcnow()
-                files_moved += 1
-                logger.info(f"Successfully moved '{src_path.name}' to '{dest_file}'")
-            except Exception as move_err:
+            except Exception as op_err:
                 op_record.status = "failed"
-                op_record.error = str(move_err)
-                err = f"Failed to move {src_path.name}: {move_err}"
+                op_record.error = str(op_err)
+                err = f"Failed to {op_type} {src_path.name}: {op_err}"
                 logger.error(err)
                 errors.append(err)
 
@@ -316,8 +395,9 @@ class OrganizationService:
         return {
             "status": "success" if not errors else "partial_success",
             "files_moved": files_moved,
+            "files_copied": files_copied,
             "errors": errors,
-            "message": f"Successfully organized {files_moved} files. Demo/Live file operation recorded."
+            "message": f"Successfully organized files ({files_moved} moved, {files_copied} copied)."
         }
 
     def get_duplicates(self, db: Session) -> List[Dict[str, Any]]:

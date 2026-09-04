@@ -112,16 +112,20 @@ class OrganizationService {
     }
   }
 
-  async applyOrganization(selectedIds = null) {
+  async applyOrganization(selectedIds = null, operationType = 'move') {
     try {
       return await this._fetch('/api/organization/apply', {
         method: 'POST',
-        body: JSON.stringify({ suggestion_ids: selectedIds })
+        body: JSON.stringify({
+          suggestion_ids: selectedIds,
+          operation_type: operationType
+        })
       });
     } catch (err) {
       return {
         status: 'success',
-        files_moved: selectedIds ? selectedIds.length : 8,
+        files_moved: operationType === 'move' ? (selectedIds ? selectedIds.length : 1) : 0,
+        files_copied: operationType === 'copy' ? (selectedIds ? selectedIds.length : 1) : 0,
         errors: [],
         message: 'Demo Mode — server simulated organization plan application.'
       };
@@ -141,6 +145,17 @@ class OrganizationService {
       return await this._fetch('/api/organization/operations');
     } catch (err) {
       return [];
+    }
+  }
+
+  async deleteFile(fileId) {
+    try {
+      return await this._fetch(`/api/files/${fileId}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.warn(`Failed to delete file ${fileId} on backend:`, err.message);
+      throw err;
     }
   }
 }

@@ -29,14 +29,14 @@ export const Modal = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800/80">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800/80 shrink-0">
           <div>
             <h3 className="text-lg font-semibold text-white">{title}</h3>
             {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800/60 rounded-lg transition-colors"
+            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800/60 rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -49,7 +49,7 @@ export const Modal = ({
 
         {/* Modal Actions Footer */}
         {actions && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-900/60 border-t border-gray-800/80">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-900/60 border-t border-gray-800/80 shrink-0">
             {actions}
           </div>
         )}

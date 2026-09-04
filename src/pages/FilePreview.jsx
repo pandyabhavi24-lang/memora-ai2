@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  FileText, 
-  Image as ImageIcon, 
   ExternalLink, 
   FolderOpen, 
   Copy, 
@@ -83,7 +81,7 @@ export const FilePreviewModal = ({ file, onClose }) => {
         {/* Top Header */}
         <div className="flex items-center justify-between text-[11px] text-gray-500 font-mono border-b border-gray-800 pb-2">
           <span>Memora AI Local File Inspector</span>
-          <span className="text-blue-400 font-semibold">[FAISS Index Verified]</span>
+          <span className="text-blue-400 font-semibold">[Indexed & Verified]</span>
         </div>
 
         {/* Metadata Grid */}
@@ -125,7 +123,7 @@ export const FilePreviewModal = ({ file, onClose }) => {
         <div className="flex items-center gap-2 border-b border-gray-800 pb-2">
           <button
             onClick={() => setActiveTab('summary')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
               activeTab === 'summary'
                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                 : 'text-gray-400 hover:text-white'
@@ -135,7 +133,7 @@ export const FilePreviewModal = ({ file, onClose }) => {
           </button>
           <button
             onClick={() => setActiveTab('text')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
               activeTab === 'text'
                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                 : 'text-gray-400 hover:text-white'
@@ -154,13 +152,13 @@ export const FilePreviewModal = ({ file, onClose }) => {
                 <span>AI Content Summary & Snippet</span>
               </h4>
               <p className="text-xs text-gray-200 leading-relaxed">
-                {file.aiSummary || file.extractedSnippet || 'Document content indexed into local vector database.'}
+                {file.aiSummary || file.extractedSnippet || 'Document content indexed locally.'}
               </p>
             </div>
 
             {file.aiExplanation && (
               <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/25 text-xs text-purple-200">
-                <strong className="text-purple-300 block mb-1 font-semibold">Semantic Vector Similarity Match:</strong>
+                <strong className="text-purple-300 block mb-1 font-semibold">Search Match Context:</strong>
                 "{file.aiExplanation}"
               </div>
             )}

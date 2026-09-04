@@ -9,12 +9,17 @@ export const OrganizationHeader = ({ onAnalyze, isAnalyzing, isAnalyzed }) => {
           <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-inner">
             <Sparkles className="w-4 h-4" />
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">
-            Intelligent File Organization
-          </h1>
+          <div>
+            <h1 className="text-xl font-bold text-white tracking-tight">
+              Intelligent File Organization
+            </h1>
+            <span className="text-[11px] font-semibold text-blue-400">
+              Memora suggests. You decide.
+            </span>
+          </div>
         </div>
-        <p className="text-xs text-slate-400 pl-10">
-          Let Memora understand your files and suggest a cleaner organization.
+        <p className="text-xs text-slate-300 pl-10 font-medium leading-relaxed">
+          Memora reads file content to suggest target categories and physical folder locations on your computer.
         </p>
       </div>
 

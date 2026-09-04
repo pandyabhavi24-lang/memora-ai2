@@ -144,7 +144,7 @@ export const Dashboard = () => {
             <Brain className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-extrabold text-white font-mono">{stats.vectors}</div>
-          <p className="text-[11px] text-gray-500 mt-1">384-dim FAISS vectors ({stats.chunks} chunks)</p>
+          <p className="text-[11px] text-gray-500 mt-1">Intelligent local semantic index ({stats.chunks} chunks)</p>
         </Card>
 
         <Card hoverEffect={false}>

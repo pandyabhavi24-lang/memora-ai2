@@ -28,11 +28,22 @@ export const Organization = () => {
   const [editingSuggestion, setEditingSuggestion] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [dupRefreshKey, setDupRefreshKey] = useState(0);
+  const [warningMessage, setWarningMessage] = useState('');
 
   // Load suggestions on initial mount
   useEffect(() => {
     fetchInitialData();
   }, []);
+
+  const handleOpenPreview = () => {
+    if (selectedIds.length === 0) {
+      setWarningMessage('Please select at least one file to organize.');
+      setTimeout(() => setWarningMessage(''), 4000);
+      return;
+    }
+    setWarningMessage('');
+    setIsPreviewOpen(true);
+  };
 
   const fetchInitialData = async () => {
     try {
@@ -225,6 +236,7 @@ export const Organization = () => {
           <OrganizationSuggestionsTable
             suggestions={suggestions}
             selectedIds={selectedIds}
+            warningMessage={warningMessage}
             onToggleSelect={handleToggleSelect}
             onSelectAll={handleSelectAll}
             onAccept={handleAccept}
@@ -232,7 +244,7 @@ export const Organization = () => {
             onEdit={handleOpenEdit}
             onAcceptSelected={handleAcceptSelected}
             onRejectSelected={handleRejectSelected}
-            onPreviewChanges={() => setIsPreviewOpen(true)}
+            onPreviewChanges={handleOpenPreview}
           />
 
           {/* Lower Content Grid: Possible Duplicates & Category Overview */}
@@ -254,12 +266,24 @@ export const Organization = () => {
       <OrganizationPreviewModal
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
-        suggestions={suggestions}
-        onConfirmSuccess={async () => {
+        suggestions={suggestions.filter((s) => selectedIds.includes(s.id) && s.status !== 'Rejected')}
+        onConfirmSuccess={async (operationMode, targetIds) => {
           try {
-            await organizationService.applyOrganization(selectedIds);
+            const idsToApply = targetIds && targetIds.length > 0 ? targetIds : selectedIds;
+            if (!idsToApply || idsToApply.length === 0) {
+              setWarningMessage('Please select at least one file to organize.');
+              return null;
+            }
+            const result = await organizationService.applyOrganization(idsToApply, operationMode);
+            if (result && (result.files_moved > 0 || result.files_copied > 0)) {
+              setSelectedIds([]);
+              await fetchInitialData();
+              setDupRefreshKey((k) => k + 1);
+            }
+            return result;
           } catch (err) {
             console.error('Error applying organization plan:', err);
+            throw err;
           }
         }}
       />

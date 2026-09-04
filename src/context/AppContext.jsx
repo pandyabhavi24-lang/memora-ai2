@@ -24,12 +24,25 @@ export const AppProvider = ({ children }) => {
   const [filters, setFilters] = useState({
     fileType: 'all',
     dateRange: 'any',
-    folder: 'all'
+    folder: 'all',
+    size: 'any',
+    category: 'all'
   });
   const [sortBy, setSortBy] = useState('relevant');
 
   // Search History State
   const [searchHistory, setSearchHistory] = useState([]);
+
+  // Recently Opened Files State (survives app restart, max 5 items)
+  const [recentlyOpenedFiles, setRecentlyOpenedFiles] = useState(() => {
+    try {
+      const saved = localStorage.getItem('memora_recently_opened_files');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to parse recently opened files from localStorage:', e);
+      return [];
+    }
+  });
 
   // File Preview Modal State
   const [previewFile, setPreviewFile] = useState(null);
@@ -144,6 +157,42 @@ export const AppProvider = ({ children }) => {
     addToast('Search history cleared', 'info');
   };
 
+  /**
+   * Record a recently opened file (survives restart, max 5, deduplicated, moves existing to top)
+   */
+  const recordOpenedFile = (fileObj) => {
+    if (!fileObj) return;
+    const fileId = fileObj.id || fileObj.file_id || fileObj.path;
+    const filePath = fileObj.path || fileObj.filePath;
+    const fileName = fileObj.name || fileObj.fileName || fileObj.filename || (filePath ? filePath.split(/[/\\]/).pop() : 'File');
+
+    if (!filePath) return;
+
+    try {
+      const newEntry = {
+        id: fileId,
+        name: fileName,
+        path: filePath,
+        openedAt: new Date().toISOString()
+      };
+
+      setRecentlyOpenedFiles((prev) => {
+        const filtered = prev.filter(
+          (item) => item.id !== fileId && item.path.toLowerCase() !== filePath.toLowerCase()
+        );
+        const updated = [newEntry, ...filtered].slice(0, 5);
+        try {
+          localStorage.setItem('memora_recently_opened_files', JSON.stringify(updated));
+        } catch (storageErr) {
+          console.error('Failed to save recently opened files to localStorage:', storageErr);
+        }
+        return updated;
+      });
+    } catch (err) {
+      console.error('Error recording opened file:', err);
+    }
+  };
+
   const addToast = (message, type = 'info') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -182,6 +231,8 @@ export const AppProvider = ({ children }) => {
         searchHistory,
         removeHistoryItem,
         clearHistoryAll,
+        recentlyOpenedFiles,
+        recordOpenedFile,
         previewFile,
         setPreviewFile,
         toasts,

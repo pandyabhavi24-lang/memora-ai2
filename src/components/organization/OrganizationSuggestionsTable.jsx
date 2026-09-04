@@ -24,7 +24,8 @@ export const OrganizationSuggestionsTable = ({
   onEdit,
   onAcceptSelected,
   onRejectSelected,
-  onPreviewChanges
+  onPreviewChanges,
+  warningMessage
 }) => {
   const allSelected = suggestions.length > 0 && selectedIds.length === suggestions.length;
   const someSelected = selectedIds.length > 0;
@@ -110,6 +111,16 @@ export const OrganizationSuggestionsTable = ({
 
   return (
     <div className="glass-panel rounded-2xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-md mb-8 overflow-hidden shadow-xl">
+      {/* Friendly Selection Warning Banner */}
+      {warningMessage && (
+        <div className="px-5 py-3 bg-amber-500/15 border-b border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-between animate-fadeIn">
+          <span className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{warningMessage}</span>
+          </span>
+        </div>
+      )}
+
       {/* Table Action Header */}
       <div className="p-4 sm:p-5 border-b border-slate-800/80 bg-slate-950/70 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -163,7 +174,7 @@ export const OrganizationSuggestionsTable = ({
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-blue-500/20 border border-blue-500/30 transition-all cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5" />
-            <span>Preview Changes</span>
+            <span>Preview Changes ({selectedIds.length})</span>
           </button>
         </div>
       </div>
@@ -183,7 +194,7 @@ export const OrganizationSuggestionsTable = ({
               </th>
               <th className="py-3 px-4">File</th>
               <th className="py-3 px-4">Type</th>
-              <th className="py-3 px-4">Suggested Category</th>
+              <th className="py-3 px-4 min-w-[190px]">Suggested Category</th>
               <th className="py-3 px-4">Confidence</th>
               <th className="py-3 px-4 min-w-[220px]">Reason</th>
               <th className="py-3 px-4">Status</th>
@@ -230,8 +241,8 @@ export const OrganizationSuggestionsTable = ({
                     </span>
                   </td>
 
-                  <td className="py-3.5 px-4">
-                    <span className="font-semibold text-blue-300 bg-blue-500/15 border border-blue-500/30 px-2.5 py-1 rounded-md">
+                  <td className="py-3.5 px-4 min-w-[190px] whitespace-nowrap">
+                    <span className="inline-block font-semibold text-blue-300 bg-blue-500/15 border border-blue-500/30 px-2.5 py-1 rounded-md">
                       {item.suggestedCategory}
                     </span>
                   </td>
@@ -252,15 +263,16 @@ export const OrganizationSuggestionsTable = ({
                     <div className="inline-flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => onAccept(item.id)}
-                        title="Accept Suggestion"
-                        className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors cursor-pointer"
+                        title="Accept Memora's category suggestion for this file"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors font-medium text-xs flex items-center gap-1 cursor-pointer"
                       >
                         <Check className="w-3.5 h-3.5" />
+                        <span>Accept</span>
                       </button>
 
                       <button
                         onClick={() => onReject(item.id)}
-                        title="Reject Suggestion"
+                        title="Reject this organization suggestion"
                         className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-colors cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -268,10 +280,11 @@ export const OrganizationSuggestionsTable = ({
 
                       <button
                         onClick={() => onEdit(item)}
-                        title="Edit Category"
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-blue-500/15 text-slate-300 hover:text-blue-300 border border-slate-700/60 hover:border-blue-500/30 transition-colors cursor-pointer"
+                        title="Choose a different category for this file"
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-blue-500/15 text-slate-200 hover:text-blue-300 border border-slate-700/60 hover:border-blue-500/30 transition-colors font-medium text-xs flex items-center gap-1 cursor-pointer"
                       >
-                        <Edit3 className="w-3.5 h-3.5" />
+                        <Edit3 className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Choose Category</span>
                       </button>
                     </div>
                   </td>
