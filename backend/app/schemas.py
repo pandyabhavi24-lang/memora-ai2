@@ -52,6 +52,11 @@ class SearchFilters(BaseModel):
     file_type: Optional[str] = None
     folder_id: Optional[int] = None
     date_range: Optional[str] = None
+    size: Optional[str] = None
+    category: Optional[str] = None
+    location: Optional[str] = None
+    labels: Optional[List[str]] = None
+    relevance: Optional[str] = None
 
 class SearchRequest(BaseModel):
     query: str

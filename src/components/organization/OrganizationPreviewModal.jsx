@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, ArrowRight, FolderOutput, CheckCircle2, ShieldCheck, FileText, Info, Copy, Folder } from 'lucide-react';
+import { X, ArrowRight, FolderOutput, CheckCircle2, ShieldCheck, FileText, Info, Copy, Folder, AlertTriangle, RefreshCw } from 'lucide-react';
+import { apiService } from '../../services/apiService';
 
 export const OrganizationPreviewModal = ({
   isOpen,
@@ -11,6 +12,7 @@ export const OrganizationPreviewModal = ({
   const [operationMode, setOperationMode] = useState('move'); // 'move' | 'copy'
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [missingFileDetails, setMissingFileDetails] = useState(null);
 
   if (!isOpen) return null;
 
@@ -21,6 +23,7 @@ export const OrganizationPreviewModal = ({
 
   const handleConfirm = async () => {
     setErrorMessage('');
+    setMissingFileDetails(null);
     if (!onConfirmSuccess) return;
     
     setIsSubmitting(true);
@@ -33,6 +36,15 @@ export const OrganizationPreviewModal = ({
         const errDetail = (result && result.errors && result.errors.length > 0)
           ? result.errors.join(', ')
           : (result && result.message) || 'No files were organized. Please verify selected files exist on disk.';
+
+        const isMissingErr = errDetail.toLowerCase().includes('does not exist') || errDetail.toLowerCase().includes('not found') || errDetail.toLowerCase().includes('no files');
+
+        if (isMissingErr && itemsToOrganize.length > 0) {
+          setMissingFileDetails({
+            recordedPath: itemsToOrganize[0].currentPath || 'Unknown path',
+            filename: itemsToOrganize[0].filename
+          });
+        }
         setErrorMessage(errDetail);
       }
     } catch (err) {
@@ -42,17 +54,29 @@ export const OrganizationPreviewModal = ({
     }
   };
 
+  const handleRescanFolder = async () => {
+    try {
+      await apiService.scanFiles();
+      setErrorMessage('');
+      setMissingFileDetails(null);
+      onClose();
+    } catch (err) {
+      console.error('Failed to trigger scan:', err);
+    }
+  };
+
   const handleCloseAll = () => {
     setIsConfirmed(false);
     setIsSubmitting(false);
     setErrorMessage('');
+    setMissingFileDetails(null);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn select-none">
       <div
-        className="w-full max-w-2xl glass-panel bg-slate-900 border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scaleUp"
+        className="w-full max-w-3xl glass-panel bg-slate-900 border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh] animate-scaleUp"
         onClick={(e) => e.stopPropagation()}
       >
         {isConfirmed ? (
@@ -63,16 +87,19 @@ export const OrganizationPreviewModal = ({
             </div>
 
             <h3 className="text-xl font-extrabold text-white">
-              Organization Plan Approved
+              ✓ Folder Organization Complete
             </h3>
 
             <p className="text-sm font-medium text-slate-300 max-w-md leading-relaxed">
-              Your files have been queued for organization. {itemsToOrganize.length} file(s) will be {operationMode === 'move' ? 'moved' : 'copied'} to their target destination folders.
+              {itemsToOrganize.length} file(s) successfully {operationMode === 'move' ? 'moved' : 'copied'} to their target physical destination folders.
             </p>
 
-            <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-300 font-medium flex items-center gap-2 max-w-md">
-              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Memora will update physical folder paths according to your selected plan.</span>
+            <div className="p-4 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-slate-300 font-medium flex items-center gap-3 max-w-md text-left">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div>
+                <span className="font-semibold text-white block">Physical Folders Updated</span>
+                Memora has moved/copied the files on disk and updated its internal path index.
+              </div>
             </div>
 
             <button
@@ -80,7 +107,7 @@ export const OrganizationPreviewModal = ({
               onClick={handleCloseAll}
               className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-500/25 border border-blue-500/30 transition-all cursor-pointer mt-2"
             >
-              Back to Suggestions
+              Done & Return to Table
             </button>
           </div>
         ) : (
@@ -88,111 +115,159 @@ export const OrganizationPreviewModal = ({
           <>
             {/* Sticky Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/90 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                  <FolderOutput className="w-4 h-4" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <FolderOutput className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Preview Organization</h3>
-                  <p className="text-xs text-slate-400">Review physical file locations before confirming</p>
+                  <h3 className="text-lg font-bold text-white">Folder Organization Preview</h3>
+                  <p className="text-xs text-slate-400">Review physical file operations and destination paths before confirming</p>
                 </div>
               </div>
               <button
                 onClick={handleCloseAll}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-xl transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Stat Banner & Operation Selection */}
-            <div className="px-6 py-3 bg-blue-500/10 border-b border-blue-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-blue-300 shrink-0">
-              <span className="font-semibold">
-                Files to organize: <strong className="text-white font-bold">{itemsToOrganize.length}</strong>
-              </span>
+            {/* Stat Banner & Operation Selection Radio Cards */}
+            <div className="p-6 bg-slate-950/80 border-b border-slate-800/80 space-y-4 shrink-0">
+              <div className="flex items-center justify-between text-xs text-slate-300">
+                <span className="font-semibold text-sm text-white">
+                  Selected files to organize: <strong className="text-blue-400 font-bold">{itemsToOrganize.length}</strong>
+                </span>
+                <span className="text-[11px] text-slate-400">Choose organization mode:</span>
+              </div>
 
-              {/* Move vs Copy Choice Toggle */}
-              <div className="flex items-center gap-2 font-medium">
-                <span className="text-slate-300">Operation:</span>
-                <div className="inline-flex rounded-lg bg-slate-950 p-0.5 border border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setOperationMode('move')}
-                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-                      operationMode === 'move'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Move
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOperationMode('copy')}
-                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-                      operationMode === 'copy'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Copy
-                  </button>
+              {/* Move vs Copy Radio Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Move Option Card */}
+                <div
+                  onClick={() => setOperationMode('move')}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                    operationMode === 'move'
+                      ? 'bg-blue-600/15 border-blue-500/60 text-white shadow-md shadow-blue-500/10'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="opMode"
+                    checked={operationMode === 'move'}
+                    onChange={() => setOperationMode('move')}
+                    className="mt-0.5 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-xs text-white block">○ Move File</span>
+                    <p className="text-[11px] text-slate-300 mt-0.5">
+                      Relocate original file from current directory into the target physical category folder.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Copy Option Card */}
+                <div
+                  onClick={() => setOperationMode('copy')}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                    operationMode === 'copy'
+                      ? 'bg-blue-600/15 border-blue-500/60 text-white shadow-md shadow-blue-500/10'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="opMode"
+                    checked={operationMode === 'copy'}
+                    onChange={() => setOperationMode('copy')}
+                    className="mt-0.5 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-xs text-white block">○ Copy File</span>
+                    <p className="text-[11px] text-slate-300 mt-0.5">
+                      Keep original file in place and create a new copy inside the target category folder.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Error / Warning Banner */}
+            {/* Error / Missing File Alert Banner with Rescan Button */}
             {errorMessage && (
-              <div className="px-6 py-3 bg-red-500/15 border-b border-red-500/30 text-red-300 text-xs font-semibold flex items-center justify-between shrink-0">
-                <span>{errorMessage}</span>
+              <div className="p-4 bg-red-950/40 border-b border-red-500/30 text-red-200 text-xs space-y-2 shrink-0">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-sm font-bold text-white block mb-0.5">
+                      Memora could not find this file at its recorded location.
+                    </strong>
+                    <p className="text-xs text-red-300/90 leading-relaxed">
+                      {errorMessage}
+                    </p>
+                    {missingFileDetails && (
+                      <div className="mt-2 p-2.5 rounded-lg bg-slate-950 border border-red-500/30 font-mono text-[11px] text-red-300 space-y-1">
+                        <div><strong>Recorded location:</strong> {missingFileDetails.recordedPath}</div>
+                        <div><strong>Possible reason:</strong> The file may have been moved, renamed, or deleted manually outside of Memora.</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleRescanFolder}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Rescan Folder Now</span>
+                  </button>
+                </div>
               </div>
             )}
 
-            {/* Explanatory Banner: Move vs Copy Description */}
-            <div className="px-6 py-2.5 bg-slate-950/80 border-b border-slate-800/80 text-[11px] text-slate-300 flex items-center gap-2 shrink-0">
+            {/* Explanatory Banner: Safety Note */}
+            <div className="px-6 py-2.5 bg-slate-950/90 border-b border-slate-800/80 text-[11px] text-slate-300 flex items-center gap-2 shrink-0">
               <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
               <span>
-                {operationMode === 'move' 
-                  ? 'Move operation: Files will be relocated from their current folder into target category folders.'
-                  : 'Copy operation: Original files will stay in place; copies will be created in target category folders.'
-                }
+                Safety Check: Files remain in place until you click <strong>Confirm Organization</strong>.
               </span>
             </div>
 
             {/* Scrollable Content List */}
-            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-3">
+            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-3.5">
               {itemsToOrganize.map((item) => (
                 <div
                   key={item.id}
-                  className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                  className="p-4 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-3 text-xs"
                 >
-                  {/* Current Location */}
-                  <div className="flex-1 space-y-0.5 min-w-0">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                      CURRENT LOCATION
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-white font-mono">{item.filename}</span>
+                    <span className="px-2.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30 font-semibold text-[11px]">
+                      AI Category: {item.suggestedCategory}
                     </span>
-                    <div className="flex items-center gap-1.5 font-mono text-slate-300 font-semibold truncate" title={item.currentPath}>
-                      <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                      <span className="truncate">{item.currentPath}</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono pt-1">
+                    {/* Current Location */}
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">
+                        CURRENT LOCATION
+                      </span>
+                      <p className="text-slate-300 text-[11px] truncate" title={item.currentPath}>
+                        {item.currentPath}
+                      </p>
                     </div>
-                  </div>
 
-                  {/* Arrow Indicator & Operation Badge */}
-                  <div className="self-center text-blue-400 sm:px-2 flex flex-col items-center gap-0.5">
-                    <span className="text-[9px] font-bold text-blue-400 uppercase px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20">
-                      {operationMode}
-                    </span>
-                    <ArrowRight className="w-4 h-4 rotate-90 sm:rotate-0 text-blue-400" />
-                  </div>
-
-                  {/* Proposed Destination */}
-                  <div className="flex-1 space-y-0.5 text-left sm:text-right min-w-0">
-                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider block">
-                      PHYSICAL DESTINATION
-                    </span>
-                    <div className="flex items-center sm:justify-end gap-1.5 font-mono text-blue-300 font-bold truncate" title={`${item.suggestedCategory}/${item.filename}`}>
-                      <Folder className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                      <span className="truncate">{item.suggestedCategory}/{item.filename}</span>
+                    {/* Proposed Destination */}
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-blue-500/30 space-y-0.5">
+                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider block font-sans">
+                        PHYSICAL DESTINATION ({operationMode.toUpperCase()})
+                      </span>
+                      <p className="text-blue-300 text-[11px] font-bold truncate" title={`${item.suggestedCategory}/${item.filename}`}>
+                        {item.suggestedCategory}/{item.filename}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -201,8 +276,8 @@ export const OrganizationPreviewModal = ({
 
             {/* Sticky Actions Footer */}
             <div className="flex items-center justify-between px-6 py-4 bg-slate-950/90 border-t border-slate-800 shrink-0">
-              <span className="text-[11px] text-slate-400 font-medium">
-                Nothing is moved until you confirm.
+              <span className="text-xs text-slate-400 font-medium">
+                Nothing is moved without explicit confirmation.
               </span>
 
               <div className="flex items-center gap-3">
@@ -218,7 +293,7 @@ export const OrganizationPreviewModal = ({
                   type="button"
                   onClick={handleConfirm}
                   disabled={isSubmitting}
-                  className="px-5 py-2 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl shadow-lg shadow-blue-500/25 border border-blue-500/30 transition-all cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl shadow-lg shadow-blue-500/25 border border-blue-500/30 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? 'Organizing Files...' : 'Confirm Organization'}
                 </button>
