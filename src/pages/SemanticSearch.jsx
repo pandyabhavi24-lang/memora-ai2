@@ -118,10 +118,10 @@ export const SemanticSearch = () => {
     filters.dateRange !== 'any' || 
     (filters.size && filters.size !== 'any') || 
     (filters.category && filters.category !== 'all') || 
-    filters.folder !== 'all';
+    (Array.isArray(filters.labels) && filters.labels.length > 0);
 
   const resetFilters = () => {
-    setFilters({ fileType: 'all', dateRange: 'any', folder: 'all', size: 'any', category: 'all' });
+    setFilters({ fileType: 'all', dateRange: 'any', category: 'all', labels: [], size: 'any' });
     setSortBy('relevant');
   };
 

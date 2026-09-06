@@ -94,13 +94,10 @@ class SemanticSearchService {
       top_k: 20,
       filters: {
         file_type: filters.fileType && filters.fileType !== 'all' ? filters.fileType : null,
-        folder_id: filters.folder && filters.folder !== 'all' ? parseInt(filters.folder, 10) : null,
         date_range: filters.dateRange && filters.dateRange !== 'any' ? filters.dateRange : null,
-        size: filters.size && filters.size !== 'any' ? filters.size : null,
         category: filters.category && filters.category !== 'all' ? filters.category : null,
-        location: filters.location && filters.location !== 'all' ? filters.location : null,
         labels: Array.isArray(filters.labels) && filters.labels.length > 0 ? filters.labels : (typeof filters.labels === 'string' && filters.labels !== 'all' && filters.labels !== '' ? [filters.labels] : null),
-        relevance: filters.relevance && filters.relevance !== 'any' ? filters.relevance : null
+        size: filters.size && filters.size !== 'any' ? filters.size : null
       },
       sort_by: sortBy
     };
