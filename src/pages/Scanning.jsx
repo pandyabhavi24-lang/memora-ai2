@@ -53,10 +53,10 @@ export const Scanning = () => {
         </div>
 
         <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">
-          {scanState.percent >= 100 ? 'Indexing Complete!' : 'Indexing Your Digital Memories'}
+          {scanState.percent >= 100 ? 'Indexing Complete!' : 'Building Your Local Memory Index'}
         </h1>
         <p className="text-sm text-gray-400 mb-8">
-          Extracting document metadata, running local OCR for images, and generating vector embeddings.
+          Extracting content, running local OCR, and generating semantic embeddings.
         </p>
 
         {/* Large Progress Card */}

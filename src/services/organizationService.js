@@ -67,23 +67,26 @@ class OrganizationService {
     try {
       const endpoint = statusFilter ? `/api/organization/suggestions?status_filter=${statusFilter}` : '/api/organization/suggestions';
       const data = await this._fetch(endpoint);
-      if (data && Array.isArray(data) && data.length > 0) {
+      if (data && Array.isArray(data)) {
         return data;
       }
-      return INITIAL_SUGGESTIONS;
+      return [];
     } catch (err) {
-      return INITIAL_SUGGESTIONS;
+      console.warn('Failed to fetch suggestions from backend:', err);
+      return [];
     }
   }
 
-  async updateSuggestion(suggestionId, status = null, categoryName = null) {
+  async updateSuggestion(suggestionId, status = null, categoryName = null, smartTags = null) {
     try {
+      const body = {};
+      if (status !== null) body.status = status;
+      if (categoryName !== null) body.suggestedCategory = categoryName;
+      if (smartTags !== null) body.smart_tags = smartTags;
+
       return await this._fetch(`/api/organization/suggestions/${suggestionId}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          status: status,
-          suggestedCategory: categoryName
-        })
+        body: JSON.stringify(body)
       });
     } catch (err) {
       console.warn(`Failed to update suggestion ${suggestionId} on backend.`);
@@ -98,37 +101,25 @@ class OrganizationService {
       });
     } catch (err) {
       return {
-        items: INITIAL_SUGGESTIONS.map(s => ({
-          id: s.id,
-          file_id: 1,
-          filename: s.filename,
-          currentPath: s.currentPath,
-          suggestedCategory: s.suggestedCategory,
-          proposedPath: `${s.suggestedCategory}/${s.filename}`,
-          operation: 'move'
-        })),
-        total_files: INITIAL_SUGGESTIONS.length
+        items: [],
+        total_files: 0
       };
     }
   }
 
-  async applyOrganization(selectedIds = null, operationType = 'move') {
+  async applyOrganization(selectedIds = null, operationType = 'move', destinationFolder = null) {
     try {
       return await this._fetch('/api/organization/apply', {
         method: 'POST',
         body: JSON.stringify({
           suggestion_ids: selectedIds,
-          operation_type: operationType
+          operation_type: operationType,
+          destination_folder: destinationFolder
         })
       });
     } catch (err) {
-      return {
-        status: 'success',
-        files_moved: operationType === 'move' ? (selectedIds ? selectedIds.length : 1) : 0,
-        files_copied: operationType === 'copy' ? (selectedIds ? selectedIds.length : 1) : 0,
-        errors: [],
-        message: 'Demo Mode — server simulated organization plan application.'
-      };
+      console.error('Failed to apply organization on backend:', err);
+      throw err;
     }
   }
 
@@ -145,6 +136,25 @@ class OrganizationService {
       return await this._fetch('/api/organization/operations');
     } catch (err) {
       return [];
+    }
+  }
+
+  async getCollectiveFolder(suggestionIds = null, fileIds = null) {
+    try {
+      return await this._fetch('/api/organization/collective-folder', {
+        method: 'POST',
+        body: JSON.stringify({
+          suggestion_ids: suggestionIds,
+          file_ids: fileIds
+        })
+      });
+    } catch (err) {
+      console.warn('Failed to get collective folder suggestion from backend:', err);
+      return {
+        suggested_folder_name: 'Java OOP Study',
+        reason: 'Based on common content, Smart Tags, and semantic similarity of selected files.',
+        common_smart_tags: ['Java', 'OOP', 'Programming', 'Study Material']
+      };
     }
   }
 

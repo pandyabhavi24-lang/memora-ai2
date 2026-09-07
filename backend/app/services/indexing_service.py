@@ -109,18 +109,31 @@ class IndexingService:
                     existing_file = db.query(File).filter(File.path == file_path).first()
 
                     if existing_file:
-                        # Check if modified
-                        if existing_file.file_hash == item_meta["file_hash"] and existing_file.modified_at == item_meta["modified_at"]:
+                        # Check if modified or if extraction/vectors are missing
+                        existing_chunks = db.query(Chunk).filter(Chunk.file_id == existing_file.id).all()
+                        has_valid_vectors = False
+                        if existing_chunks:
+                            chunk_ids = [c.id for c in existing_chunks]
+                            v_count = db.query(VectorMapping).filter(VectorMapping.chunk_id.in_(chunk_ids)).count()
+                            has_valid_vectors = (v_count == len(existing_chunks))
+
+                        is_fully_indexed = (
+                            existing_file.file_hash == item_meta["file_hash"] and
+                            existing_file.modified_at == item_meta["modified_at"] and
+                            existing_file.extraction_status in ["success", "empty"] and
+                            (has_valid_vectors or not (existing_file.extracted_text and existing_file.extracted_text.strip()))
+                        )
+
+                        if is_fully_indexed:
                             # Unchanged file - count chunks & vectors
                             processed += 1
-                            existing_chunks = db.query(Chunk).filter(Chunk.file_id == existing_file.id).all()
                             chunks_total += len(existing_chunks)
                             vectors_total += len(existing_chunks)
                             self._update_progress(processed, failed, chunks_total, vectors_total, len(all_found_scans))
                             continue
                         else:
-                            # Modified file: Delete old chunks & vectors from FAISS and DB
-                            logger.info(f"File modified: '{file_path}'. Re-indexing.")
+                            # Re-index file: Delete old chunks & vectors from FAISS and DB
+                            logger.info(f"Re-indexing file '{file_path}' (modified or missing vector mappings).")
                             self._delete_file_chunks_and_vectors(db, existing_file.id)
                             target_file = existing_file
                             target_file.size = item_meta["size"]
@@ -146,6 +159,15 @@ class IndexingService:
                     extracted_text, status_str = text_extractor.extract(file_path, item_meta["extension"])
                     target_file.extracted_text = extracted_text
                     target_file.extraction_status = status_str
+
+                    # Generate and persist dynamic Smart Tags
+                    from .classification_service import classification_service
+                    _, _, _, _, smart_tags = classification_service.classify_file(
+                        filename=target_file.name,
+                        extension=target_file.extension,
+                        extracted_text=extracted_text or ""
+                    )
+                    target_file.set_smart_tags(smart_tags)
                     db.commit()
 
                     if status_str in ["success", "empty"] and extracted_text:

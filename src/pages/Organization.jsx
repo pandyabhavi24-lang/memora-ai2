@@ -11,17 +11,58 @@ import { organizationService } from '../services/organizationService';
 import { INITIAL_SUGGESTIONS } from '../data/organizationMockData';
 import { FolderSearch, Sparkles } from 'lucide-react';
 
+// Simple Error Boundary Fallback for Organization Page
+class OrganizationErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Organization Error Boundary caught an exception:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="glass-panel p-12 rounded-2xl border border-red-500/30 bg-slate-900/90 text-center flex flex-col items-center justify-center my-6 space-y-4 shadow-xl">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400">
+            <Sparkles className="w-8 h-8" />
+          </div>
+          <div className="max-w-md space-y-1">
+            <h3 className="text-lg font-bold text-white">Something went wrong on the Organize page</h3>
+            <p className="text-xs text-slate-400">
+              An unexpected display error occurred. You can click below to reload the page safely.
+            </p>
+          </div>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg transition-all cursor-pointer"
+          >
+            <span>Reset & Reload Page View</span>
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export const Organization = () => {
   // Analysis state: 'idle' | 'scanning' | 'complete' | 'error'
   const [analysisStatus, setAnalysisStatus] = useState('idle');
   const [currentStep, setCurrentStep] = useState(1);
-  const [suggestions, setSuggestions] = useState(INITIAL_SUGGESTIONS);
+  const [suggestions, setSuggestions] = useState(INITIAL_SUGGESTIONS || []);
   const [selectedIds, setSelectedIds] = useState([]);
   const [summaryStats, setSummaryStats] = useState({
-    files_analyzed: 24,
-    suggestions_generated: 18,
-    high_confidence: 14,
-    duplicate_groups: 3
+    files_analyzed: 0,
+    suggestions_generated: 0,
+    high_confidence: 0,
+    duplicate_groups: 0
   });
   
   // Modals state
@@ -48,11 +89,18 @@ export const Organization = () => {
   const fetchInitialData = async () => {
     try {
       const realSuggestions = await organizationService.getSuggestions();
-      if (realSuggestions && realSuggestions.length > 0) {
+      if (Array.isArray(realSuggestions) && realSuggestions.length > 0) {
         setSuggestions(realSuggestions);
+        setAnalysisStatus('complete');
+        setSummaryStats(prev => ({
+          ...prev,
+          files_analyzed: realSuggestions.length,
+          suggestions_generated: realSuggestions.length,
+          high_confidence: realSuggestions.filter(s => (s.confidenceScore || 0) >= 0.8).length
+        }));
       }
     } catch (err) {
-      console.warn('Backend loading error, falling back to mock data:', err);
+      console.warn('Backend loading error, using initial state:', err);
     }
   };
 
@@ -77,9 +125,18 @@ export const Organization = () => {
         setSummaryStats(summary);
       }
       const realSuggestions = await organizationService.getSuggestions();
-      if (realSuggestions && realSuggestions.length > 0) {
+      if (Array.isArray(realSuggestions)) {
         setSuggestions(realSuggestions);
       }
+      const nowStr = new Date().toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      localStorage.setItem('last_analysis_timestamp', nowStr);
+      localStorage.removeItem('scanned_since_last_analysis');
     } catch (err) {
       console.error('Error during backend analysis:', err);
     } finally {
@@ -90,26 +147,30 @@ export const Organization = () => {
     }
   };
 
+  const safeSuggestions = Array.isArray(suggestions) ? suggestions : [];
+  const safeSelectedIds = Array.isArray(selectedIds) ? selectedIds : [];
+
   // Toggle individual item checkbox
   const handleToggleSelect = (id) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
+    setSelectedIds((prev) => {
+      const safePrev = Array.isArray(prev) ? prev : [];
+      return safePrev.includes(id) ? safePrev.filter((i) => i !== id) : [...safePrev, id];
+    });
   };
 
   // Select all / Deselect all
   const handleSelectAll = () => {
-    if (selectedIds.length === suggestions.length) {
+    if (safeSelectedIds.length === safeSuggestions.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(suggestions.map((s) => s.id));
+      setSelectedIds(safeSuggestions.map((s) => s.id).filter(Boolean));
     }
   };
 
   // Individual Actions
   const handleAccept = async (id) => {
     setSuggestions((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: 'Accepted' } : item))
+      (Array.isArray(prev) ? prev : []).map((item) => (item.id === id ? { ...item, status: 'Accepted' } : item))
     );
     try {
       await organizationService.updateSuggestion(id, 'accepted');
@@ -120,7 +181,7 @@ export const Organization = () => {
 
   const handleReject = async (id) => {
     setSuggestions((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: 'Rejected' } : item))
+      (Array.isArray(prev) ? prev : []).map((item) => (item.id === id ? { ...item, status: 'Rejected' } : item))
     );
     try {
       await organizationService.updateSuggestion(id, 'rejected');
@@ -133,16 +194,21 @@ export const Organization = () => {
     setEditingSuggestion(item);
   };
 
-  const handleSaveEditCategory = async (id, newCategory) => {
+  const handleSaveEditCategory = async (id, newCategory, smartTags) => {
     setSuggestions((prev) =>
-      prev.map((item) =>
+      (Array.isArray(prev) ? prev : []).map((item) =>
         item.id === id
-          ? { ...item, suggestedCategory: newCategory, status: 'Edited' }
+          ? {
+              ...item,
+              suggestedCategory: newCategory || item.suggestedCategory,
+              smart_tags: smartTags || item.smart_tags,
+              status: 'Edited'
+            }
           : item
       )
     );
     try {
-      await organizationService.updateSuggestion(id, 'edited', newCategory);
+      await organizationService.updateSuggestion(id, 'edited', newCategory, smartTags);
     } catch (err) {
       console.error('Failed to sync edited category on backend:', err);
     }
@@ -151,11 +217,11 @@ export const Organization = () => {
   // Bulk Actions
   const handleAcceptSelected = async () => {
     setSuggestions((prev) =>
-      prev.map((item) =>
-        selectedIds.includes(item.id) ? { ...item, status: 'Accepted' } : item
+      (Array.isArray(prev) ? prev : []).map((item) =>
+        safeSelectedIds.includes(item.id) ? { ...item, status: 'Accepted' } : item
       )
     );
-    for (const id of selectedIds) {
+    for (const id of safeSelectedIds) {
       try {
         await organizationService.updateSuggestion(id, 'accepted');
       } catch (err) {}
@@ -165,11 +231,11 @@ export const Organization = () => {
 
   const handleRejectSelected = async () => {
     setSuggestions((prev) =>
-      prev.map((item) =>
-        selectedIds.includes(item.id) ? { ...item, status: 'Rejected' } : item
+      (Array.isArray(prev) ? prev : []).map((item) =>
+        safeSelectedIds.includes(item.id) ? { ...item, status: 'Rejected' } : item
       )
     );
-    for (const id of selectedIds) {
+    for (const id of safeSelectedIds) {
       try {
         await organizationService.updateSuggestion(id, 'rejected');
       } catch (err) {}
@@ -178,115 +244,117 @@ export const Organization = () => {
   };
 
   // Metric Computations
-  const highConfidenceCount = suggestions.filter((s) => s.confidence >= 90).length;
+  const highConfidenceCount = safeSuggestions.filter((s) => (s?.confidence || 0) >= 90).length;
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Page Header */}
-      <OrganizationHeader
-        onAnalyze={handleStartAnalysis}
-        isAnalyzing={analysisStatus === 'scanning'}
-        isAnalyzed={analysisStatus === 'complete'}
-      />
-
-      {/* Initial Empty State (before analysis) */}
-      {analysisStatus === 'idle' && (
-        <div className="glass-panel p-12 rounded-2xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-md text-center flex flex-col items-center justify-center my-6 space-y-4 shadow-xl">
-          <div className="w-16 h-16 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-500/10">
-            <FolderSearch className="w-8 h-8" />
-          </div>
-          <div className="max-w-md space-y-1">
-            <h3 className="text-lg font-bold text-white">No files analyzed yet</h3>
-            <p className="text-xs text-slate-400">
-              Select a folder and let Memora analyze your files to suggest intelligent category mappings and flag potential duplicates.
-            </p>
-          </div>
-          <button
-            onClick={handleStartAnalysis}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-lg shadow-blue-500/20 border border-blue-500/30 transition-all cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4 text-blue-200" />
-            <span>Analyze Files</span>
-          </button>
-        </div>
-      )}
-
-      {/* Analysis Progress Banner (during or after scanning) */}
-      {analysisStatus !== 'idle' && (
-        <AnalysisProgress
-          currentStep={currentStep}
-          isComplete={analysisStatus === 'complete'}
-          isError={analysisStatus === 'error'}
-          onRetry={handleStartAnalysis}
+    <OrganizationErrorBoundary>
+      <div className="space-y-6 pb-12">
+        {/* Page Header */}
+        <OrganizationHeader
+          onAnalyze={handleStartAnalysis}
+          isAnalyzing={analysisStatus === 'scanning'}
+          isAnalyzed={analysisStatus === 'complete'}
         />
-      )}
 
-      {/* Summary Cards & Main Content (visible when analysis is complete or in progress) */}
-      {analysisStatus === 'complete' && (
-        <>
-          {/* Summary Cards */}
-          <OrganizationSummary
-            filesAnalyzed={summaryStats.files_analyzed || 24}
-            suggestionsCount={suggestions.length}
-            highConfidenceCount={highConfidenceCount}
-            duplicatesCount={summaryStats.duplicate_groups || 3}
+        {/* Initial Empty State (before analysis) */}
+        {analysisStatus === 'idle' && (
+          <div className="glass-panel p-12 rounded-2xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-md text-center flex flex-col items-center justify-center my-6 space-y-4 shadow-xl">
+            <div className="w-16 h-16 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-500/10">
+              <FolderSearch className="w-8 h-8" />
+            </div>
+            <div className="max-w-md space-y-1">
+              <h3 className="text-lg font-bold text-white">No files analyzed yet</h3>
+              <p className="text-xs text-slate-400">
+                Select a folder and let Memora analyze your files to suggest intelligent category mappings and flag potential duplicates.
+              </p>
+            </div>
+            <button
+              onClick={handleStartAnalysis}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-lg shadow-blue-500/20 border border-blue-500/30 transition-all cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-blue-200" />
+              <span>Analyze Files</span>
+            </button>
+          </div>
+        )}
+
+        {/* Analysis Progress Banner (during or after scanning) */}
+        {analysisStatus !== 'idle' && (
+          <AnalysisProgress
+            currentStep={currentStep}
+            isComplete={analysisStatus === 'complete'}
+            isError={analysisStatus === 'error'}
+            onRetry={handleStartAnalysis}
           />
+        )}
 
-          {/* Main Suggestions Table */}
-          <OrganizationSuggestionsTable
-            suggestions={suggestions}
-            selectedIds={selectedIds}
-            warningMessage={warningMessage}
-            onToggleSelect={handleToggleSelect}
-            onSelectAll={handleSelectAll}
-            onAccept={handleAccept}
-            onReject={handleReject}
-            onEdit={handleOpenEdit}
-            onAcceptSelected={handleAcceptSelected}
-            onRejectSelected={handleRejectSelected}
-            onPreviewChanges={handleOpenPreview}
-          />
+        {/* Summary Cards & Main Content (visible when analysis is complete or in progress) */}
+        {analysisStatus === 'complete' && (
+          <>
+            {/* Summary Cards */}
+            <OrganizationSummary
+              filesAnalyzed={summaryStats.files_analyzed || safeSuggestions.length || 0}
+              suggestionsCount={safeSuggestions.length}
+              highConfidenceCount={highConfidenceCount}
+              duplicatesCount={summaryStats.duplicate_groups || 0}
+            />
 
-          {/* Lower Content Grid: Possible Duplicates & Category Overview */}
-          <DuplicatesSection refreshTrigger={dupRefreshKey} />
+            {/* Main Suggestions Table */}
+            <OrganizationSuggestionsTable
+              suggestions={safeSuggestions}
+              selectedIds={safeSelectedIds}
+              warningMessage={warningMessage}
+              onToggleSelect={handleToggleSelect}
+              onSelectAll={handleSelectAll}
+              onAccept={handleAccept}
+              onReject={handleReject}
+              onEdit={handleOpenEdit}
+              onAcceptSelected={handleAcceptSelected}
+              onRejectSelected={handleRejectSelected}
+              onPreviewChanges={handleOpenPreview}
+            />
 
-          <CategoryOverview refreshTrigger={dupRefreshKey} />
-        </>
-      )}
+            {/* Lower Content Grid: Possible Duplicates & Category Overview */}
+            <DuplicatesSection refreshTrigger={dupRefreshKey} />
 
-      {/* Edit Suggestion Modal */}
-      <EditSuggestionModal
-        isOpen={!!editingSuggestion}
-        onClose={() => setEditingSuggestion(null)}
-        suggestion={editingSuggestion}
-        onSave={handleSaveEditCategory}
-      />
+            <CategoryOverview refreshTrigger={dupRefreshKey} />
+          </>
+        )}
 
-      {/* Organization Preview & Confirm Modal */}
-      <OrganizationPreviewModal
-        isOpen={isPreviewOpen}
-        onClose={() => setIsPreviewOpen(false)}
-        suggestions={suggestions.filter((s) => selectedIds.includes(s.id) && s.status !== 'Rejected')}
-        onConfirmSuccess={async (operationMode, targetIds) => {
-          try {
-            const idsToApply = targetIds && targetIds.length > 0 ? targetIds : selectedIds;
-            if (!idsToApply || idsToApply.length === 0) {
-              setWarningMessage('Please select at least one file to organize.');
-              return null;
+        {/* Edit Suggestion Modal */}
+        <EditSuggestionModal
+          isOpen={!!editingSuggestion}
+          onClose={() => setEditingSuggestion(null)}
+          suggestion={editingSuggestion}
+          onSave={handleSaveEditCategory}
+        />
+
+        {/* Organization Preview & Confirm Modal */}
+        <OrganizationPreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          suggestions={safeSuggestions.filter((s) => safeSelectedIds.includes(s.id) && s.status !== 'Rejected')}
+          onConfirmSuccess={async (operationMode, targetIds, destinationFolder) => {
+            try {
+              const idsToApply = targetIds && targetIds.length > 0 ? targetIds : safeSelectedIds;
+              if (!idsToApply || idsToApply.length === 0) {
+                setWarningMessage('Please select at least one file to organize.');
+                return null;
+              }
+              const result = await organizationService.applyOrganization(idsToApply, operationMode, destinationFolder);
+              if (result && (result.files_moved > 0 || result.files_copied > 0)) {
+                setSelectedIds([]);
+                await fetchInitialData();
+                setDupRefreshKey((k) => k + 1);
+              }
+              return result;
+            } catch (err) {
+              console.error('Error applying organization plan:', err);
+              throw err;
             }
-            const result = await organizationService.applyOrganization(idsToApply, operationMode);
-            if (result && (result.files_moved > 0 || result.files_copied > 0)) {
-              setSelectedIds([]);
-              await fetchInitialData();
-              setDupRefreshKey((k) => k + 1);
-            }
-            return result;
-          } catch (err) {
-            console.error('Error applying organization plan:', err);
-            throw err;
-          }
-        }}
-      />
-    </div>
+          }}
+        />
+      </div>
+    </OrganizationErrorBoundary>
   );
 };

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import engine, SessionLocal, Base
+from .database import engine, SessionLocal, Base, init_db_schema
 from .ai.faiss_manager import faiss_manager
 from .services.embedding_service import embedding_service
 from .services.organization_service import organization_service
@@ -16,8 +16,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("memora.main")
 
-# Initialize DB tables
+# Initialize DB tables & schema migration
 Base.metadata.create_all(bind=engine)
+init_db_schema()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

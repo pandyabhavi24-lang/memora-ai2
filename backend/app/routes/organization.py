@@ -9,6 +9,8 @@ from ..schemas import (
     CategoryOverviewItem,
     SuggestionItemResponse,
     SuggestionUpdate,
+    CollectiveFolderRequest,
+    CollectiveFolderResponse,
     AnalyzeRequest,
     AnalysisSummaryResponse,
     OrganizationPreviewItem,
@@ -81,7 +83,8 @@ def update_suggestion(
         db,
         sug_id=db_id,
         status=update_data.status,
-        category_name=update_data.suggestedCategory
+        category_name=update_data.suggestedCategory,
+        smart_tags=update_data.smart_tags
     )
 
     if not updated:
@@ -113,7 +116,13 @@ def apply_organization(
     try:
         selected_ids = req.suggestion_ids if req else None
         operation_type = req.operation_type if req and req.operation_type else "move"
-        result = organization_service.apply_organization(db, selected_ids=selected_ids, operation_type=operation_type)
+        destination_folder = req.destination_folder if req else None
+        result = organization_service.apply_organization(
+            db,
+            selected_ids=selected_ids,
+            operation_type=operation_type,
+            destination_folder=destination_folder
+        )
         return result
     except Exception as e:
         logger.error(f"Error applying organization plan: {e}", exc_info=True)
@@ -136,3 +145,17 @@ def get_operations(db: Session = Depends(get_db)):
 def get_overview(db: Session = Depends(get_db)):
     """Returns real organization summary category distribution."""
     return organization_service.get_overview(db)
+
+@router.post("/collective-folder", response_model=CollectiveFolderResponse)
+def get_collective_folder(
+    req: CollectiveFolderRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Generates ONE collective physical folder suggestion for a selected group of files.
+    """
+    return organization_service.generate_collective_folder_name(
+        db,
+        suggestion_ids=req.suggestion_ids,
+        file_ids=req.file_ids
+    )

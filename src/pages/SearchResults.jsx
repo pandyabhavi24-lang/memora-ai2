@@ -24,6 +24,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/common/Button';
 import { apiService } from '../services/apiService';
+import { semanticSearchService } from '../services/semanticSearchService';
 
 // Smart Portal Popover Wrapper Component with Fixed Viewport Positioning & Collision Detection
 const FilterPopover = ({ name, title, activeCount = 0, activeLabel = '', isOpen, onToggle, widthClass = 'w-56', children }) => {
@@ -145,6 +146,18 @@ export const SearchResults = () => {
   // SEPARATE LOCAL SEARCH INPUT STATES FOR FILTER POPOVERS
   const [categorySearchInput, setCategorySearchInput] = useState('');
   const [labelSearchInput, setLabelSearchInput] = useState('');
+  const [availableTags, setAvailableTags] = useState([]);
+
+  // Fetch real persistent Smart Tags from backend
+  useEffect(() => {
+    semanticSearchService.getAvailableSmartTags().then(tags => {
+      if (Array.isArray(tags) && tags.length > 0) {
+        setAvailableTags(tags);
+      }
+    }).catch(err => {
+      console.warn('Could not load smart tags for search filters:', err);
+    });
+  }, []);
 
   useEffect(() => {
     if (searchQuery) {
@@ -202,18 +215,17 @@ export const SearchResults = () => {
     setFilters({
       fileType: 'all',
       dateRange: 'any',
-      category: 'all',
+      smartTags: [],
       labels: [],
       size: 'any'
     });
-    setCategorySearchInput('');
     setLabelSearchInput('');
     setOpenPopover(null);
   };
 
   const removeSingleFilter = (filterKey, defaultValue = 'all') => {
-    if (filterKey === 'labels') {
-      setFilters(prev => ({ ...prev, labels: [] }));
+    if (filterKey === 'smartTags' || filterKey === 'labels') {
+      setFilters(prev => ({ ...prev, smartTags: [], labels: [] }));
     } else {
       setFilters(prev => ({ ...prev, [filterKey]: defaultValue }));
     }
@@ -221,35 +233,44 @@ export const SearchResults = () => {
 
   const removeIndividualLabel = (lblToRemove) => {
     setFilters(prev => {
-      const current = Array.isArray(prev.labels) ? prev.labels : [];
+      const current = Array.isArray(prev.smartTags) && prev.smartTags.length > 0
+        ? prev.smartTags
+        : (Array.isArray(prev.labels) ? prev.labels : []);
       const updated = current.filter(l => l.toLowerCase() !== lblToRemove.toLowerCase());
-      return { ...prev, labels: updated };
+      return { ...prev, smartTags: updated, labels: updated };
     });
   };
 
   const toggleSelectLabel = (selectedLabel) => {
     setFilters(prev => {
-      const currentLabels = Array.isArray(prev.labels) ? prev.labels : [];
-      const exists = currentLabels.some(
+      const current = Array.isArray(prev.smartTags) && prev.smartTags.length > 0
+        ? prev.smartTags
+        : (Array.isArray(prev.labels) ? prev.labels : []);
+      const exists = current.some(
         label => label.toLowerCase() === selectedLabel.toLowerCase()
       );
+      const updated = exists
+        ? current.filter(label => label.toLowerCase() !== selectedLabel.toLowerCase())
+        : [...current, selectedLabel];
       return {
         ...prev,
-        labels: exists
-          ? currentLabels.filter(label => label.toLowerCase() !== selectedLabel.toLowerCase())
-          : [...currentLabels, selectedLabel]
+        smartTags: updated,
+        labels: updated
       };
     });
   };
+
+  const activeLabelList = Array.isArray(filters.smartTags) && filters.smartTags.length > 0
+    ? filters.smartTags
+    : (Array.isArray(filters.labels) ? filters.labels : []);
 
   const getActiveFiltersCount = () => {
     let count = 0;
     if (filters.fileType && filters.fileType !== 'all') count++;
     if (filters.dateRange && filters.dateRange !== 'any') count++;
-    if (filters.category && filters.category !== 'all') count++;
     if (filters.size && filters.size !== 'any') count++;
-    if (Array.isArray(filters.labels) && filters.labels.length > 0) {
-      count += filters.labels.length;
+    if (activeLabelList.length > 0) {
+      count += activeLabelList.length;
     }
     return count;
   };
@@ -267,26 +288,23 @@ export const SearchResults = () => {
     return true;
   };
 
-  // Helper for category-based filtering
-  const matchesCategory = (itemCategory, categoryFilter) => {
-    if (!categoryFilter || categoryFilter === 'all') return true;
-    if (!itemCategory) return false;
-    return itemCategory.toLowerCase().includes(categoryFilter.toLowerCase());
-  };
-
-  // Helper for label-based filtering
-  const matchesLabels = (file, labelFilters) => {
-    if (!labelFilters || labelFilters === 'all' || (Array.isArray(labelFilters) && labelFilters.length === 0)) return true;
-    const labelsList = Array.isArray(labelFilters) ? labelFilters : [labelFilters];
+  // Helper for Smart Tags filtering
+  const matchesSmartTags = (file, tagFilters) => {
+    if (!tagFilters || tagFilters === 'all' || (Array.isArray(tagFilters) && tagFilters.length === 0)) return true;
+    const tagsList = Array.isArray(tagFilters) ? tagFilters : [tagFilters];
     
+    const fileTags = Array.isArray(file.smartTags) && file.smartTags.length > 0
+      ? file.smartTags
+      : (Array.isArray(file.tags) ? file.tags : []);
+
     const textContent = (
-      (file.category || '') + ' ' +
       (file.name || '') + ' ' +
       (file.path || '') + ' ' +
+      fileTags.join(' ') + ' ' +
       (file.fileExtension || file.extension || '')
     ).toLowerCase();
 
-    return labelsList.every(lbl => textContent.includes(lbl.toLowerCase()));
+    return tagsList.every(lbl => textContent.includes(lbl.toLowerCase()));
   };
 
   // Helper for file-type filtering
@@ -323,23 +341,22 @@ export const SearchResults = () => {
     return true;
   };
 
-  // Filter backend search results on frontend across all 5 active filter dimensions
+  // Filter backend search results on frontend across filter dimensions
   const filteredResults = searchResults.filter(result => {
     const file = result.file || {};
     const matchesType = matchesFileType(file, filters.fileType);
     const matchesDate = matchesDateRange(file.modifiedAt, filters.dateRange);
     const matchesSz = matchesSize(file.sizeBytes, filters.size);
-    const matchesCat = matchesCategory(file.category, filters.category);
-    const matchesLbl = matchesLabels(file, filters.labels);
+    const matchesTag = matchesSmartTags(file, activeLabelList);
 
     if (searchMode === 'exact' && searchQuery) {
       const qWords = searchQuery.toLowerCase().split(/\s+/).filter(w => w.length > 1);
       const textContent = ((file.name || '') + ' ' + (result.matchedSnippet || '') + ' ' + (result.aiExplanation || '')).toLowerCase();
       const hasExactWords = qWords.every(w => textContent.includes(w));
-      return matchesType && matchesDate && matchesSz && matchesCat && matchesLbl && hasExactWords;
+      return matchesType && matchesDate && matchesSz && matchesTag && hasExactWords;
     }
 
-    return matchesType && matchesDate && matchesSz && matchesCat && matchesLbl;
+    return matchesType && matchesDate && matchesSz && matchesTag;
   });
 
   const activeFiltersCount = getActiveFiltersCount();
@@ -407,7 +424,51 @@ export const SearchResults = () => {
     return acc;
   }, {});
 
+  // Sort items within each duplicate group
+  Object.values(groupedResults).forEach(group => {
+    if (sortBy === 'newest') {
+      group.results.sort((a, b) => {
+        const timeA = new Date(a.file?.modifiedAt || 0).getTime();
+        const timeB = new Date(b.file?.modifiedAt || 0).getTime();
+        return timeB - timeA;
+      });
+    } else if (sortBy === 'oldest') {
+      group.results.sort((a, b) => {
+        const timeA = new Date(a.file?.modifiedAt || 0).getTime();
+        const timeB = new Date(b.file?.modifiedAt || 0).getTime();
+        return timeA - timeB;
+      });
+    } else if (sortBy === 'name') {
+      group.results.sort((a, b) => (a.file?.name || '').localeCompare(b.file?.name || ''));
+    } else {
+      group.results.sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+  });
+
   const groupedList = Object.values(groupedResults);
+
+  // Sort overall group list
+  if (sortBy === 'newest') {
+    groupedList.sort((a, b) => {
+      const timeA = Math.max(...a.results.map(r => new Date(r.file?.modifiedAt || 0).getTime()), 0);
+      const timeB = Math.max(...b.results.map(r => new Date(r.file?.modifiedAt || 0).getTime()), 0);
+      return timeB - timeA;
+    });
+  } else if (sortBy === 'oldest') {
+    groupedList.sort((a, b) => {
+      const timeA = Math.min(...a.results.map(r => new Date(r.file?.modifiedAt || 0).getTime()), Infinity);
+      const timeB = Math.min(...b.results.map(r => new Date(r.file?.modifiedAt || 0).getTime()), Infinity);
+      return timeA - timeB;
+    });
+  } else if (sortBy === 'name') {
+    groupedList.sort((a, b) => (a.filename || '').localeCompare(b.filename || ''));
+  } else {
+    groupedList.sort((a, b) => {
+      const maxA = Math.max(...a.results.map(r => r.score || 0), 0);
+      const maxB = Math.max(...b.results.map(r => r.score || 0), 0);
+      return maxB - maxA;
+    });
+  }
 
   const toggleGroupExpand = (fnameKey) => {
     setExpandedGroups(prev => ({ ...prev, [fnameKey]: !prev[fnameKey] }));
@@ -417,13 +478,11 @@ export const SearchResults = () => {
     setShowFullPaths(prev => ({ ...prev, [fileId]: !prev[fileId] }));
   };
 
-  // Dynamically compile REAL labels from indexed results & standard categories
-  const BASE_LABELS = ['C', 'Coding', 'College', 'Certificate', 'ed', 'Education', 'Internship', 'Project', 'Personal', 'Work', 'Notes', 'Assignments'];
+  // Dynamically compile REAL Smart Tags from backend and current search results (No hardcoded presets)
   const dynamicLabels = Array.from(new Set([
-    ...BASE_LABELS,
-    ...searchResults.map(r => r.file?.category).filter(Boolean),
-    ...searchResults.map(r => r.file?.extension?.replace('.', '')).filter(Boolean)
-  ]));
+    ...availableTags,
+    ...searchResults.flatMap(r => r.file?.smartTags || r.file?.tags || []).filter(Boolean)
+  ])).filter(t => t && typeof t === 'string' && t.trim().length > 0);
 
   // Lists for Popovers filtered strictly by local popover search inputs
   const fileTypeOptions = [
@@ -447,20 +506,6 @@ export const SearchResults = () => {
     { id: 'year', label: 'This year' }
   ];
 
-  const categoryOptions = [
-    { id: 'all', label: 'All Categories' },
-    { id: 'education', label: 'Education' },
-    { id: 'work', label: 'Work' },
-    { id: 'projects', label: 'Projects' },
-    { id: 'personal', label: 'Personal' },
-    { id: 'certificates', label: 'Certificates' },
-    { id: 'finance', label: 'Finance' }
-  ];
-
-  const categoryItems = categoryOptions.filter(i => 
-    i.label.toLowerCase().includes(categorySearchInput.toLowerCase())
-  );
-
   const labelItems = dynamicLabels
     .map(l => ({ id: l, label: l }))
     .filter(i => i.label.toLowerCase().includes(labelSearchInput.toLowerCase()));
@@ -474,10 +519,6 @@ export const SearchResults = () => {
     { id: '500mb_1gb', label: '500 MB–1 GB' },
     { id: 'over_1gb', label: '> 1 GB' }
   ];
-
-  const activeLabelList = Array.isArray(filters.labels)
-    ? filters.labels
-    : (filters.labels && filters.labels !== 'all' ? [filters.labels] : []);
 
   return (
     <div className="space-y-4 select-none max-w-5xl mx-auto" ref={popoverContainerRef}>
@@ -559,7 +600,7 @@ export const SearchResults = () => {
         </div>
       </div>
 
-      {/* FILTER TOOLBAR: Exactly 5 filters [ Type ] [ Date ] [ Category ] [ Labels ] [ Size ] [ Reset Filters ] */}
+      {/* FILTER TOOLBAR: Exactly 4 filters [ Type ] [ Date ] [ Smart Tags ] [ Size ] [ Reset Filters ] */}
       <div className="p-3 rounded-2xl glass-panel border-gray-800/80 space-y-2.5 relative">
         <div className="flex items-center justify-between flex-wrap gap-2">
           
@@ -631,72 +672,21 @@ export const SearchResults = () => {
               ))}
             </FilterPopover>
 
-            {/* 3. CATEGORY POPOVER */}
+            {/* 3. SMART TAGS POPOVER (UNIFIED METADATA FILTER) */}
             <FilterPopover
-              name="category"
-              title="Category"
-              activeLabel={filters.category !== 'all' ? categoryOptions.find(o => o.id === filters.category)?.label || filters.category : ''}
-              isOpen={openPopover === 'category'}
-              onToggle={togglePopover}
-              widthClass="w-64"
-            >
-              <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase tracking-wider">Category</div>
-              
-              <div className="px-1 py-1" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="text"
-                  name="categoryFilterSearchInput"
-                  autoComplete="off"
-                  value={categorySearchInput}
-                  onChange={(e) => setCategorySearchInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === 'Enter') e.preventDefault();
-                  }}
-                  placeholder="Search categories..."
-                  className="w-full px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-medium"
-                />
-              </div>
-
-              <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-0.5 pr-0.5">
-                {categoryItems.length > 0 ? (
-                  categoryItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        setFilters(prev => ({ ...prev, category: item.id }));
-                        setOpenPopover(null);
-                      }}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                        filters.category === item.id ? 'bg-emerald-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
-                      }`}
-                    >
-                      <span>{item.label}</span>
-                      {filters.category === item.id && <Check className="w-3.5 h-3.5" />}
-                    </button>
-                  ))
-                ) : (
-                  <div className="px-2 py-2 text-[11px] text-gray-500 italic">No matching categories</div>
-                )}
-              </div>
-            </FilterPopover>
-
-            {/* 4. LABELS POPOVER */}
-            <FilterPopover
-              name="labels"
-              title="Labels"
+              name="smartTags"
+              title="Smart Tags"
               activeCount={activeLabelList.length}
-              isOpen={openPopover === 'labels'}
+              isOpen={openPopover === 'smartTags'}
               onToggle={togglePopover}
               widthClass="w-72"
             >
-              <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase tracking-wider">Memora Labels</div>
+              <div className="text-[10px] font-bold text-purple-300 px-2 py-1 uppercase tracking-wider">Smart Tags</div>
               
               <div className="px-1 py-1" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="text"
-                  name="labelFilterSearchInput"
+                  name="smartTagsFilterSearchInput"
                   autoComplete="off"
                   value={labelSearchInput}
                   onChange={(e) => setLabelSearchInput(e.target.value)}
@@ -704,7 +694,7 @@ export const SearchResults = () => {
                     e.stopPropagation();
                     if (e.key === 'Enter') e.preventDefault();
                   }}
-                  placeholder="Search labels..."
+                  placeholder="Filter by Smart Tags..."
                   className="w-full px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 font-medium"
                 />
               </div>
@@ -739,12 +729,12 @@ export const SearchResults = () => {
                     );
                   })
                 ) : (
-                  <div className="px-2 py-2 text-[11px] text-gray-500 italic">No matching labels found</div>
+                  <div className="px-2 py-2 text-[11px] text-gray-500 italic">No matching Smart Tags found</div>
                 )}
               </div>
             </FilterPopover>
 
-            {/* 5. SIZE POPOVER */}
+            {/* 4. SIZE POPOVER */}
             <FilterPopover
               name="size"
               title="Size"
@@ -806,17 +796,10 @@ export const SearchResults = () => {
               </span>
             )}
 
-            {filters.category && filters.category !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px]">
-                Category: {filters.category}
-                <button onClick={() => removeSingleFilter('category', 'all')} className="hover:text-white ml-0.5 cursor-pointer font-bold">×</button>
-              </span>
-            )}
-
-            {/* Individual Label Chips */}
+            {/* Individual Smart Tag Chips */}
             {activeLabelList.map(lbl => (
               <span key={lbl} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold text-[11px]">
-                Label: {lbl}
+                Tag: {lbl}
                 <button onClick={() => removeIndividualLabel(lbl)} className="hover:text-white ml-0.5 cursor-pointer font-bold">×</button>
               </span>
             ))}
@@ -914,6 +897,10 @@ export const SearchResults = () => {
             const relevance = getRelevanceBadge(primaryResult.score || 0);
             const physicalLocationsCount = group.results.length;
 
+            const fileSmartTags = Array.isArray(primaryFile.smartTags) && primaryFile.smartTags.length > 0
+              ? primaryFile.smartTags
+              : (Array.isArray(primaryFile.tags) ? primaryFile.tags : []);
+
             return (
               <div
                 key={gIdx}
@@ -925,19 +912,27 @@ export const SearchResults = () => {
                     <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0 mt-0.5">
                       <FileText className="w-5 h-5" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-base font-bold text-white truncate hover:text-blue-300 transition-colors">
                           {group.filename}
                         </h3>
-
-                        {/* File Category / Tags */}
-                        {primaryFile.category && (
-                          <span className="px-2 py-0.5 rounded-md bg-gray-900 text-gray-300 border border-gray-800 text-[10px] font-semibold uppercase tracking-wider">
-                            {primaryFile.category}
-                          </span>
-                        )}
+                        <span className="px-2 py-0.5 rounded-md bg-gray-900 text-gray-400 border border-gray-800 text-[10px] font-mono">
+                          {(primaryFile.fileExtension || primaryFile.extension || 'FILE').toUpperCase().replace('.', '')}
+                        </span>
                       </div>
+
+                      {/* Smart Tags Chips */}
+                      {fileSmartTags.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                          <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mr-1">Smart Tags:</span>
+                          {fileSmartTags.map((tag, tIdx) => (
+                            <span key={tIdx} className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Duplicate physical locations indicator */}
                       {physicalLocationsCount > 1 && (

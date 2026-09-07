@@ -24,8 +24,7 @@ export const AppProvider = ({ children }) => {
   const [filters, setFilters] = useState({
     fileType: 'all',
     dateRange: 'any',
-    category: 'all',
-    labels: [],
+    smartTags: [],
     size: 'any'
   });
   const [sortBy, setSortBy] = useState('relevant');

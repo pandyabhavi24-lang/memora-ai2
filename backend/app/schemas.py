@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 # Folder Schemas
 class FolderBase(BaseModel):
@@ -36,8 +36,27 @@ class FileResponse(BaseModel):
     file_hash: str
     mime_type: Optional[str] = None
     extraction_status: str
+    smart_tags: List[str] = []
     created_at: datetime
     updated_at: datetime
+
+    @field_validator('smart_tags', mode='before')
+    @classmethod
+    def parse_smart_tags(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            try:
+                import json
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                pass
+            return [x.strip() for x in v.split(",") if x.strip()]
+        return []
 
     class Config:
         from_attributes = True
@@ -56,6 +75,7 @@ class SearchFilters(BaseModel):
     category: Optional[str] = None
     location: Optional[str] = None
     labels: Optional[List[str]] = None
+    smart_tags: Optional[List[str]] = None
     relevance: Optional[str] = None
 
 class SearchRequest(BaseModel):
@@ -71,6 +91,7 @@ class SearchResultItem(BaseModel):
     folder_name: str
     extension: str
     category: str
+    smart_tags: List[str] = []
     score: float
     matched_snippet: str
     ai_explanation: str
@@ -150,6 +171,8 @@ class SuggestionItemResponse(BaseModel):
     type: str
     currentPath: str
     suggestedCategory: str
+    smart_tags: List[str] = []
+    labels: List[str] = []
     confidence: int
     confidenceLevel: str
     reason: str
@@ -162,6 +185,18 @@ class SuggestionItemResponse(BaseModel):
 class SuggestionUpdate(BaseModel):
     status: Optional[str] = None  # Accepted, Rejected, Edited, Pending
     suggestedCategory: Optional[str] = None
+    smart_tags: Optional[List[str]] = None
+
+
+class CollectiveFolderRequest(BaseModel):
+    suggestion_ids: Optional[List[str]] = None
+    file_ids: Optional[List[int]] = None
+
+
+class CollectiveFolderResponse(BaseModel):
+    suggested_folder_name: str
+    reason: str
+    common_smart_tags: List[str] = []
 
 
 class AnalyzeRequest(BaseModel):
@@ -194,6 +229,7 @@ class OrganizationPreviewResponse(BaseModel):
 class OrganizationApplyRequest(BaseModel):
     suggestion_ids: Optional[List[str]] = None
     operation_type: Optional[str] = "move"
+    destination_folder: Optional[str] = None
 
 
 class OrganizationApplyResponse(BaseModel):

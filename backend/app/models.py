@@ -30,12 +30,39 @@ class File(Base):
     mime_type = Column(String, nullable=True)
     extracted_text = Column(Text, nullable=True)
     extraction_status = Column(String, default="pending")  # pending, success, failed, skipped
+    smart_tags = Column(Text, nullable=True)  # JSON-encoded list of strings
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     folder = relationship("Folder", back_populates="files")
     chunks = relationship("Chunk", back_populates="file", cascade="all, delete-orphan")
     suggestions = relationship("OrganizationSuggestion", back_populates="file", cascade="all, delete-orphan")
+
+    def get_smart_tags(self) -> list:
+        if not self.smart_tags:
+            return []
+        try:
+            import json
+            tags = json.loads(self.smart_tags)
+            return tags if isinstance(tags, list) else []
+        except Exception:
+            return [t.strip() for t in self.smart_tags.split(",") if t.strip()]
+
+    def set_smart_tags(self, tags: list):
+        import json
+        if isinstance(tags, list):
+            clean = []
+            seen = set()
+            for t in tags:
+                if t and str(t).strip():
+                    item = str(t).strip()
+                    if item.lower() not in seen:
+                        seen.add(item.lower())
+                        clean.append(item)
+            self.smart_tags = json.dumps(clean)
+        else:
+            self.smart_tags = json.dumps([])
+
 
 
 class Chunk(Base):
@@ -98,11 +125,43 @@ class OrganizationSuggestion(Base):
     confidence_level = Column(String, nullable=False)  # High, Medium, Low
     reason = Column(Text, nullable=False)
     status = Column(String, default="pending", index=True)  # pending, accepted, rejected, edited
+    smart_tags = Column(Text, nullable=True)  # JSON-encoded list of strings
     created_at = Column(DateTime, default=datetime.utcnow)
     reviewed_at = Column(DateTime, nullable=True)
 
     file = relationship("File", back_populates="suggestions")
     category = relationship("OrganizationCategory", back_populates="suggestions")
+
+    def get_smart_tags(self) -> list:
+        if self.smart_tags:
+            try:
+                import json
+                tags = json.loads(self.smart_tags)
+                if isinstance(tags, list) and tags:
+                    return tags
+            except Exception:
+                pass
+        if self.file:
+            return self.file.get_smart_tags()
+        return []
+
+    def set_smart_tags(self, tags: list):
+        import json
+        if isinstance(tags, list):
+            clean = []
+            seen = set()
+            for t in tags:
+                if t and str(t).strip():
+                    item = str(t).strip()
+                    if item.lower() not in seen:
+                        seen.add(item.lower())
+                        clean.append(item)
+            self.smart_tags = json.dumps(clean)
+            if self.file:
+                self.file.set_smart_tags(clean)
+        else:
+            self.smart_tags = json.dumps([])
+
 
 
 class DuplicateGroup(Base):

@@ -8,7 +8,10 @@ logger = logging.getLogger("memora.scanner")
 
 SUPPORTED_EXTENSIONS = {
     ".pdf", ".docx", ".doc",
-    ".pptx",   ".txt", ".md", ".csv", ".jpg", ".jpeg", ".png", ".webp"
+    ".pptx", ".txt", ".md", ".csv", ".jpg", ".jpeg", ".png", ".webp",
+    ".java", ".c", ".py",".class",".html",".htm",".js",".ts",".css",".scss",".sass",".php",".cpp",".hpp",".hxx",".cs",".swift",".kt",".kts",".rb",".go",".rs",".sh",".bash",".zsh",".fish",".ksh",".ps1",".bat",".cmd",".vbs",".jsb",".mjs",".cjs",".css",".scss",".sass",".less",".html",".htm",".js",".ts",".jsx",".tsx",
+    ".json",".xml",".yml",".yaml",".toml",".cfg",".conf",".ini",".env",".log",".sql",".py",".java",".c",".cpp",".hpp",".hxx",".cs",".swift",".kt",".kts",".rb",".go",".rs",".sh",".bash",".zsh",
+    ".fish",".ksh",".ps1",".bat",".cmd",".vbs",".jsb",".mjs",".cjs"
 }
 
 def calculate_sha256(file_path: str, block_size: int = 65536) -> str:

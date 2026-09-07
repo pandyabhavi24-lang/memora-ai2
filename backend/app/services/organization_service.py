@@ -64,9 +64,10 @@ class OrganizationService:
         self.seed_categories(db)
         return db.query(OrganizationCategory).filter(OrganizationCategory.is_active == True).all()
 
-    def analyze_files(self, db: Session, folder_id: Optional[int] = None) -> Dict[str, int]:
+    def analyze_files(self, db: Session, folder_id: Optional[int] = None, force_reanalyze: bool = False) -> Dict[str, int]:
         """
-        Runs hybrid classification over indexed files and records organization suggestions & duplicates.
+        Runs intelligent classification over indexed files and records organization suggestions & duplicates.
+        Reuses saved analysis unless forced or file content has changed.
         """
         categories = {c.name: c for c in self.get_categories(db)}
 
@@ -90,31 +91,49 @@ class OrganizationService:
         suggestions_count = 0
 
         for f in files:
-            cat_name, confidence, level, reason = classification_service.classify_file(
+            f_tags = f.get_smart_tags()
+            has_existing = f.id in existing_suggestions
+
+            if not force_reanalyze and f_tags and has_existing:
+                sug = existing_suggestions[f.id]
+                suggestions_count += 1
+                if sug.confidence >= 90:
+                    high_confidence_count += 1
+                continue
+
+            # Run dynamic content-driven analysis
+            cat_name, confidence, level, reason, smart_tags = classification_service.classify_file(
                 filename=f.name,
                 extension=f.extension,
                 extracted_text=f.extracted_text or ""
             )
 
-            category_obj = categories.get(cat_name) or categories.get("Other")
+            f.set_smart_tags(smart_tags)
 
-            if f.id in existing_suggestions:
+            category_obj = categories.get(cat_name)
+            if not category_obj:
+                category_obj = categories.get("Education") if ("Java" in cat_name or "Study" in cat_name) else categories.get("Other")
+                if not category_obj and categories:
+                    category_obj = list(categories.values())[0]
+
+            if has_existing:
                 sug = existing_suggestions[f.id]
-                # Update if pending
                 if sug.status == "pending":
-                    sug.category_id = category_obj.id
+                    sug.category_id = category_obj.id if category_obj else 1
                     sug.confidence = confidence
                     sug.confidence_level = level
                     sug.reason = reason
+                    sug.set_smart_tags(smart_tags)
             else:
                 sug = OrganizationSuggestion(
                     file_id=f.id,
-                    category_id=category_obj.id,
+                    category_id=category_obj.id if category_obj else 1,
                     confidence=confidence,
                     confidence_level=level,
                     reason=reason,
                     status="pending"
                 )
+                sug.set_smart_tags(smart_tags)
                 db.add(sug)
 
             suggestions_count += 1
@@ -134,7 +153,7 @@ class OrganizationService:
         }
 
     def get_suggestions(self, db: Session, status: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Returns formatted suggestions for frontend consumption."""
+        """Returns formatted suggestions for frontend consumption directly from DB without re-analysis."""
         self.seed_categories(db)
         query = db.query(OrganizationSuggestion).join(File).join(OrganizationCategory)
         if status:
@@ -144,12 +163,18 @@ class OrganizationService:
         results = []
 
         for sug in suggestions:
-            # Map path to display format (e.g., Downloads/file.pdf)
-            rel_path = sug.file.path
-            try:
-                rel_path = os.path.relpath(sug.file.path, start=os.path.dirname(sug.file.path))
-            except Exception:
-                pass
+            smart_tags = sug.get_smart_tags()
+            if not smart_tags:
+                smart_tags = sug.file.get_smart_tags()
+                if not smart_tags:
+                    _, _, _, _, smart_tags = classification_service.classify_file(
+                        filename=sug.file.name,
+                        extension=sug.file.extension,
+                        extracted_text=sug.file.extracted_text or ""
+                    )
+                    sug.set_smart_tags(smart_tags)
+                    sug.file.set_smart_tags(smart_tags)
+                    db.commit()
 
             results.append({
                 "id": f"s-{sug.id}",
@@ -158,7 +183,9 @@ class OrganizationService:
                 "filename": sug.file.name,
                 "type": sug.file.extension.upper().replace('.', ''),
                 "currentPath": sug.file.path,
-                "suggestedCategory": sug.category.name,
+                "suggestedCategory": sug.category.name if sug.category else "Other",
+                "smart_tags": smart_tags,
+                "labels": smart_tags,
                 "confidence": sug.confidence,
                 "confidenceLevel": sug.confidence_level,
                 "reason": sug.reason,
@@ -167,12 +194,89 @@ class OrganizationService:
 
         return results
 
+    def generate_collective_folder_name(
+        self,
+        db: Session,
+        suggestion_ids: Optional[List[str]] = None,
+        file_ids: Optional[List[int]] = None
+    ) -> Dict[str, Any]:
+        """
+        Synthesizes ONE collective physical folder suggestion for a selected group of files
+        based on common content, Smart Tags, and semantic similarity.
+        """
+        target_files = []
+        if suggestion_ids:
+            clean_ids = []
+            for sid in suggestion_ids:
+                raw_id = str(sid).replace("s-", "")
+                if raw_id.isdigit():
+                    clean_ids.append(int(raw_id))
+            if clean_ids:
+                sugs = db.query(OrganizationSuggestion).filter(OrganizationSuggestion.id.in_(clean_ids)).all()
+                target_files = [s.file for s in sugs if s.file]
+        elif file_ids:
+            target_files = db.query(File).filter(File.id.in_(file_ids)).all()
+
+        if not target_files:
+            return {
+                "suggested_folder_name": "Organized Files",
+                "reason": "Default target folder for selected files.",
+                "common_smart_tags": ["General"]
+            }
+
+        # Collect Smart Tags and textual concepts across all selected files
+        all_tags = []
+        tag_counts = {}
+        for f in target_files:
+            ftags = f.get_smart_tags()
+            if not ftags:
+                _, _, _, _, ftags = classification_service.classify_file(
+                    filename=f.name,
+                    extension=f.extension,
+                    extracted_text=f.extracted_text or ""
+                )
+                f.set_smart_tags(ftags)
+            all_tags.extend(ftags)
+            for t in ftags:
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+
+        # Find common Smart Tags appearing across multiple files
+        sorted_common_tags = sorted(tag_counts.keys(), key=lambda t: tag_counts[t], reverse=True)
+        unique_tags = list(dict.fromkeys(all_tags))[:6]
+
+        # Synthesize a clean, meaningful collective physical folder name
+        generic_descriptors = {"Study Material", "Notes", "Documents", "Files", "Programming", "General", "Images"}
+        if sorted_common_tags:
+            top_tag = sorted_common_tags[0]
+            second_tag = sorted_common_tags[1] if len(sorted_common_tags) > 1 and tag_counts[sorted_common_tags[1]] > 0 else None
+
+            if second_tag and second_tag not in generic_descriptors and top_tag not in generic_descriptors:
+                folder_name = f"{top_tag} {second_tag}"
+            elif second_tag and second_tag in generic_descriptors:
+                folder_name = f"{top_tag} {second_tag}"
+            elif top_tag in generic_descriptors and second_tag:
+                folder_name = f"{second_tag} {top_tag}"
+            else:
+                folder_name = f"{top_tag} Programming" if top_tag in ["Java", "Python", "C"] else f"{top_tag} Material"
+
+            reason = f"Synthesized based on shared content and common Smart Tags ({', '.join(sorted_common_tags[:3])}) across selected files."
+        else:
+            folder_name = "Organized Files"
+            reason = "Default folder based on selected files."
+
+        return {
+            "suggested_folder_name": folder_name,
+            "reason": reason,
+            "common_smart_tags": unique_tags
+        }
+
     def update_suggestion(
         self,
         db: Session,
         sug_id: int,
         status: Optional[str] = None,
-        category_name: Optional[str] = None
+        category_name: Optional[str] = None,
+        smart_tags: Optional[List[str]] = None
     ) -> Optional[OrganizationSuggestion]:
         sug = db.query(OrganizationSuggestion).filter(OrganizationSuggestion.id == sug_id).first()
         if not sug:
@@ -180,6 +284,13 @@ class OrganizationService:
 
         if status:
             sug.status = status.lower()
+            sug.reviewed_at = datetime.utcnow()
+
+        if smart_tags is not None:
+            sug.set_smart_tags(smart_tags)
+            if sug.file:
+                sug.file.set_smart_tags(smart_tags)
+            sug.status = "edited"
             sug.reviewed_at = datetime.utcnow()
 
         if category_name:
@@ -269,11 +380,14 @@ class OrganizationService:
         self,
         db: Session,
         selected_ids: Optional[List[str]] = None,
-        operation_type: str = "move"
+        operation_type: str = "move",
+        destination_folder: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Performs safe file movement or copying for approved suggestions with conflict handling & DB path updates.
         Destination is calculated relative to scanned root, ensuring idempotency and preventing nested paths.
+        If destination_folder is specified, all selected files are organized into that target folder.
+        Safely reuses existing physical folders without duplicating them.
         """
         op_type = "copy" if operation_type and operation_type.lower() == "copy" else "move"
 
@@ -287,7 +401,6 @@ class OrganizationService:
             if clean_ids:
                 query = query.filter(OrganizationSuggestion.id.in_(clean_ids))
             else:
-                # Explicit empty selection [] means organize NOTHING
                 return {
                     "status": "success",
                     "files_moved": 0,
@@ -298,7 +411,6 @@ class OrganizationService:
         else:
             query = query.filter(OrganizationSuggestion.status.in_(["accepted", "edited", "pending"]))
 
-        # Do NOT process rejected suggestions
         query = query.filter(OrganizationSuggestion.status != "rejected")
         suggestions = query.all()
 
@@ -314,6 +426,7 @@ class OrganizationService:
         files_moved = 0
         files_copied = 0
         errors = []
+        target_folder_name = destination_folder.strip().lstrip('/\\') if destination_folder and destination_folder.strip() else None
 
         for sug in suggestions:
             file_obj = sug.file
@@ -326,10 +439,10 @@ class OrganizationService:
                 errors.append(err)
                 continue
 
-            category_name = sug.category.name if sug.category else "Other"
-            root_dir, dest_dir, dest_file = self._get_scanned_root_and_target_path(file_obj, category_name)
+            folder_destination = target_folder_name if target_folder_name else (sug.category.name if sug.category else "Other")
+            root_dir, dest_dir, dest_file = self._get_scanned_root_and_target_path(file_obj, folder_destination)
 
-            # Idempotency check: If file is ALREADY in target category destination folder, skip move/copy
+            # Idempotency check: If file is ALREADY in destination folder, skip move/copy
             if src_path == dest_file:
                 logger.info(f"File '{src_path.name}' is already in target location '{dest_file}'. Skipping operation.")
                 sug.status = "accepted"
@@ -342,10 +455,10 @@ class OrganizationService:
                 errors.append(err)
                 continue
 
-            # Create destination folder under scanned root (handles nested subdirectories like ed/kt)
+            # Create destination folder under scanned root (mkdir with exist_ok=True safely REUSES existing folder)
             dest_dir.mkdir(parents=True, exist_ok=True)
 
-            # Safety check 3: Conflict resolution (append counter if target exists)
+            # Safety check 3: Conflict resolution (append counter ONLY if dest file already exists and is not src)
             if dest_file.exists() and dest_file != src_path:
                 stem = src_path.stem
                 ext = src_path.suffix
@@ -372,7 +485,6 @@ class OrganizationService:
                     logger.info(f"Successfully copied '{src_path.name}' to '{dest_file}'")
                 else:
                     shutil.move(str(src_path), str(dest_file))
-                    # Update file model path in database for move
                     file_obj.path = str(dest_file)
                     file_obj.name = dest_file.name
                     file_obj.updated_at = datetime.utcnow()

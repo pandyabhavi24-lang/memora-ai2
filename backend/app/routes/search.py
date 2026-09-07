@@ -19,6 +19,18 @@ def perform_search(search_req: SearchRequest, db: Session = Depends(get_db)):
     )
     return SearchResponse(**results_data)
 
+@router.get("/tags", response_model=List[str])
+def get_available_tags(db: Session = Depends(get_db)):
+    """Return all unique smart tags currently stored across files in the database."""
+    from ..models import File
+    files = db.query(File).filter(File.smart_tags.isnot(None)).all()
+    unique_tags = set()
+    for f in files:
+        for tag in f.get_smart_tags():
+            if tag and tag.strip():
+                unique_tags.add(tag.strip())
+    return sorted(list(unique_tags), key=lambda x: x.lower())
+
 @router.get("/history", response_model=List[SearchHistoryItem])
 def get_search_history(db: Session = Depends(get_db)):
     history = db.query(SearchHistory).order_by(SearchHistory.created_at.desc()).limit(15).all()

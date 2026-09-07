@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, ArrowRight, FolderOutput, CheckCircle2, ShieldCheck, FileText, Info, Copy, Folder, AlertTriangle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, ArrowRight, FolderOutput, CheckCircle2, ShieldCheck, FileText, Info, Copy, Folder, AlertTriangle, RefreshCw, Sparkles, Edit3 } from 'lucide-react';
 import { apiService } from '../../services/apiService';
+import { organizationService } from '../../services/organizationService';
 
 export const OrganizationPreviewModal = ({
   isOpen,
@@ -14,12 +15,45 @@ export const OrganizationPreviewModal = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [missingFileDetails, setMissingFileDetails] = useState(null);
 
-  if (!isOpen) return null;
+  // Collective folder state
+  const [collectiveFolderName, setCollectiveFolderName] = useState('');
+  const [isLoadingCollective, setIsLoadingCollective] = useState(false);
 
-  // Filter items to organize (Accepted or Edited or all valid suggestions)
+  // Filter items to organize
   const itemsToOrganize = suggestions.filter(
     (item) => item.status === 'Accepted' || item.status === 'Edited' || item.status === 'Pending'
   );
+
+  useEffect(() => {
+    if (isOpen && itemsToOrganize.length > 0) {
+      fetchCollectiveFolder();
+    } else {
+      setCollectiveFolderName('');
+    }
+  }, [isOpen, suggestions]);
+
+  const fetchCollectiveFolder = async () => {
+    setIsLoadingCollective(true);
+    try {
+      const suggestionIds = itemsToOrganize.map(i => i.db_id || i.id).filter(Boolean);
+      const fileIds = itemsToOrganize.map(i => i.file_id).filter(Boolean);
+      const res = await organizationService.getCollectiveFolder(suggestionIds, fileIds);
+      if (res && res.folder_name) {
+        setCollectiveFolderName(res.folder_name);
+      } else {
+        setCollectiveFolderName('Organized Files');
+      }
+    } catch (err) {
+      console.warn('Failed to fetch collective folder name:', err);
+      setCollectiveFolderName('Organized Files');
+    } finally {
+      setIsLoadingCollective(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const folderNameClean = (collectiveFolderName || '').trim() || 'Organized Files';
 
   const handleConfirm = async () => {
     setErrorMessage('');
@@ -28,8 +62,18 @@ export const OrganizationPreviewModal = ({
     
     setIsSubmitting(true);
     try {
+      // Sync collective folder name to all items being organized
+      for (const item of itemsToOrganize) {
+        const rawId = item.db_id || item.id;
+        try {
+          await organizationService.updateSuggestion(rawId, 'edited', folderNameClean);
+        } catch (e) {
+          console.error('Failed to sync edited category on confirm:', e);
+        }
+      }
+
       const targetIds = itemsToOrganize.map((item) => item.id);
-      const result = await onConfirmSuccess(operationMode, targetIds);
+      const result = await onConfirmSuccess(operationMode, targetIds, folderNameClean);
       if (result && (result.files_moved > 0 || result.files_copied > 0)) {
         setIsConfirmed(true);
       } else {
@@ -91,7 +135,7 @@ export const OrganizationPreviewModal = ({
             </h3>
 
             <p className="text-sm font-medium text-slate-300 max-w-md leading-relaxed">
-              {itemsToOrganize.length} file(s) successfully {operationMode === 'move' ? 'moved' : 'copied'} to their target physical destination folders.
+              {itemsToOrganize.length} file(s) successfully {operationMode === 'move' ? 'moved' : 'copied'} into physical folder <strong className="text-emerald-300 font-mono">📁 {folderNameClean}</strong>.
             </p>
 
             <div className="p-4 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-slate-300 font-medium flex items-center gap-3 max-w-md text-left">
@@ -132,8 +176,47 @@ export const OrganizationPreviewModal = ({
               </button>
             </div>
 
+            {/* CREATE NEW FOLDER SECTION */}
+            <div className="p-5 bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-purple-950/40 border-b border-blue-500/30 space-y-3 shrink-0">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-300 uppercase tracking-wider flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-400" />
+                  <span>CREATE NEW FOLDER (Collective AI Suggestion)</span>
+                </span>
+                {isLoadingCollective && (
+                  <span className="text-[11px] text-blue-400 flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    Generating folder name...
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300 block">
+                  Folder Name:
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-blue-400">
+                      <Folder className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="text"
+                      value={collectiveFolderName}
+                      onChange={(e) => setCollectiveFolderName(e.target.value)}
+                      placeholder="e.g. Java OOP Study"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-blue-500/50 rounded-xl text-sm font-bold text-white placeholder-slate-500 focus:outline-none focus:border-blue-400 shadow-inner font-mono"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Edit the collective physical folder name above. All selected files will be placed into this folder.
+                </p>
+              </div>
+            </div>
+
             {/* Stat Banner & Operation Selection Radio Cards */}
-            <div className="p-6 bg-slate-950/80 border-b border-slate-800/80 space-y-4 shrink-0">
+            <div className="p-5 bg-slate-950/80 border-b border-slate-800/80 space-y-3 shrink-0">
               <div className="flex items-center justify-between text-xs text-slate-300">
                 <span className="font-semibold text-sm text-white">
                   Selected files to organize: <strong className="text-blue-400 font-bold">{itemsToOrganize.length}</strong>
@@ -146,7 +229,7 @@ export const OrganizationPreviewModal = ({
                 {/* Move Option Card */}
                 <div
                   onClick={() => setOperationMode('move')}
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
                     operationMode === 'move'
                       ? 'bg-blue-600/15 border-blue-500/60 text-white shadow-md shadow-blue-500/10'
                       : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/60'
@@ -160,9 +243,9 @@ export const OrganizationPreviewModal = ({
                     className="mt-0.5 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
                   />
                   <div>
-                    <span className="font-bold text-xs text-white block">○ Move File</span>
+                    <span className="font-bold text-xs text-white block">○ Move Files</span>
                     <p className="text-[11px] text-slate-300 mt-0.5">
-                      Relocate original file from current directory into the target physical category folder.
+                      Relocate original files from current directories into <strong>{folderNameClean}</strong>.
                     </p>
                   </div>
                 </div>
@@ -170,7 +253,7 @@ export const OrganizationPreviewModal = ({
                 {/* Copy Option Card */}
                 <div
                   onClick={() => setOperationMode('copy')}
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
                     operationMode === 'copy'
                       ? 'bg-blue-600/15 border-blue-500/60 text-white shadow-md shadow-blue-500/10'
                       : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/60'
@@ -184,16 +267,16 @@ export const OrganizationPreviewModal = ({
                     className="mt-0.5 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
                   />
                   <div>
-                    <span className="font-bold text-xs text-white block">○ Copy File</span>
+                    <span className="font-bold text-xs text-white block">○ Copy Files</span>
                     <p className="text-[11px] text-slate-300 mt-0.5">
-                      Keep original file in place and create a new copy inside the target category folder.
+                      Keep original files in place and create copies inside <strong>{folderNameClean}</strong>.
                     </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Error / Missing File Alert Banner with Rescan Button */}
+            {/* Error / Missing File Alert Banner */}
             {errorMessage && (
               <div className="p-4 bg-red-950/40 border-b border-red-500/30 text-red-200 text-xs space-y-2 shrink-0">
                 <div className="flex items-start gap-2">
@@ -236,42 +319,41 @@ export const OrganizationPreviewModal = ({
             </div>
 
             {/* Scrollable Content List */}
-            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-3.5">
-              {itemsToOrganize.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-3 text-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-white font-mono">{item.filename}</span>
-                    <span className="px-2.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30 font-semibold text-[11px]">
-                      AI Category: {item.suggestedCategory}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono pt-1">
-                    {/* Current Location */}
-                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">
-                        CURRENT LOCATION
-                      </span>
-                      <p className="text-slate-300 text-[11px] truncate" title={item.currentPath}>
-                        {item.currentPath}
-                      </p>
+            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-3">
+              {itemsToOrganize.map((item) => {
+                return (
+                  <div
+                    key={item.id}
+                    className="p-4 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-2 text-xs"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span className="font-bold text-sm text-white font-mono">{item.filename}</span>
                     </div>
 
-                    {/* Proposed Destination */}
-                    <div className="p-2.5 rounded-lg bg-slate-900 border border-blue-500/30 space-y-0.5">
-                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider block font-sans">
-                        PHYSICAL DESTINATION ({operationMode.toUpperCase()})
-                      </span>
-                      <p className="text-blue-300 text-[11px] font-bold truncate" title={`${item.suggestedCategory}/${item.filename}`}>
-                        {item.suggestedCategory}/{item.filename}
-                      </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono pt-1">
+                      {/* Current Location */}
+                      <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">
+                          CURRENT LOCATION
+                        </span>
+                        <p className="text-slate-300 text-[11px] truncate" title={item.currentPath}>
+                          {item.currentPath}
+                        </p>
+                      </div>
+
+                      {/* Proposed Destination */}
+                      <div className="p-2.5 rounded-lg bg-slate-900 border border-blue-500/30 space-y-0.5">
+                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider block font-sans">
+                          TARGET PATH ({operationMode.toUpperCase()})
+                        </span>
+                        <p className="text-blue-300 text-[11px] font-bold truncate" title={`${folderNameClean}/${item.filename}`}>
+                          📁 {folderNameClean}/{item.filename}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Sticky Actions Footer */}

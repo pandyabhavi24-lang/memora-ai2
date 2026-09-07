@@ -13,69 +13,15 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
- * Calibrates raw backend score & text signals into a user-friendly relevance percentage (0-100%).
+ * Returns clean cosine similarity relevance percentage (0-100%) from backend.
+ * No arbitrary bonuses are added, preserving true mathematical vector similarity.
  */
-export function calculateRelevanceScore({ score, query, filename, filePath, snippet, explanation }) {
-  if (!query || !query.trim()) {
-    return Math.min(100, Math.max(0, Math.round(score || 0)));
+export function calculateRelevanceScore({ score }) {
+  if (typeof score === 'number') {
+    return Math.min(100, Math.max(0, Math.round(score)));
   }
-
-  const q = query.trim().toLowerCase();
-  const name = (filename || '').toLowerCase();
-  const path = (filePath || '').toLowerCase();
-  const text = ((snippet || '') + ' ' + (explanation || '')).toLowerCase();
-
-  // 1. Uncompress raw vector score (backend maps raw cosine sim to ~70..98 range)
-  const rawScore = typeof score === 'number' ? score : parseFloat(score) || 70;
-  let vectorNorm = 0;
-  if (rawScore > 1) {
-    // Backend score range ~70 to 98
-    vectorNorm = Math.max(0, Math.min(1, (rawScore - 70) / 28));
-  } else {
-    // Raw similarity range 0 to 1
-    vectorNorm = Math.max(0, Math.min(1, rawScore));
-  }
-
-  // 2. Base score from vector similarity (30 to 65)
-  let calibrated = 30 + (vectorNorm * 35);
-
-  // 3. Exact query phrase matches in title/path or text
-  const inName = name.includes(q) || path.includes(q);
-  const inText = text.includes(q);
-
-  if (inName) {
-    calibrated += 28;
-  }
-  if (inText) {
-    calibrated += 22;
-  }
-
-  // 4. Token-based matching for individual query words
-  const words = q.split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w));
-  if (words.length > 0) {
-    const titleMatchedCount = words.filter(w => name.includes(w) || path.includes(w)).length;
-    const textMatchedCount = words.filter(w => text.includes(w)).length;
-
-    const titleRatio = titleMatchedCount / words.length;
-    const textRatio = textMatchedCount / words.length;
-
-    if (!inName && titleRatio > 0) {
-      calibrated += titleRatio * 18;
-    }
-    if (!inText && textRatio > 0) {
-      calibrated += textRatio * 14;
-    }
-
-    // Keyword density bonus if multiple query terms appear in snippet/explanation
-    if (textMatchedCount >= 2 || (textMatchedCount === 1 && words.length === 1)) {
-      calibrated += 5;
-    }
-  }
-
-  // 5. Final bounding (0 - 99, 100 for exact title & snippet match)
-  const isExactFullMatch = inName && inText;
-  const maxCap = isExactFullMatch ? 100 : 98;
-  return Math.min(maxCap, Math.max(25, Math.round(calibrated)));
+  const parsed = parseFloat(score);
+  return !isNaN(parsed) ? Math.min(100, Math.max(0, Math.round(parsed))) : 0;
 }
 
 class SemanticSearchService {
@@ -89,14 +35,18 @@ class SemanticSearchService {
       };
     }
 
+    const targetSmartTags = Array.isArray(filters.smartTags) && filters.smartTags.length > 0 
+      ? filters.smartTags 
+      : (Array.isArray(filters.labels) && filters.labels.length > 0 ? filters.labels : null);
+
     const payload = {
       query: query.trim(),
       top_k: 20,
       filters: {
         file_type: filters.fileType && filters.fileType !== 'all' ? filters.fileType : null,
         date_range: filters.dateRange && filters.dateRange !== 'any' ? filters.dateRange : null,
-        category: filters.category && filters.category !== 'all' ? filters.category : null,
-        labels: Array.isArray(filters.labels) && filters.labels.length > 0 ? filters.labels : (typeof filters.labels === 'string' && filters.labels !== 'all' && filters.labels !== '' ? [filters.labels] : null),
+        smart_tags: targetSmartTags,
+        labels: targetSmartTags,
         size: filters.size && filters.size !== 'any' ? filters.size : null
       },
       sort_by: sortBy
@@ -126,6 +76,10 @@ class SemanticSearchService {
           explanation: item.ai_explanation
         });
 
+        const smartTagsList = Array.isArray(item.smart_tags) && item.smart_tags.length > 0
+          ? item.smart_tags
+          : (Array.isArray(item.labels) ? item.labels : []);
+
         return {
           file: {
             id: item.file_id,
@@ -138,7 +92,8 @@ class SemanticSearchService {
             modifiedAt: item.modified_at,
             aiSummary: item.ai_explanation,
             extractedSnippet: item.matched_snippet,
-            tags: [item.category.toUpperCase(), item.folder_name]
+            smartTags: smartTagsList,
+            tags: smartTagsList
           },
           score: calibratedScore,
           matchedSnippet: item.matched_snippet,
@@ -193,6 +148,18 @@ class SemanticSearchService {
       });
     } catch (err) {
       console.error('Failed to clear search history:', err);
+    }
+  }
+
+  async getAvailableSmartTags() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/search/tags`);
+      if (!response.ok) return [];
+      const tags = await response.json();
+      return Array.isArray(tags) ? tags : [];
+    } catch (err) {
+      console.warn('Failed to fetch available smart tags from backend:', err);
+      return [];
     }
   }
 }

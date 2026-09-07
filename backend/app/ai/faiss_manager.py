@@ -84,12 +84,11 @@ class FAISSManager:
         if vectors.shape[1] != self.dimension:
             raise ValueError(f"Vector dimension mismatch: expected {self.dimension}, got {vectors.shape[1]}")
 
-        start_id = self.next_faiss_id
+        start_id = self.index.ntotal
         assigned = []
 
-        # IndexFlatIP does not support custom IDs directly in standard flat index unless using IndexIDMap,
-        # but IndexFlatIP maintains strict sequential index pos (0..N-1).
-        # To maintain alignment, we add vectors sequentially to IndexFlatIP and record mapping.
+        # IndexFlatIP maintains strict sequential index pos (0..N-1).
+        # To maintain alignment, start_id matches self.index.ntotal before adding vectors.
         self.index.add(vectors)
 
         for i in range(count):
@@ -98,7 +97,7 @@ class FAISSManager:
             self.faiss_to_chunk[faiss_id] = chunk_id
             assigned.append((faiss_id, chunk_id))
 
-        self.next_faiss_id += count
+        self.next_faiss_id = self.index.ntotal
         self.save()
         return assigned
 

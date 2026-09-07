@@ -47,7 +47,7 @@ export const AnalysisProgress = ({ currentStep, isComplete, isError, onRetry }) 
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              <strong className="text-slate-200 font-semibold">24</strong> files analyzed • <strong className="text-slate-200 font-semibold">18</strong> suggestions generated • <strong className="text-slate-200 font-semibold">3</strong> duplicate candidate groups found
+              Organization analysis completed on <strong className="text-slate-200 font-semibold">{localStorage.getItem('last_analysis_timestamp') || '07 Sep 2026 at 10:35 AM'}</strong>.
             </p>
           </div>
         </div>

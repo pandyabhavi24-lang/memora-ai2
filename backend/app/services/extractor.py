@@ -285,6 +285,7 @@ class TextExtractor:
     def extract_from_image(file_path: str) -> Tuple[str, str]:
         try:
             import cv2
+            import numpy as np
 
             reader = get_easyocr_reader()
 
@@ -297,19 +298,21 @@ class TextExtractor:
 
             image = cv2.imread(file_path)
 
+            # Fallback for Windows non-ASCII / space paths
             if image is None:
-                return "", "failed"
+                try:
+                    img_bytes = np.fromfile(file_path, dtype=np.uint8)
+                    image = cv2.imdecode(img_bytes, cv2.IMREAD_COLOR)
+                except Exception as img_err:
+                    logger.debug(f"np.fromfile loading failed for '{file_path}': {img_err}")
 
-            # Preprocessing
-            gray = cv2.cvtColor(
-                image,
-                cv2.COLOR_BGR2GRAY
-            )
-
-            results = reader.readtext(
-                gray,
-                detail=0
-            )
+            if image is not None:
+                # Preprocessing
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                results = reader.readtext(gray, detail=0)
+            else:
+                # Direct file path fallback for EasyOCR
+                results = reader.readtext(file_path, detail=0)
 
             extracted_str = " ".join(
                 [
@@ -351,7 +354,7 @@ class TextExtractor:
         elif ext == ".pptx":
             return cls.extract_from_pptx(file_path)
 
-        elif ext in [".txt", ".md", ".csv"]:
+        elif ext in [".txt", ".md", ".csv", ".java", ".c", ".py"]:
             return cls.extract_from_plain_text(file_path)
 
         elif ext in [".jpg", ".jpeg", ".png", ".webp"]:
