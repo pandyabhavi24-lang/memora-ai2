@@ -7,3 +7,9 @@ scipy
 faiss-cpu
 fastembed
 python-multipart
+easyocr
+opencv-python-headless
+pillow
+pypdf
+python-docx
+python-pptx

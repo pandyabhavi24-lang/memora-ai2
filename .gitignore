@@ -57,7 +57,7 @@ out/
 htmlcov/
 
 # ==============================
-# Temporary Files
+# Temporary / Logs
 # ==============================
 *.tmp
 *.temp
@@ -71,30 +71,38 @@ temp/
 tmp/
 
 # ==============================
-# Vector Database / Search Cache
-# ==============================
-# Add these ONLY if they are generated locally
-# faiss_index/
-# embeddings/
-# vector_store/
-
-# ==============================
 # Local Database
 # ==============================
 *.db
 *.sqlite
 *.sqlite3
+
+# ==============================
+# Vector Database / Generated FAISS
+# ==============================
 faiss/
-backend/data/faiss/
 embeddings/
 vector_store/
-scratch_verify.py
+
+# Generated FAISS mapping
 backend/data/faiss/faiss_id_map.json
+backend/data/faiss/visual_id_map.json
+
+# Generated visual FAISS index
+backend/data/faiss/visual_index.faiss
+
+# ==============================
+# Local Test / Scratch Files
+# ==============================
+scratch_verify.py
+
 backend/test_api_endpoints.py
 backend/test_improvements.py
 backend/test_module2.py
 backend/test_module1_search.py
+
+# ==============================
+# Sample / Test Documents
+# ==============================
 backend/sample_documents/
 backend/test_module1_docs/
-backend/data/faiss/faiss_id_map.json
-scratch_verify.py
