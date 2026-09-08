@@ -65,15 +65,10 @@ class SemanticSearchService {
 
       const data = await response.json();
 
-      // Transform backend SearchResultItem objects & apply calibrated relevance percentage
+      // Transform backend SearchResultItem objects with true mathematical scores
       const formattedResults = (data.results || []).map(item => {
         const calibratedScore = calculateRelevanceScore({
-          score: item.score,
-          query: query.trim(),
-          filename: item.file_name,
-          filePath: item.file_path,
-          snippet: item.matched_snippet,
-          explanation: item.ai_explanation
+          score: item.score !== undefined ? item.score : (item.final_score ? item.final_score * 100 : 0)
         });
 
         const smartTagsList = Array.isArray(item.smart_tags) && item.smart_tags.length > 0
@@ -82,8 +77,8 @@ class SemanticSearchService {
 
         return {
           file: {
-            id: item.file_id,
-            name: item.file_name,
+            id: item.file_id || item.document_id,
+            name: item.file_name || item.filename,
             path: item.file_path,
             folderName: item.folder_name,
             category: item.category,
@@ -96,6 +91,9 @@ class SemanticSearchService {
             tags: smartTagsList
           },
           score: calibratedScore,
+          semanticScore: typeof item.semantic_score === 'number' ? item.semantic_score : null,
+          lexicalScore: typeof item.lexical_score === 'number' ? item.lexical_score : null,
+          finalScore: typeof item.final_score === 'number' ? item.final_score : null,
           matchedSnippet: item.matched_snippet,
           aiExplanation: item.ai_explanation,
           matchHighlights: [query.trim()]
@@ -106,13 +104,15 @@ class SemanticSearchService {
         results: formattedResults,
         total: data.total,
         query: data.query,
-        executionTimeMs: data.execution_time_ms
+        executionTimeMs: data.execution_time_ms,
+        debug: data.debug
       };
     } catch (err) {
       console.error('Semantic Search API Error:', err);
       throw err;
     }
   }
+
 
   async getSearchHistory() {
     try {

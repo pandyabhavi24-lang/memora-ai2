@@ -45,6 +45,51 @@ def is_subpath(child_path: Path, parent_path: Path) -> bool:
         return False
 
 
+def format_friendly_display_path(file_path: str, root_folder_path: Optional[str] = None, root_folder_name: Optional[str] = None) -> str:
+    r"""
+    Converts absolute filesystem paths to clean, user-friendly relative display paths.
+    Examples:
+    Root: C:\Users\Rana Ruchi\OneDrive\Desktop\Ruchi
+    File: C:\Users\Rana Ruchi\OneDrive\Desktop\Ruchi\Photos\Flowers\rose.jpg
+    -> Ruchi / Photos / Flowers
+    File in root: C:\Users\Rana Ruchi\OneDrive\Desktop\Ruchi\readme.txt
+    -> Ruchi
+    """
+    if not file_path:
+        return "Root Folder"
+
+    try:
+        abs_file = os.path.abspath(file_path)
+        file_dir = os.path.dirname(abs_file)
+
+        if root_folder_path:
+            abs_root = os.path.abspath(root_folder_path)
+            root_label = root_folder_name or os.path.basename(abs_root) or "Root"
+
+            if os.path.normcase(file_dir) == os.path.normcase(abs_root):
+                return root_label
+
+            if is_subpath(Path(file_dir), Path(abs_root)):
+                rel = os.path.relpath(file_dir, abs_root)
+                parts = [p for p in rel.replace("\\", "/").split("/") if p and p != "."]
+                if parts:
+                    return f"{root_label} / {' / '.join(parts)}"
+                return root_label
+
+        # Fallback: Clean up drive letters and system parent folders
+        parts = [p for p in Path(file_dir).parts if p and not p.endswith(":") and "\\" not in p and "/" not in p]
+        filtered = [p for p in parts if p.lower() not in ["users", "desktop", "onedrive", "documents", "downloads"]]
+        if len(filtered) >= 3:
+            return " / ".join(filtered[-3:])
+        elif filtered:
+            return " / ".join(filtered)
+        elif parts:
+            return " / ".join(parts[-2:])
+        return os.path.basename(file_dir) or "Root Folder"
+    except Exception:
+        return os.path.basename(os.path.dirname(file_path)) or "Root Folder"
+
+
 class OrganizationService:
     def seed_categories(self, db: Session) -> List[OrganizationCategory]:
         """Ensure default categories are seeded in the database."""
@@ -176,6 +221,10 @@ class OrganizationService:
                     sug.file.set_smart_tags(smart_tags)
                     db.commit()
 
+            folder_path = sug.file.folder.path if sug.file and sug.file.folder else None
+            folder_name = sug.file.folder.name if sug.file and sug.file.folder else None
+            display_path = format_friendly_display_path(sug.file.path, folder_path, folder_name)
+
             results.append({
                 "id": f"s-{sug.id}",
                 "db_id": sug.id,
@@ -183,6 +232,7 @@ class OrganizationService:
                 "filename": sug.file.name,
                 "type": sug.file.extension.upper().replace('.', ''),
                 "currentPath": sug.file.path,
+                "displayPath": display_path,
                 "suggestedCategory": sug.category.name if sug.category else "Other",
                 "smart_tags": smart_tags,
                 "labels": smart_tags,
@@ -564,35 +614,66 @@ class OrganizationService:
             })
         return results
 
-    def get_overview(self, db: Session) -> List[Dict[str, Any]]:
+    def get_overview(self, db: Session) -> Dict[str, Any]:
         """
-        Calculates category distribution from real organization suggestions in the database.
-        Returns empty list [] if no suggestions exist yet.
+        Returns rich organization overview containing BOTH:
+        1. Existing physical folders & subfolder hierarchy
+        2. Memora AI suggested & created categories
         """
+        folders = db.query(Folder).filter(Folder.is_active == True).all()
+        all_files = db.query(File).all()
         suggestions = db.query(OrganizationSuggestion).join(OrganizationCategory).all()
-        if not suggestions:
-            return []
 
+        # 1. Existing Physical Folders
+        existing_folders_list = []
+        files_by_folder: Dict[int, List[File]] = {}
+        for f in all_files:
+            files_by_folder.setdefault(f.folder_id, []).append(f)
+
+        for folder in folders:
+            f_list = files_by_folder.get(folder.id, [])
+            subfolder_counts: Dict[str, int] = {}
+            for f in f_list:
+                disp_path = format_friendly_display_path(f.path, folder.path, folder.name)
+                subfolder_counts[disp_path] = subfolder_counts.get(disp_path, 0) + 1
+
+            subfolders_breakdown = [
+                {"name": sp.split(" / ")[-1] if " / " in sp else sp, "path": folder.path, "displayPath": sp, "fileCount": cnt, "subfolders": []}
+                for sp, cnt in sorted(subfolder_counts.items(), key=lambda x: x[0])
+            ]
+            existing_folders_list.append({
+                "name": folder.name,
+                "path": folder.path,
+                "displayPath": folder.name,
+                "fileCount": len(f_list),
+                "subfolders": subfolders_breakdown
+            })
+
+        # 2. AI Categories & Distribution
         counts: Dict[str, int] = {}
         for sug in suggestions:
-            cat_name = sug.category.name
+            cat_name = sug.category.name if sug.category else "Other"
             counts[cat_name] = counts.get(cat_name, 0) + 1
 
-        total_files = len(suggestions)
+        total_files = len(suggestions) if suggestions else len(all_files)
         categories = self.get_categories(db)
 
-        overview = []
+        ai_categories_list = []
         for cat in categories:
             f_count = counts.get(cat.name, 0)
             if f_count > 0:
                 pct = round((f_count / total_files) * 100, 1) if total_files > 0 else 0.0
-                overview.append({
+                ai_categories_list.append({
                     "category": cat.name,
                     "fileCount": f_count,
                     "totalFiles": total_files,
                     "percentage": pct
                 })
 
-        return overview
+        return {
+            "existingFolders": existing_folders_list,
+            "aiCategories": ai_categories_list,
+            "totalFiles": total_files
+        }
 
 organization_service = OrganizationService()

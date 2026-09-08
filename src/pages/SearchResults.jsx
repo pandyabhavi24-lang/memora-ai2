@@ -147,8 +147,9 @@ export const SearchResults = () => {
   const [categorySearchInput, setCategorySearchInput] = useState('');
   const [labelSearchInput, setLabelSearchInput] = useState('');
   const [availableTags, setAvailableTags] = useState([]);
+  const [availableCategories, setAvailableCategories] = useState([]);
 
-  // Fetch real persistent Smart Tags from backend
+  // Fetch real persistent Smart Tags and Categories from backend
   useEffect(() => {
     semanticSearchService.getAvailableSmartTags().then(tags => {
       if (Array.isArray(tags) && tags.length > 0) {
@@ -156,6 +157,14 @@ export const SearchResults = () => {
       }
     }).catch(err => {
       console.warn('Could not load smart tags for search filters:', err);
+    });
+
+    import('../services/organizationService').then(({ organizationService }) => {
+      organizationService.getCategories().then(cats => {
+        if (Array.isArray(cats) && cats.length > 0) {
+          setAvailableCategories(cats);
+        }
+      }).catch(err => console.warn('Could not load categories for search filters:', err));
     });
   }, []);
 
@@ -215,11 +224,13 @@ export const SearchResults = () => {
     setFilters({
       fileType: 'all',
       dateRange: 'any',
+      category: 'all',
       smartTags: [],
       labels: [],
       size: 'any'
     });
     setLabelSearchInput('');
+    setCategorySearchInput('');
     setOpenPopover(null);
   };
 
@@ -269,6 +280,7 @@ export const SearchResults = () => {
     if (filters.fileType && filters.fileType !== 'all') count++;
     if (filters.dateRange && filters.dateRange !== 'any') count++;
     if (filters.size && filters.size !== 'any') count++;
+    if (filters.category && filters.category !== 'all') count++;
     if (activeLabelList.length > 0) {
       count += activeLabelList.length;
     }
@@ -286,6 +298,16 @@ export const SearchResults = () => {
     if (sizeFilter === '500mb_1gb') return mb >= 500 && mb <= 1024;
     if (sizeFilter === 'over_1gb') return mb >= 1024;
     return true;
+  };
+
+  // Helper for Category filtering
+  const matchesCategory = (file, catFilter) => {
+    if (!catFilter || catFilter.toLowerCase() === 'all') return true;
+    const target = catFilter.toLowerCase();
+    const cat = (file.category || '').toLowerCase();
+    const orgCat = (file.orgCategory || file.org_category || '').toLowerCase();
+    const tags = (file.smartTags || file.tags || []).map(t => (t || '').toLowerCase());
+    return cat.includes(target) || orgCat.includes(target) || tags.some(t => t.includes(target));
   };
 
   // Helper for Smart Tags filtering
@@ -347,16 +369,17 @@ export const SearchResults = () => {
     const matchesType = matchesFileType(file, filters.fileType);
     const matchesDate = matchesDateRange(file.modifiedAt, filters.dateRange);
     const matchesSz = matchesSize(file.sizeBytes, filters.size);
+    const matchesCat = matchesCategory(file, filters.category);
     const matchesTag = matchesSmartTags(file, activeLabelList);
 
     if (searchMode === 'exact' && searchQuery) {
       const qWords = searchQuery.toLowerCase().split(/\s+/).filter(w => w.length > 1);
       const textContent = ((file.name || '') + ' ' + (result.matchedSnippet || '') + ' ' + (result.aiExplanation || '')).toLowerCase();
       const hasExactWords = qWords.every(w => textContent.includes(w));
-      return matchesType && matchesDate && matchesSz && matchesTag && hasExactWords;
+      return matchesType && matchesDate && matchesSz && matchesCat && matchesTag && hasExactWords;
     }
 
-    return matchesType && matchesDate && matchesSz && matchesTag;
+    return matchesType && matchesDate && matchesSz && matchesCat && matchesTag;
   });
 
   const activeFiltersCount = getActiveFiltersCount();
@@ -485,6 +508,27 @@ export const SearchResults = () => {
   ])).filter(t => t && typeof t === 'string' && t.trim().length > 0);
 
   // Lists for Popovers filtered strictly by local popover search inputs
+  const defaultCategoryOptions = [
+    { id: 'all', label: 'All Categories' },
+    { id: 'education', label: '🎓 Education' },
+    { id: 'programming', label: '💻 Programming' },
+    { id: 'work', label: '💼 Work' },
+    { id: 'personal', label: '👤 Personal' },
+    { id: 'projects', label: '📁 Projects' },
+    { id: 'certificates', label: '🏆 Certificates' },
+    { id: 'finance', label: '💳 Finance' },
+    { id: 'images', label: '🖼 Images' },
+    { id: 'documents', label: '📄 Documents' },
+    { id: 'other', label: '📦 Other' }
+  ];
+
+  const dynamicCategoryOptions = [
+    { id: 'all', label: 'All Categories' },
+    ...availableCategories.map(c => ({ id: c.name.toLowerCase(), label: c.name }))
+  ];
+
+  const categoryOptions = availableCategories.length > 0 ? dynamicCategoryOptions : defaultCategoryOptions;
+
   const fileTypeOptions = [
     { id: 'all', label: 'All Types' },
     { id: 'pdf', label: '📄 PDF' },
@@ -600,7 +644,7 @@ export const SearchResults = () => {
         </div>
       </div>
 
-      {/* FILTER TOOLBAR: Exactly 4 filters [ Type ] [ Date ] [ Smart Tags ] [ Size ] [ Reset Filters ] */}
+      {/* FILTER TOOLBAR: [ Category ] [ Type ] [ Date ] [ Smart Tags ] [ Size ] [ Reset Filters ] */}
       <div className="p-3 rounded-2xl glass-panel border-gray-800/80 space-y-2.5 relative">
         <div className="flex items-center justify-between flex-wrap gap-2">
           
@@ -616,7 +660,39 @@ export const SearchResults = () => {
               )}
             </div>
 
-            {/* 1. TYPE POPOVER */}
+            {/* 1. CATEGORY POPOVER */}
+            <FilterPopover
+              name="category"
+              title="Category"
+              activeLabel={filters.category && filters.category !== 'all' ? (categoryOptions.find(o => o.id.toLowerCase() === filters.category.toLowerCase())?.label || filters.category) : ''}
+              isOpen={openPopover === 'category'}
+              onToggle={togglePopover}
+              widthClass="w-56"
+            >
+              <div className="text-[10px] font-bold text-emerald-400 px-2 py-1 uppercase tracking-wider">Category</div>
+              <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-0.5">
+                {categoryOptions.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setFilters(prev => ({ ...prev, category: item.id }));
+                      setOpenPopover(null);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
+                      (filters.category || 'all').toLowerCase() === item.id.toLowerCase()
+                        ? 'bg-emerald-600 text-white font-bold'
+                        : 'text-gray-300 hover:bg-gray-800'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {(filters.category || 'all').toLowerCase() === item.id.toLowerCase() && <Check className="w-3.5 h-3.5" />}
+                  </button>
+                ))}
+              </div>
+            </FilterPopover>
+
+            {/* 2. TYPE POPOVER */}
             <FilterPopover
               name="type"
               title="Type"
@@ -644,7 +720,7 @@ export const SearchResults = () => {
               ))}
             </FilterPopover>
 
-            {/* 2. DATE POPOVER */}
+            {/* 3. DATE POPOVER */}
             <FilterPopover
               name="date"
               title="Date"
@@ -672,7 +748,7 @@ export const SearchResults = () => {
               ))}
             </FilterPopover>
 
-            {/* 3. SMART TAGS POPOVER (UNIFIED METADATA FILTER) */}
+            {/* 4. SMART TAGS POPOVER (UNIFIED METADATA FILTER) */}
             <FilterPopover
               name="smartTags"
               title="Smart Tags"
@@ -734,7 +810,7 @@ export const SearchResults = () => {
               </div>
             </FilterPopover>
 
-            {/* 4. SIZE POPOVER */}
+            {/* 5. SIZE POPOVER */}
             <FilterPopover
               name="size"
               title="Size"
@@ -781,6 +857,13 @@ export const SearchResults = () => {
         {activeFiltersCount > 0 && (
           <div className="pt-2 border-t border-gray-800/80 flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-gray-400 font-medium">Active filters:</span>
+
+            {filters.category && filters.category !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px]">
+                Category: {categoryOptions.find(o => o.id.toLowerCase() === filters.category.toLowerCase())?.label || filters.category}
+                <button onClick={() => removeSingleFilter('category', 'all')} className="hover:text-white ml-0.5 cursor-pointer font-bold">×</button>
+              </span>
+            )}
             
             {filters.fileType !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-semibold text-[11px]">
@@ -952,17 +1035,31 @@ export const SearchResults = () => {
                     </div>
                   </div>
 
-                  {/* Similarity / Relevance Badge */}
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 border ${
-                    relevance.variant === 'success'
-                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                      : relevance.variant === 'violet'
-                      ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                      : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
-                  }`}>
-                    {relevance.text}
-                  </span>
+                  {/* Similarity / Relevance Badge with Semantic + Lexical Breakdown */}
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                      relevance.variant === 'success'
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : relevance.variant === 'violet'
+                        ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                        : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                    }`}>
+                      {relevance.text}
+                    </span>
+                    {typeof primaryResult.semanticScore === 'number' && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-mono">
+                        <span className="text-purple-300 font-semibold" title="Semantic Score (90% weight)">
+                          Sem: {(primaryResult.semanticScore * 100).toFixed(1)}%
+                        </span>
+                        <span>•</span>
+                        <span className="text-blue-300 font-semibold" title="Lexical Score (10% weight)">
+                          Lex: {typeof primaryResult.lexicalScore === 'number' ? (primaryResult.lexicalScore * 100).toFixed(1) : '0.0'}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
 
                 {/* PHYSICAL LOCATIONS LIST */}
                 <div className="space-y-2 pl-2 border-l-2 border-gray-800/80">

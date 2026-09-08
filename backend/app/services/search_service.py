@@ -1,16 +1,36 @@
 import re
 import time
 import logging
-from typing import List, Dict, Any, Optional
+import numpy as np
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from .embedding_service import embedding_service
+from .query_expansion import query_expansion_service
 from ..ai.faiss_manager import faiss_manager
-from ..models import Chunk, File, Folder, SearchHistory, OrganizationSuggestion, OrganizationCategory
+from ..models import Chunk, File, Folder, SearchHistory, OrganizationSuggestion, OrganizationCategory, VectorMapping
 from ..schemas import SearchFilters
 
 logger = logging.getLogger("memora.search")
+
+# ==============================================================================
+# CONFIGURABLE RELEVANCE WEIGHTS & SEMANTIC THRESHOLDS
+# Primary ranking signal: Dense Vector Cosine Similarity (85%)
+# Secondary support: Lexical / Label / Metadata match (15%)
+# ==============================================================================
+SEMANTIC_WEIGHT = 0.85
+LEXICAL_WEIGHT = 0.15
+
+# Central configurable minimum semantic relevance threshold (HARD GATE)
+# Calibrated for BAAI/bge-small-en-v1.5 normalized cosine similarities
+# Values >= 0.50 denote clear semantic alignment, while unrelated content is strictly excluded (< 0.50)
+SEMANTIC_SIMILARITY_THRESHOLD = 0.50
+SEMANTIC_MIN_THRESHOLD = SEMANTIC_SIMILARITY_THRESHOLD
+
+# Semantic drop-off gap threshold
+MAX_RELATIVE_DROP_FROM_TOP = 0.35
+
 
 def map_category_from_extension(ext: str) -> str:
     ext_clean = ext.lower().replace(".", "")
@@ -24,35 +44,14 @@ def map_category_from_extension(ext: str) -> str:
         return "presentation"
     elif ext_clean in ["xlsx", "xls", "csv"]:
         return "spreadsheet"
-    elif ext_clean in ["java", "c", "py"]:
+    elif ext_clean in ["java", "c", "py", "js", "ts", "cpp", "cs", "go", "rs", "php", "sql"]:
         return "code"
     return "doc"
 
 
-RELEVANCE_THRESHOLD = 0.25
-
-def calculate_relevance_percentage(faiss_score: float) -> float:
-    """
-    Computes mathematical cosine similarity percentage.
-    Since embeddings are L2 normalized, the FAISS inner product is exact cosine similarity:
-    cosine_sim = (A · B) / (||A|| ||B||) = A · B.
-
-    If similarity is below RELEVANCE_THRESHOLD (0.25), the query is semantically unrelated (0.0%).
-    For scores >= threshold, maps similarity score smoothly to percentage range [25.0%, 100.0%].
-    """
-    sim = float(faiss_score)
-    if sim < RELEVANCE_THRESHOLD:
-        return 0.0
-    scaled = (sim - RELEVANCE_THRESHOLD) / (1.0 - RELEVANCE_THRESHOLD)
-    pct = 25.0 + (scaled * 75.0)
-    return round(max(0.0, min(100.0, pct)), 1)
-
-
-
 def extract_clean_snippet(text: str, query: str, max_len: int = 260) -> str:
     """
-    Extracts a clean, human-readable snippet centered around query keywords or meaningful sentences,
-    stripping OCR noise lines containing single-character garbage strings.
+    Extracts a clean snippet centered around relevant query content.
     """
     if not text:
         return ""
@@ -61,15 +60,14 @@ def extract_clean_snippet(text: str, query: str, max_len: int = 260) -> str:
     clean_lines = []
     for ln in lines:
         words = ln.split()
-        # If line is mostly single disconnected characters (e.g. OCR noise), omit it
         if len(words) > 4 and sum(1 for w in words if len(w) == 1) / len(words) > 0.5:
             continue
         clean_lines.append(ln)
 
     full_clean = " ".join(clean_lines) if clean_lines else text.strip()
 
-    # Locate query terms in text
-    q_words = [w.lower() for w in re.findall(r"\b\w{2,}\b", query) if len(w) > 1]
+    q_clean = query_expansion_service.clean_search_intent(query)
+    q_words = [w.lower() for w in re.findall(r"\b[\w#+.-]{2,}\b", q_clean) if len(w) > 1]
     match_pos = -1
     for qw in q_words:
         pos = full_clean.lower().find(qw)
@@ -91,7 +89,6 @@ def extract_clean_snippet(text: str, query: str, max_len: int = 260) -> str:
             snippet = snippet + "..."
         return snippet
 
-    # Default to beginning of clean content
     if len(full_clean) <= max_len:
         return full_clean
     return full_clean[:max_len].rsplit(" ", 1)[0] + "..."
@@ -99,9 +96,18 @@ def extract_clean_snippet(text: str, query: str, max_len: int = 260) -> str:
 
 class SearchService:
     """
-    Core Semantic Search Pipeline with End-to-End Filter Support,
-    persistent Smart Tags, true cosine similarity ranking, and clean snippets.
+    High-Precision Semantic Search Service:
+    1. Context & Concept Understanding across all domains and file types
+    2. Enriched Query Representation with Original Query Priority
+    3. Query Embedding Generation via FastEmbed (384-dim)
+    4. Vector Search via FAISS IndexFlatIP (Cosine Similarity on L2-normalized vectors)
+    5. Document-level scoring: max(chunk cosine similarities)
+    6. Field-aware Lexical Similarity calculation (Content, Code, OCR, Title, Tags, Path)
+    7. Multi-tier High-Precision Relevance & Semantic Gap Filtering (Rejects unrelated files)
+    8. Strict 90% Semantic + 10% Lexical ranking
+    9. Top-K as maximum (never fills slots with unrelated files)
     """
+
     def execute_search(
         self,
         db: Session,
@@ -117,52 +123,89 @@ class SearchService:
                 "query": "",
                 "total": 0,
                 "execution_time_ms": 0.0,
-                "results": []
+                "results": [],
+                "debug": {}
             }
 
-        clean_query = query.strip()
+        raw_query = query.strip()
 
-        # 1. Generate query embedding vector (384d normalized)
-        query_vector = embedding_service.embed_query(clean_query)
+        # 1. Context-aware query expansion, concept extraction & intent derivation
+        expanded_terms, expanded_str, detected_concepts = query_expansion_service.build_expanded_query_terms(raw_query)
+        concept_groups = query_expansion_service.build_concept_groups_for_lexical(raw_query)
+        query_intent = query_expansion_service.extract_query_intent(raw_query)
 
-        # 2. Vector similarity search via FAISS
-        candidate_count = max(top_k * 6, 100)
+        # 2. Generate Query Embedding directly from query for pure semantic vector search
+        query_vector = embedding_service.embed_query(raw_query)
+        if query_vector is None or query_vector.size == 0:
+            raise RuntimeError("Failed to generate query embedding vector.")
+
+        # Validate vector dimension
+        if query_vector.shape[-1] != faiss_manager.dimension:
+            logger.error(
+                f"Vector dimension mismatch: query dim {query_vector.shape[-1]} != FAISS dim {faiss_manager.dimension}"
+            )
+            raise ValueError(f"Vector dimension mismatch: query dim {query_vector.shape[-1]} != FAISS dim {faiss_manager.dimension}")
+
+        # Auto-sync check: Ensure FAISS index is aligned with active DB chunks
+        active_db_chunks = db.query(Chunk).all()
+        active_db_chunk_ids = set(c.id for c in active_db_chunks)
+        faiss_chunk_ids = set(faiss_manager.faiss_to_chunk.values())
+        orphaned_ids = faiss_chunk_ids - active_db_chunk_ids
+
+        if orphaned_ids:
+            logger.info(f"Purging {len(orphaned_ids)} orphaned vector mappings from FAISS index.")
+            faiss_manager.remove_chunks(orphaned_ids)
+
+        if active_db_chunks and (faiss_manager.index.ntotal == 0 or len(faiss_chunk_ids - orphaned_ids) < len(active_db_chunk_ids)):
+            missing_chunks = [c for c in active_db_chunks if c.id not in faiss_chunk_ids]
+            if missing_chunks:
+                logger.info(f"Auto-syncing {len(missing_chunks)} active DB chunks into FAISS index.")
+                vecs = []
+                cids = []
+                for mc in missing_chunks:
+                    v = embedding_service.embed_text(mc.text)
+                    if v is not None:
+                        vecs.append(v)
+                        cids.append(mc.id)
+                if vecs:
+                    faiss_manager.add_vectors(np.vstack(vecs), cids)
+                    from .indexing_service import indexing_service
+                    indexing_service._sync_vector_mappings(db)
+
+        # 3. Retrieve candidate chunks using vector similarity in FAISS IndexFlatIP
+        candidate_count = max(top_k * 15, 150)
         vector_results = faiss_manager.search(query_vector, top_k=candidate_count)
 
-        if not vector_results:
-            execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
-            self._log_history(db, clean_query, 0, execution_time_ms)
-            return {
-                "query": clean_query,
-                "total": 0,
-                "execution_time_ms": execution_time_ms,
-                "results": []
-            }
-
-        # 3. Fetch chunks and files from SQLite DB
         chunk_ids = [vr["chunk_id"] for vr in vector_results]
-        score_by_chunk_id = {vr["chunk_id"]: vr["score"] for vr in vector_results}
+        score_by_chunk_id = {vr["chunk_id"]: float(vr["score"]) for vr in vector_results}
 
-        db_chunks = (
-            db.query(Chunk, File, Folder)
-            .join(File, Chunk.file_id == File.id)
-            .join(Folder, File.folder_id == Folder.id)
-            .filter(Chunk.id.in_(chunk_ids))
-            .all()
-        )
-
-        # 3b. Keyword & Smart Tag fallback candidate search in DB
-        query_lower = clean_query.lower()
-        keyword_files = (
-            db.query(File, Folder)
-            .join(Folder, File.folder_id == Folder.id)
-            .filter(
-                (File.name.ilike(f"%{clean_query}%")) |
-                (File.smart_tags.ilike(f"%{clean_query}%")) |
-                (File.extracted_text.ilike(f"%{clean_query}%"))
+        db_chunks = []
+        if chunk_ids:
+            db_chunks = (
+                db.query(Chunk, File, Folder)
+                .join(File, Chunk.file_id == File.id)
+                .join(Folder, File.folder_id == Folder.id)
+                .filter(Chunk.id.in_(chunk_ids))
+                .all()
             )
-            .all()
-        )
+
+        # 4. Keyword candidate search in DB across expanded terms
+        all_query_terms = list(set([raw_query] + expanded_terms[:12]))
+        keyword_filters = []
+        for term in all_query_terms[:10]:
+            keyword_filters.append(File.name.ilike(f"%{term}%"))
+            keyword_filters.append(File.extracted_text.ilike(f"%{term}%"))
+            keyword_filters.append(File.smart_tags.ilike(f"%{term}%"))
+
+        from sqlalchemy import or_
+        keyword_files = []
+        if keyword_filters:
+            keyword_files = (
+                db.query(File, Folder)
+                .join(Folder, File.folder_id == Folder.id)
+                .filter(or_(*keyword_filters))
+                .all()
+            )
 
         # Fetch organization suggestions & persistent Smart Tags
         file_ids = list(set(f.id for _, f, _ in db_chunks) | set(f.id for f, _ in keyword_files))
@@ -189,76 +232,175 @@ class SearchService:
                     db.commit()
                 labels_by_file_id[f.id] = f_tags if f_tags else ["General"]
 
-        # 4. Group chunks by file (keep best scoring chunk per file)
-        file_matches: Dict[int, Dict[str, Any]] = {}
-
+        # 5. Document-Level Aggregation: Group chunks by document
+        file_chunks_map: Dict[int, List[Tuple[Chunk, File, Folder]]] = {}
         for chunk, file, folder in db_chunks:
-            faiss_score = score_by_chunk_id.get(chunk.id, 0.0)
+            file_chunks_map.setdefault(file.id, []).append((chunk, file, folder))
 
-            # Boost score if query matches smart tags, filename, or text
+        all_candidates: List[Dict[str, Any]] = []
+
+        for file_id, chunk_list in file_chunks_map.items():
+            first_chunk, file, folder = chunk_list[0]
             f_tags = labels_by_file_id.get(file.id, [])
-            is_tag_match = any(query_lower in t.lower() for t in f_tags)
-            is_name_match = query_lower in file.name.lower()
-            is_text_match = query_lower in (file.extracted_text or "").lower()
+            category_str = map_category_from_extension(file.extension)
+            doc_content = file.extracted_text or ""
 
-            if (is_tag_match or is_name_match or is_text_match) and faiss_score < 0.70:
-                faiss_score = max(faiss_score, 0.75)
+            # Representative best chunk (max cosine similarity)
+            best_chunk = first_chunk
+            best_chunk_cosine = -1.0
+            for ch, _, _ in chunk_list:
+                cos_sim = score_by_chunk_id.get(ch.id, 0.0)
+                if cos_sim > best_chunk_cosine:
+                    best_chunk_cosine = cos_sim
+                    best_chunk = ch
 
-            relevance_pct = calculate_relevance_percentage(faiss_score)
+            doc_semantic_score = max(0.0, min(1.0, float(best_chunk_cosine)))
+            doc_lexical_score = query_expansion_service.calculate_field_aware_lexical_score(
+                concept_groups=concept_groups,
+                content_text=doc_content,
+                filename=file.name,
+                smart_tags=f_tags,
+                file_path=file.path
+            )
 
-            if file.id not in file_matches or faiss_score > file_matches[file.id]["faiss_score"]:
-                file_matches[file.id] = {
-                    "file_id": file.id,
-                    "file_name": file.name,
-                    "file_path": file.path,
-                    "folder_name": folder.name,
-                    "folder_id": folder.id,
-                    "extension": file.extension,
-                    "category": map_category_from_extension(file.extension),
-                    "org_category": suggestions_by_file_id.get(file.id, ""),
-                    "smart_tags": labels_by_file_id.get(file.id, []),
-                    "labels": labels_by_file_id.get(file.id, []),
-                    "score": relevance_pct,
-                    "faiss_score": faiss_score,
-                    "matched_snippet": chunk.text,
-                    "chunk_id": chunk.id,
-                    "modified_at": file.modified_at,
-                    "size_bytes": file.size
-                }
+            # Strict 85% Semantic + 15% Lexical formula
+            final_score = (SEMANTIC_WEIGHT * doc_semantic_score) + (LEXICAL_WEIGHT * doc_lexical_score)
 
-        # Include keyword DB candidate matches not present in FAISS chunks
+            # Multi-concept / distinctive intent agreement verification
+            agreed, matched_concepts, agreement_reason = query_expansion_service.verify_concept_agreement(
+                query=raw_query,
+                content_text=best_chunk.text or doc_content,
+                filename=file.name,
+                smart_tags=f_tags
+            )
+
+            all_candidates.append({
+                "document_id": file.id,
+                "file_id": file.id,
+                "filename": file.name,
+                "file_name": file.name,
+                "file_path": file.path,
+                "folder_name": folder.name,
+                "folder_id": folder.id,
+                "extension": file.extension,
+                "category": category_str,
+                "org_category": suggestions_by_file_id.get(file.id, ""),
+                "smart_tags": f_tags,
+                "labels": f_tags,
+                "semantic_score": round(doc_semantic_score, 4),
+                "lexical_score": round(doc_lexical_score, 4),
+                "final_score": round(final_score, 5),
+                "score": round(final_score * 100, 1),
+                "matched_snippet": best_chunk.text or doc_content,
+                "chunk_id": best_chunk.id,
+                "modified_at": file.modified_at,
+                "size_bytes": file.size,
+                "concept_agreed": agreed,
+                "matched_concepts": matched_concepts,
+                "agreement_reason": agreement_reason
+            })
+
+        # Include keyword candidate files not in FAISS vector results
+        existing_cand_ids = set(c["file_id"] for c in all_candidates)
         for file, folder in keyword_files:
-            if file.id not in file_matches:
-                faiss_score = 0.75
-                relevance_pct = calculate_relevance_percentage(faiss_score)
-                snippet = file.extracted_text[:260] if file.extracted_text else file.name
-                file_matches[file.id] = {
+            if file.id not in existing_cand_ids:
+                f_tags = labels_by_file_id.get(file.id, [])
+                category_str = map_category_from_extension(file.extension)
+                doc_content = file.extracted_text or ""
+                doc_semantic_score = 0.0
+                doc_lexical_score = query_expansion_service.calculate_field_aware_lexical_score(
+                    concept_groups=concept_groups,
+                    content_text=doc_content,
+                    filename=file.name,
+                    smart_tags=f_tags,
+                    file_path=file.path
+                )
+                final_score = (SEMANTIC_WEIGHT * doc_semantic_score) + (LEXICAL_WEIGHT * doc_lexical_score)
+
+                agreed, matched_concepts, agreement_reason = query_expansion_service.verify_concept_agreement(
+                    query=raw_query,
+                    content_text=doc_content,
+                    filename=file.name,
+                    smart_tags=f_tags
+                )
+
+                all_candidates.append({
+                    "document_id": file.id,
                     "file_id": file.id,
+                    "filename": file.name,
                     "file_name": file.name,
                     "file_path": file.path,
                     "folder_name": folder.name,
                     "folder_id": folder.id,
                     "extension": file.extension,
-                    "category": map_category_from_extension(file.extension),
+                    "category": category_str,
                     "org_category": suggestions_by_file_id.get(file.id, ""),
-                    "smart_tags": labels_by_file_id.get(file.id, []),
-                    "labels": labels_by_file_id.get(file.id, []),
-                    "score": relevance_pct,
-                    "faiss_score": faiss_score,
-                    "matched_snippet": snippet,
+                    "smart_tags": f_tags,
+                    "labels": f_tags,
+                    "semantic_score": round(doc_semantic_score, 4),
+                    "lexical_score": round(doc_lexical_score, 4),
+                    "final_score": round(final_score, 5),
+                    "score": round(final_score * 100, 1),
+                    "matched_snippet": doc_content[:260] if doc_content else file.name,
                     "chunk_id": 0,
                     "modified_at": file.modified_at,
-                    "size_bytes": file.size
-                }
+                    "size_bytes": file.size,
+                    "concept_agreed": agreed,
+                    "matched_concepts": matched_concepts,
+                    "agreement_reason": agreement_reason
+                })
 
-        results = [r for r in list(file_matches.values()) if r["score"] > 0.0 and r["faiss_score"] >= RELEVANCE_THRESHOLD]
+        faiss_candidates_count = len(all_candidates)
 
-        # 5. Apply filters across dimensions
+        # 6. Strict Hard Semantic Gate & Secondary Relevance Ranking
+        # Step A: HARD SEMANTIC THRESHOLD GATE
+        # Candidates must strictly satisfy cosine similarity >= SEMANTIC_SIMILARITY_THRESHOLD.
+        # Secondary signals (labels, filenames, keywords) CANNOT bypass this gate.
+        after_threshold_candidates = [
+            c for c in all_candidates
+            if c["semantic_score"] >= SEMANTIC_SIMILARITY_THRESHOLD
+        ]
+        after_threshold_count = len(after_threshold_candidates)
+
+        # Step B: Filter by relative semantic drop-off gap among valid candidates
+        accepted_results = []
+        rejected_diagnostics = []
+
+        if after_threshold_candidates:
+            # Sort after_threshold_candidates descending by final_score
+            after_threshold_candidates.sort(key=lambda x: x["final_score"], reverse=True)
+            top_score = after_threshold_candidates[0]["final_score"]
+
+            for c in after_threshold_candidates:
+                # Check semantic gap drop-off
+                relative_drop = top_score - c["final_score"]
+                if top_score >= 0.75 and relative_drop > MAX_RELATIVE_DROP_FROM_TOP and c["lexical_score"] < 0.50:
+                    rejected_diagnostics.append({
+                        "filename": c["file_name"],
+                        "cosine": c["semantic_score"],
+                        "reason": f"Semantic gap drop-off ({relative_drop:.3f} below top score)"
+                    })
+                    continue
+
+                accepted_results.append(c)
+
+        for c in all_candidates:
+            if c not in accepted_results:
+                rejected_diagnostics.append({
+                    "filename": c["file_name"],
+                    "cosine": c["semantic_score"],
+                    "reason": f"EXCLUDED - BELOW SEMANTIC THRESHOLD ({c['semantic_score']} < {SEMANTIC_SIMILARITY_THRESHOLD})"
+                })
+
+        after_relevance_filtering_count = len(accepted_results)
+
+        # 7. Apply User Filters across dimensions
+        results = accepted_results
         if filters:
             if filters.file_type and filters.file_type != "all":
                 target_type = filters.file_type.lower()
                 results = [
-                    r for r in results 
+                    r for r in results
                     if r["category"] == target_type or r["extension"].lower().replace(".", "") == target_type
                 ]
 
@@ -274,90 +416,162 @@ class SearchService:
 
             if filters.category and filters.category != "all":
                 results = [
-                    r for r in results 
-                    if self._filter_by_category(r["category"], r.get("org_category"), filters.category)
+                    r for r in results
+                    if self._filter_by_category(r["category"], r.get("org_category"), filters.category, r.get("smart_tags"))
                 ]
 
             if filters.location and filters.location != "all":
                 results = [
-                    r for r in results 
+                    r for r in results
                     if self._filter_by_location(r["file_path"], r["folder_name"], filters.location)
                 ]
 
             target_tags = filters.smart_tags or filters.labels
             if target_tags and isinstance(target_tags, list) and len(target_tags) > 0:
                 results = [
-                    r for r in results 
+                    r for r in results
                     if self._filter_by_labels(r, target_tags)
                 ]
 
             if filters.relevance and filters.relevance != "any":
                 results = [
-                    r for r in results 
+                    r for r in results
                     if self._filter_by_relevance(r["score"], filters.relevance)
                 ]
 
-        # 6. Generate clean snippets and meaningful explanations
+        # 8. Generate clean snippets and content explanations
         formatted_results = []
         for r in results:
-            clean_snippet = extract_clean_snippet(r["matched_snippet"], clean_query)
+            clean_snippet = extract_clean_snippet(r["matched_snippet"], raw_query)
             file_smart_tags = r.get("smart_tags", [])
             topics_str = ", ".join(file_smart_tags[:3]) if file_smart_tags else r["category"]
 
-            # Content-focused explanation without technical/percentage redundancy
-            if "resume" in clean_query.lower() or "cv" in clean_query.lower():
-                explanation = "This file matches your query because it contains professional resume and career profile details."
-            elif any(q in clean_query.lower() for q in ["java", "oop", "code", "python", "program"]):
-                explanation = f"This file matches your query because the content discusses {topics_str}."
+            q_low = raw_query.lower()
+            if "design pattern" in q_low or "pattern" in q_low:
+                explanation = f"Matches your query on software design patterns ({r['file_name']})."
+            elif "resume" in q_low or "cv" in q_low:
+                explanation = "Matches your query based on career profile and resume content."
+            elif any(q in q_low for q in ["java", "sorting", "sort", "oop", "code", "python", "program", "database"]):
+                explanation = f"Matches your query based on programming topics ({topics_str})."
+            elif "internship" in q_low or "certificate" in q_low:
+                explanation = "Matches your search for internship and certification documents."
+            elif "presentation" in q_low or "slide" in q_low:
+                explanation = "Matches your presentation slides and deck content."
+            elif "spreadsheet" in q_low or "excel" in q_low or "sheet" in q_low:
+                explanation = "Matches your spreadsheet and workbook data."
             elif file_smart_tags:
-                explanation = f"This file matches your search query based on relevant content discussing {topics_str}."
+                explanation = f"Matches your query based on semantic content regarding {topics_str}."
             else:
-                explanation = f"This file matches your query within folder '{r['folder_name']}'."
+                explanation = f"Matches your query in folder '{r['folder_name']}'."
 
             formatted_results.append({
+                "document_id": r["document_id"],
                 "file_id": r["file_id"],
+                "filename": r["filename"],
                 "file_name": r["file_name"],
                 "file_path": r["file_path"],
                 "folder_name": r["folder_name"],
                 "extension": r["extension"],
                 "category": r["category"],
                 "smart_tags": file_smart_tags,
+                "labels": file_smart_tags,
+                "semantic_score": r["semantic_score"],
+                "lexical_score": r["lexical_score"],
+                "final_score": r["final_score"],
                 "score": r["score"],
-                "faiss_score": r["faiss_score"],
                 "matched_snippet": clean_snippet,
                 "ai_explanation": explanation,
+                "matched_concepts": r.get("matched_concepts", []),
                 "chunk_id": r["chunk_id"],
                 "modified_at": r["modified_at"].isoformat() if isinstance(r["modified_at"], datetime) else str(r["modified_at"]),
                 "raw_modified_at": r["modified_at"] if isinstance(r["modified_at"], datetime) else datetime.min,
                 "size_bytes": r["size_bytes"]
             })
 
-        # 7. Apply Sorting (ranking based on actual cosine similarity, or newest-first modified date)
+        # 9. Apply Ranking (descending by final_score)
         if sort_by == "newest":
-            formatted_results.sort(key=lambda x: (x["raw_modified_at"], x["faiss_score"]), reverse=True)
+            formatted_results.sort(key=lambda x: (x["raw_modified_at"], x["final_score"]), reverse=True)
         elif sort_by == "oldest":
-            formatted_results.sort(key=lambda x: (x["raw_modified_at"], -x["faiss_score"]), reverse=False)
+            formatted_results.sort(key=lambda x: (x["raw_modified_at"], -x["final_score"]), reverse=False)
         elif sort_by == "largest":
-            formatted_results.sort(key=lambda x: (x["size_bytes"], x["faiss_score"]), reverse=True)
-        else:  # default: 'relevant' (strictly sorted by cosine similarity DESC, then modified date DESC)
-            formatted_results.sort(key=lambda x: (x["faiss_score"], x["raw_modified_at"]), reverse=True)
+            formatted_results.sort(key=lambda x: (x["size_bytes"], x["final_score"]), reverse=True)
+        else:
+            formatted_results.sort(key=lambda x: (x["final_score"], x["raw_modified_at"]), reverse=True)
 
-        # Strip temporary raw sorting key
         for res in formatted_results:
             res.pop("raw_modified_at", None)
-            res.pop("faiss_score", None)
 
+        # TOP-K IS A MAXIMUM, NEVER FORCED (Section 6)
         final_results = formatted_results[:top_k]
         execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
-        # 8. Log search history
-        self._log_history(db, clean_query, len(final_results), execution_time_ms)
+        # 10. Log search history & SPEC-COMPLIANT DEBUG LOGGING (Section 21)
+        self._log_history(db, raw_query, len(final_results), execution_time_ms)
+
+        debug_info = {
+            "original_query": raw_query,
+            "expanded_query": expanded_str,
+            "query_intent": query_intent["intent_summary"],
+            "faiss_candidates": faiss_candidates_count,
+            "after_semantic_threshold": after_threshold_count,
+            "after_relevance_filtering": after_relevance_filtering_count,
+            "final_results": len(final_results),
+            "candidates": [
+                {
+                    "filename": r["file_name"],
+                    "cosine": r["semantic_score"],
+                    "lexical": r["lexical_score"],
+                    "final": r["final_score"],
+                    "relevance": f"{r['score']}%",
+                    "matched_concepts": r.get("matched_concepts", [])
+                }
+                for r in final_results
+            ],
+            "rejected": rejected_diagnostics[:8]
+        }
+
+        # Spec-compliant diagnostic logging formatted to Section 21
+        accepted_log_lines = []
+        for r in final_results:
+            accepted_log_lines.append(
+                f"[ACCEPTED] Filename: {r['file_name']}\n"
+                f"  Cosine: {r['semantic_score']:.4f}\n"
+                f"  Lexical: {r['lexical_score']:.4f}\n"
+                f"  Final: {r['final_score']:.5f}\n"
+                f"  Relevance: {r['score']}%\n"
+                f"  Matched concepts: {', '.join(r.get('matched_concepts', [])) if r.get('matched_concepts') else 'semantic vector match'}"
+            )
+
+        rejected_log_lines = []
+        for rej in rejected_diagnostics[:6]:
+            rejected_log_lines.append(
+                f"[REJECTED] Filename: {rej['filename']}\n"
+                f"  Cosine: {rej['cosine']:.4f}\n"
+                f"  Reason: {rej['reason']}"
+            )
+
+        logger.info(
+            f"\n============================================================\n"
+            f"Original Query:\n{raw_query}\n\n"
+            f"Expanded Query:\n{expanded_str}\n\n"
+            f"Query Intent:\n{query_intent['intent_summary']}\n\n"
+            f"FAISS Candidates:\n{faiss_candidates_count}\n\n"
+            f"After Semantic Threshold:\n{after_threshold_count}\n\n"
+            f"After Relevance Filtering:\n{after_relevance_filtering_count}\n\n"
+            f"Final Results:\n{len(final_results)}\n\n"
+            f"--- ACCEPTED CANDIDATES ---\n"
+            f"{chr(10).join(accepted_log_lines) if accepted_log_lines else 'None (No strongly relevant results found)'}\n\n"
+            f"--- SAMPLE REJECTED CANDIDATES ---\n"
+            f"{chr(10).join(rejected_log_lines) if rejected_log_lines else 'None'}\n"
+            f"============================================================"
+        )
 
         return {
-            "query": clean_query,
+            "query": raw_query,
             "total": len(final_results),
             "execution_time_ms": execution_time_ms,
-            "results": final_results
+            "results": final_results,
+            "debug": debug_info
         }
 
     def _filter_by_date(self, file_dt: datetime, date_range: str, now: datetime) -> bool:
@@ -396,14 +610,20 @@ class SearchService:
             return mb >= 1024.0
         return True
 
-    def _filter_by_category(self, item_category: str, org_category: Optional[str], target_category: str) -> bool:
-        if not target_category or target_category == "all":
+    def _filter_by_category(self, item_category: str, org_category: Optional[str], target_category: str, smart_tags: Optional[List[str]] = None) -> bool:
+        if not target_category or target_category.lower() == "all":
             return True
-        target = target_category.lower()
-        if item_category and target in item_category.lower():
+        target = target_category.lower().strip()
+        if org_category and target == org_category.lower().strip():
             return True
         if org_category and target in org_category.lower():
             return True
+        if item_category and target in item_category.lower():
+            return True
+        if smart_tags:
+            for st in smart_tags:
+                if target == st.lower().strip() or target in st.lower():
+                    return True
         return False
 
     def _filter_by_location(self, file_path: str, folder_name: str, location_filter: str) -> bool:

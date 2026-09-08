@@ -72,6 +72,30 @@ app.include_router(search.router)
 app.include_router(statistics.router)
 app.include_router(organization.router)
 
+from .schemas import SearchRequest, SearchResponse
+from .services.search_service import search_service
+from .database import get_db
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+@app.post("/search", response_model=SearchResponse, tags=["Search"])
+def root_search_alias(search_req: SearchRequest, db: Session = Depends(get_db)):
+    """Root alias for POST /api/search."""
+    results_data = search_service.execute_search(
+        db=db,
+        query=search_req.query,
+        top_k=search_req.top_k or 20,
+        filters=search_req.filters,
+        sort_by=search_req.sort_by or "relevant"
+    )
+    return SearchResponse(**results_data)
+
+@app.get("/search/health", tags=["Search"])
+def root_search_health_alias(db: Session = Depends(get_db)):
+    """Root alias for GET /api/search/health."""
+    from .routes.search import semantic_search_health_check
+    return semantic_search_health_check(db=db)
+
 @app.get("/")
 def root():
     return {
@@ -79,6 +103,7 @@ def root():
         "version": "1.0.0",
         "status": "running"
     }
+
 
 if __name__ == "__main__":
     import uvicorn
