@@ -85,15 +85,38 @@ export const SemanticSearch = () => {
     { id: 'over_1gb', label: '1 GB or larger' }
   ];
 
-  const categoryOptions = [
-    { id: 'all', label: 'All Categories' },
+  const [dynamicCategories, setDynamicCategories] = useState([]);
+
+  useEffect(() => {
+    import('../services/organizationService').then(({ organizationService }) => {
+      organizationService.getCategories().then(cats => {
+        if (Array.isArray(cats) && cats.length > 0) {
+          setDynamicCategories(cats);
+        }
+      }).catch(err => console.warn('Could not load dynamic categories:', err));
+    });
+  }, []);
+
+  const defaultCategories = [
     { id: 'education', label: 'Education' },
+    { id: 'programming', label: 'Programming' },
     { id: 'work', label: 'Work' },
     { id: 'personal', label: 'Personal' },
     { id: 'projects', label: 'Projects' },
     { id: 'certificates', label: 'Certificates' },
     { id: 'finance', label: 'Finance' },
+    { id: 'images', label: 'Images' },
+    { id: 'documents', label: 'Documents' },
     { id: 'other', label: 'Other' }
+  ];
+
+  const categoryList = dynamicCategories.length > 0
+    ? dynamicCategories.map(c => ({ id: c.name.toLowerCase(), label: c.name }))
+    : defaultCategories;
+
+  const categoryOptions = [
+    { id: 'all', label: 'All Categories' },
+    ...categoryList.filter(c => c.id !== 'all')
   ];
 
   const folderOptions = [

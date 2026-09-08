@@ -1,33 +1,100 @@
-# Python virtual environments
+# ==============================
+# Python Virtual Environments
+# ==============================
 .venv/
 venv/
+backend/venv/
 env/
 
-# Python cache
+# ==============================
+# Python Cache
+# ==============================
 __pycache__/
 *.py[cod]
+*$py.class
 
-# Secrets
+# ==============================
+# Environment / Secrets
+# ==============================
 .env
-*.env
+.env.*
+!.env.example
 
-# Node
+# ==============================
+# IDE / Editor
+# ==============================
+.vscode/
+.idea/
+*.code-workspace
+
+# ==============================
+# OS Files
+# ==============================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==============================
+# Node / Electron
+# ==============================
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
 
-# Build
+# ==============================
+# Build Output
+# ==============================
 dist/
 build/
-.vite/
+out/
 
-# Database
+# ==============================
+# Python Test / Coverage
+# ==============================
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ==============================
+# Temporary Files
+# ==============================
+*.tmp
+*.temp
+*.log
+
+# ==============================
+# Generated / Local Data
+# ==============================
+uploads/
+temp/
+tmp/
+
+# ==============================
+# Vector Database / Search Cache
+# ==============================
+# Add these ONLY if they are generated locally
+# faiss_index/
+# embeddings/
+# vector_store/
+
+# ==============================
+# Local Database
+# ==============================
 *.db
 *.sqlite
 *.sqlite3
-
-# FAISS generated files
-*.faiss
-*.index
-
-# OS
-.DS_Store
-Thumbs.db
+faiss/
+backend/data/faiss/
+embeddings/
+vector_store/
+scratch_verify.py
+backend/data/faiss/faiss_id_map.json
+backend/test_api_endpoints.py
+backend/test_improvements.py
+backend/test_module2.py
+backend/test_module1_search.py
+backend/sample_documents/
+backend/test_module1_docs/
+backend/data/faiss/faiss_id_map.json
+scratch_verify.py

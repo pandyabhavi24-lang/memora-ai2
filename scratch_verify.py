@@ -44,27 +44,29 @@ def run_tests():
 
     print("\n=== Step 4: Testing Smart Tag User Edit Persistence ===")
     target_sug = suggestions[0]
-    test_tags = target_sug['smart_tags'] + ["CustomVerifiedTag"]
+    import time
+    test_tag = f"CustomVerifiedTag_{int(time.time())}"
+    test_tags = list(set(target_sug['smart_tags'] + [test_tag]))
     raw_id = target_sug['id']
-    clean_id = int(str(raw_id).split("-")[-1]) if "s-" in str(raw_id) else int(raw_id)
-    organization_service.update_suggestion(db, target_sug['id'], smart_tags=test_tags)
+    clean_id = int(str(raw_id).replace("s-", "")) if "s-" in str(raw_id) else int(raw_id)
+    organization_service.update_suggestion(db, clean_id, smart_tags=test_tags)
     db.commit()
 
     # Re-fetch fresh from DB to verify persistence in SQLite
     refreshed_sug = db.query(OrganizationSuggestion).filter(OrganizationSuggestion.id == clean_id).first()
     assert refreshed_sug is not None, f"Suggestion with id {clean_id} should exist"
-    assert "CustomVerifiedTag" in refreshed_sug.get_smart_tags(), "Tag should persist in suggestion"
+    assert test_tag in refreshed_sug.get_smart_tags(), "Tag should persist in suggestion"
     refreshed_file = db.query(File).filter(File.id == refreshed_sug.file_id).first()
-    assert "CustomVerifiedTag" in refreshed_file.get_smart_tags(), "Tag should persist in file"
+    assert test_tag in refreshed_file.get_smart_tags(), "Tag should persist in file"
     print(f"Successfully verified tag edit persistence for file '{refreshed_file.name}': {refreshed_file.get_smart_tags()}")
 
     print("\n=== Step 5: Testing Collective Folder Synthesis ===")
     sug_ids = [s['id'] for s in suggestions[:3]]
     collective = organization_service.generate_collective_folder_name(db, suggestion_ids=sug_ids)
-    print(f"Collective folder name: '{collective['folder_name']}'")
+    print(f"Collective folder name: '{collective.get('suggested_folder_name', collective.get('folder_name'))}'")
     print(f"Reason: {collective['reason']}")
     print(f"Common Smart Tags: {collective['common_smart_tags']}")
-    assert collective['folder_name'] != "", "Folder name should not be empty"
+    assert collective.get('suggested_folder_name', collective.get('folder_name', '')) != "", "Folder name should not be empty"
 
     print("\n=== Step 6: Testing Semantic Search & Mathematical Scores ===")
     search_res = search_service.execute_search(db, query="Java", top_k=5, sort_by="relevant")
@@ -93,11 +95,11 @@ def run_tests():
         db, 
         query="Java", 
         top_k=5, 
-        filters=SearchFilters(smart_tags=["CustomVerifiedTag"])
+        filters=SearchFilters(smart_tags=[test_tag])
     )
-    print(f"Tag filter results for ['CustomVerifiedTag']: {filter_res['total']} files matched")
+    print(f"Tag filter results for ['{test_tag}']: {filter_res['total']} files matched")
     for r in filter_res['results']:
-        assert "CustomVerifiedTag" in r['smart_tags']
+        assert test_tag in r['smart_tags']
 
     db.close()
     print("\n ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!")

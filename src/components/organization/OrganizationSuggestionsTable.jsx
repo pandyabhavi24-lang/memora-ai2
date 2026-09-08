@@ -307,8 +307,8 @@ export const OrganizationSuggestionsTable = ({
                     </td>
 
                     {/* Current Physical Folder */}
-                    <td className="py-3.5 px-4 font-mono text-[11px] text-slate-400 truncate max-w-[200px]" title={item.currentPath || ''}>
-                      📁 {item.currentPath || 'Root Folder'}
+                    <td className="py-3.5 px-4 font-mono text-[11px] text-slate-300 truncate max-w-[220px]" title={item.displayPath || item.currentPath || ''}>
+                      📁 {item.displayPath || item.currentPath || 'Root Folder'}
                     </td>
 
                     {/* Status Badge */}

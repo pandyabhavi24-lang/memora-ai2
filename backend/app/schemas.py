@@ -84,14 +84,21 @@ class SearchRequest(BaseModel):
     filters: Optional[SearchFilters] = None
     sort_by: Optional[str] = "relevant"
 
+from typing import List, Optional, Dict, Any
+
 class SearchResultItem(BaseModel):
+    document_id: Optional[int] = None
     file_id: int
+    filename: Optional[str] = None
     file_name: str
     file_path: str
     folder_name: str
     extension: str
     category: str
     smart_tags: List[str] = []
+    semantic_score: Optional[float] = 0.0
+    lexical_score: Optional[float] = 0.0
+    final_score: Optional[float] = 0.0
     score: float
     matched_snippet: str
     ai_explanation: str
@@ -104,6 +111,8 @@ class SearchResponse(BaseModel):
     total: int
     execution_time_ms: float
     results: List[SearchResultItem]
+    debug: Optional[Dict[str, Any]] = None
+
 
 
 # Search History Schema
@@ -163,6 +172,20 @@ class CategoryOverviewItem(BaseModel):
     percentage: float
 
 
+class PhysicalFolderOverviewItem(BaseModel):
+    name: str
+    path: str
+    displayPath: str
+    fileCount: int
+    subfolders: List[Dict[str, Any]] = []
+
+
+class OrganizationOverviewResponse(BaseModel):
+    existingFolders: List[PhysicalFolderOverviewItem] = []
+    aiCategories: List[CategoryOverviewItem] = []
+    totalFiles: int = 0
+
+
 class SuggestionItemResponse(BaseModel):
     id: str
     db_id: int
@@ -170,6 +193,7 @@ class SuggestionItemResponse(BaseModel):
     filename: str
     type: str
     currentPath: str
+    displayPath: Optional[str] = None
     suggestedCategory: str
     smart_tags: List[str] = []
     labels: List[str] = []

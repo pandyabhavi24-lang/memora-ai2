@@ -169,11 +169,32 @@ class FAISSManager:
                 self.index.add(new_vecs_np)
 
             self.faiss_to_chunk = new_faiss_to_chunk
-            self.next_faiss_id = new_id
+            self.next_faiss_id = self.index.ntotal
             self.save()
             logger.info(f"Removed chunks {chunk_ids_to_remove}. Rebuilt index with {self.index.ntotal} vectors.")
         except Exception as e:
             logger.error(f"Error rebuilding FAISS index during removal: {e}", exc_info=True)
 
 
+    def reset(self):
+        """Resets the FAISS index and clearing all stored vectors and mappings."""
+        self.index = faiss.IndexFlatIP(self.dimension)
+        self.faiss_to_chunk = {}
+        self.next_faiss_id = 0
+        self.save()
+        logger.info("FAISS index has been reset to empty.")
+
+    def get_stats(self) -> dict:
+        """Returns diagnostic statistics about the current FAISS index state."""
+        return {
+            "dimension": self.dimension,
+            "ntotal": self.index.ntotal if self.index is not None else 0,
+            "mapping_count": len(self.faiss_to_chunk),
+            "index_path": self.index_path,
+            "map_path": self.map_path
+        }
+
+
+
 faiss_manager = FAISSManager()
+

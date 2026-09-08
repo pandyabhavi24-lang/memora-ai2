@@ -171,8 +171,8 @@ class IndexingService:
                     db.commit()
 
                     if status_str in ["success", "empty"] and extracted_text:
-                        # Chunk text
-                        chunk_objs = chunk_text(extracted_text, chunk_size=500, overlap=50)
+                        # Chunk text (300-500 words per chunk with 50 word overlap)
+                        chunk_objs = chunk_text(extracted_text, chunk_size=400, overlap=50)
                         if chunk_objs:
                             chunk_records = []
                             texts_to_embed = []
@@ -191,22 +191,15 @@ class IndexingService:
                             for ch_rec in chunk_records:
                                 db.refresh(ch_rec)
 
-                            # Embed chunks
+                            # Generate embeddings locally using the unified embedding service
                             vectors = embedding_service.embed_documents(texts_to_embed)
                             chunk_ids = [ch.id for ch in chunk_records]
 
-                            # Add to FAISS index
+                            # Add normalized float32 vectors to FAISS IndexFlatIP
                             assigned_mappings = faiss_manager.add_vectors(vectors, chunk_ids)
 
-                            # Save vector mappings to DB safely
-                            for faiss_id, chunk_id in assigned_mappings:
-                                existing_vm = db.query(VectorMapping).filter(VectorMapping.chunk_id == chunk_id).first()
-                                if existing_vm:
-                                    existing_vm.faiss_id = faiss_id
-                                else:
-                                    vm = VectorMapping(chunk_id=chunk_id, faiss_id=faiss_id)
-                                    db.add(vm)
-                            db.commit()
+                            # Keep VectorMapping in sync
+                            self._sync_vector_mappings(db)
 
                             chunks_total += len(chunk_records)
                             vectors_total += len(assigned_mappings)
@@ -219,6 +212,9 @@ class IndexingService:
                     processed += 1
 
                 self._update_progress(processed, failed, chunks_total, vectors_total, len(all_found_scans))
+
+            # Final vector mapping synchronization check
+            self._sync_vector_mappings(db)
 
             self.state["status"] = "complete"
             self.state["progress_percentage"] = 100
@@ -233,6 +229,24 @@ class IndexingService:
         finally:
             db.close()
 
+    def _sync_vector_mappings(self, db: Session):
+        """Synchronizes the SQLite vector_mappings table with faiss_manager.faiss_to_chunk."""
+        try:
+            db.query(VectorMapping).delete(synchronize_session=False)
+            valid_chunk_ids = set(cid for (cid,) in db.query(Chunk.id).all())
+            seen_chunk_ids = set()
+            for faiss_id, chunk_id in sorted(faiss_manager.faiss_to_chunk.items(), key=lambda x: int(x[0])):
+                cid = int(chunk_id)
+                fid = int(faiss_id)
+                if cid in valid_chunk_ids and cid not in seen_chunk_ids:
+                    db.add(VectorMapping(chunk_id=cid, faiss_id=fid))
+                    seen_chunk_ids.add(cid)
+            db.commit()
+        except Exception as e:
+            logger.error(f"Failed to synchronize vector mappings: {e}")
+            db.rollback()
+
+
     def _delete_file_chunks_and_vectors(self, db: Session, file_id: int):
         chunks = db.query(Chunk).filter(Chunk.file_id == file_id).all()
         chunk_ids = {c.id for c in chunks}
@@ -241,6 +255,7 @@ class IndexingService:
             db.query(VectorMapping).filter(VectorMapping.chunk_id.in_(chunk_ids)).delete(synchronize_session=False)
             db.query(Chunk).filter(Chunk.file_id == file_id).delete(synchronize_session=False)
             db.commit()
+            self._sync_vector_mappings(db)
 
     def _update_progress(self, processed: int, failed: int, chunks: int, vectors: int, total: int):
         self.state["files_processed"] = processed
@@ -251,3 +266,4 @@ class IndexingService:
             self.state["progress_percentage"] = min(100, int((processed / total) * 100))
 
 indexing_service = IndexingService()
+

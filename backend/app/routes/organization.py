@@ -7,6 +7,7 @@ from ..database import get_db
 from ..schemas import (
     CategoryResponse,
     CategoryOverviewItem,
+    OrganizationOverviewResponse,
     SuggestionItemResponse,
     SuggestionUpdate,
     CollectiveFolderRequest,
@@ -141,9 +142,9 @@ def get_operations(db: Session = Depends(get_db)):
     """Returns history log of executed file organization operations."""
     return organization_service.get_operations(db)
 
-@router.get("/overview", response_model=List[CategoryOverviewItem])
+@router.get("/overview", response_model=OrganizationOverviewResponse)
 def get_overview(db: Session = Depends(get_db)):
-    """Returns real organization summary category distribution."""
+    """Returns real organization summary containing both existing folders and AI categories."""
     return organization_service.get_overview(db)
 
 @router.post("/collective-folder", response_model=CollectiveFolderResponse)

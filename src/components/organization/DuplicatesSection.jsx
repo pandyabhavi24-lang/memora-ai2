@@ -89,6 +89,10 @@ export const DuplicatesSection = ({ refreshTrigger }) => {
     }
   };
 
+  if (!loading && !error && duplicates.length === 0) {
+    return null;
+  }
+
   return (
     <div className="glass-panel rounded-2xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-md p-6 mb-8 shadow-xl">
       {/* Section Header */}
@@ -140,18 +144,8 @@ export const DuplicatesSection = ({ refreshTrigger }) => {
         </div>
       )}
 
-      {/* Empty State */}
-      {!loading && !error && duplicates.length === 0 && (
-        <div className="py-12 text-center flex flex-col items-center justify-center space-y-2 bg-slate-950/30 rounded-xl border border-slate-800/50 p-6">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-1">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-          <h3 className="text-sm font-bold text-white">No possible duplicates found</h3>
-          <p className="text-xs text-slate-400 max-w-sm">
-            Memora didn't detect any duplicate files in the scanned folders.
-          </p>
-        </div>
-      )}
+      {/* Empty State - omit entire section if no duplicates */}
+      {!loading && !error && duplicates.length === 0 && null}
 
       {/* Duplicate Pairs Cards (Real API Data) */}
       {!loading && !error && duplicates.length > 0 && (
