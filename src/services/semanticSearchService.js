@@ -96,7 +96,11 @@ class SemanticSearchService {
           finalScore: typeof item.final_score === 'number' ? item.final_score : null,
           matchedSnippet: item.matched_snippet,
           aiExplanation: item.ai_explanation,
-          matchHighlights: [query.trim()]
+          matchHighlights: [query.trim()],
+          matchSource: item.match_source || 'TEXT',
+          visualMatchDetails: item.visual_match_details || null,
+          thumbnailUrl: item.thumbnail_url ? `${API_BASE_URL}${item.thumbnail_url}` : null,
+          previewUrl: item.preview_url ? `${API_BASE_URL}${item.preview_url}` : null
         };
       });
 

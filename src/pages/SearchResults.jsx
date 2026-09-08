@@ -992,9 +992,21 @@ export const SearchResults = () => {
                 {/* Result Card Main Header */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0 mt-0.5">
-                      <FileText className="w-5 h-5" />
-                    </div>
+                    {/* Icon or Media Thumbnail */}
+                    {primaryResult.thumbnailUrl ? (
+                      <div className="w-12 h-12 rounded-xl bg-gray-900 border border-gray-800 overflow-hidden shrink-0 mt-0.5">
+                        <img
+                          src={primaryResult.thumbnailUrl}
+                          alt={group.filename}
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0 mt-0.5">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                    )}
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-base font-bold text-white truncate hover:text-blue-300 transition-colors">
@@ -1003,6 +1015,28 @@ export const SearchResults = () => {
                         <span className="px-2 py-0.5 rounded-md bg-gray-900 text-gray-400 border border-gray-800 text-[10px] font-mono">
                           {(primaryFile.fileExtension || primaryFile.extension || 'FILE').toUpperCase().replace('.', '')}
                         </span>
+
+                        {/* Search Source Indicator: TEXT, OCR, VISUAL, HYBRID */}
+                        {primaryResult.matchSource === 'VISUAL' && (
+                          <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[9px] font-bold font-mono uppercase">
+                            VISUAL
+                          </span>
+                        )}
+                        {primaryResult.matchSource === 'HYBRID' && (
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[9px] font-bold font-mono uppercase">
+                            HYBRID (OCR + Visual)
+                          </span>
+                        )}
+                        {primaryResult.matchSource === 'OCR' && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold font-mono uppercase">
+                            OCR
+                          </span>
+                        )}
+                        {primaryResult.matchSource === 'TEXT' && (
+                          <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[9px] font-bold font-mono uppercase">
+                            TEXT
+                          </span>
+                        )}
                       </div>
 
                       {/* Smart Tags Chips */}
@@ -1172,23 +1206,47 @@ export const SearchResults = () => {
                         <span>Why this matches</span>
                       </span>
 
-                      <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] font-semibold">
-                        ✓ Semantic Similarity
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {primaryResult.matchSource && (
+                          <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] font-bold font-mono uppercase">
+                            ✓ {primaryResult.matchSource} Match
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="space-y-1.5 pl-1">
                       <div className="text-[11px] text-gray-400">
                         <strong className="text-gray-300 font-semibold">Search Query:</strong> <span className="italic text-blue-300">"{searchQuery}"</span>
                       </div>
+
+                      {/* Visual Content Highlights if available */}
+                      {primaryResult.visualMatchDetails && (
+                        <div className="space-y-1 pt-1">
+                          <span className="text-[11px] text-gray-400 font-semibold block">Detected Visual Elements:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {(primaryResult.visualMatchDetails.objects || []).map((obj, i) => (
+                              <span key={i} className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold">
+                                #{obj}
+                              </span>
+                            ))}
+                            {(primaryResult.visualMatchDetails.scenes || []).map((scn, i) => (
+                              <span key={i} className="px-2 py-0.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-semibold">
+                                {scn}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="text-[11px] text-gray-300 leading-relaxed">
-                        <strong className="text-gray-200 block mb-0.5 font-semibold">Relevant Content Snippet:</strong>
+                        <strong className="text-gray-200 block mb-0.5 font-semibold">Relevant Content / Description:</strong>
                         <p className="p-2.5 rounded-lg bg-gray-900/90 border border-gray-800 text-gray-300 text-xs italic">
                           "{primaryResult.matchedSnippet || primaryResult.aiExplanation}"
                         </p>
                       </div>
                       <p className="text-[11px] text-purple-200/90 leading-snug">
-                        <strong>Semantic Explanation:</strong> {primaryResult.aiExplanation || `This document contains concepts closely aligned with your search context.`}
+                        <strong>Match Explanation:</strong> {primaryResult.aiExplanation || `This document contains concepts closely aligned with your search context.`}
                       </p>
                     </div>
                   </div>

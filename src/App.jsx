@@ -11,8 +11,9 @@ import { Scanning } from './pages/Scanning';
 import { Dashboard } from './pages/Dashboard';
 import { SemanticSearch } from './pages/SemanticSearch';
 import { SearchResults } from './pages/SearchResults';
-import { Settings } from './pages/Settings';
 import { Organization } from './pages/Organization';
+import { MediaIntelligence } from './pages/MediaIntelligence';
+import { Settings } from './pages/Settings';
 
 export default function App() {
   return (
@@ -55,6 +56,14 @@ export default function App() {
             element={
               <MainLayout>
                 <Organization />
+              </MainLayout>
+            }
+          />
+          <Route
+            path="/media"
+            element={
+              <MainLayout>
+                <MediaIntelligence />
               </MainLayout>
             }
           />

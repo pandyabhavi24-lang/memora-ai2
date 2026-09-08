@@ -102,9 +102,14 @@ class SearchResultItem(BaseModel):
     score: float
     matched_snippet: str
     ai_explanation: str
+    match_source: Optional[str] = "TEXT"  # TEXT, OCR, VISUAL, HYBRID
+    visual_match_details: Optional[Dict[str, Any]] = None
+    thumbnail_url: Optional[str] = None
+    preview_url: Optional[str] = None
     chunk_id: int
     modified_at: str
     size_bytes: int
+
 
 class SearchResponse(BaseModel):
     query: str

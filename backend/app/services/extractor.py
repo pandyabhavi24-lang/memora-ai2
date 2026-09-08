@@ -281,55 +281,68 @@ class TextExtractor:
 
         return "", "failed"
 
+    IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", ".gif"}
+
     @staticmethod
     def extract_from_image(file_path: str) -> Tuple[str, str]:
+        """
+        Extract text from images using EasyOCR with robust format and path handling.
+        Returns (extracted_text, status): 'success', 'empty', or 'failed'.
+        """
         try:
-            import cv2
+            from PIL import Image
             import numpy as np
 
             reader = get_easyocr_reader()
 
             if not reader:
                 logger.warning(
-                    f"EasyOCR reader unavailable for image "
-                    f"'{file_path}'"
+                    f"EasyOCR reader unavailable for image '{file_path}'"
                 )
                 return "", "failed"
 
-            image = cv2.imread(file_path)
+            if not os.path.exists(file_path):
+                logger.warning(f"Image file does not exist: '{file_path}'")
+                return "", "failed"
 
-            # Fallback for Windows non-ASCII / space paths
-            if image is None:
-                try:
-                    img_bytes = np.fromfile(file_path, dtype=np.uint8)
-                    image = cv2.imdecode(img_bytes, cv2.IMREAD_COLOR)
-                except Exception as img_err:
-                    logger.debug(f"np.fromfile loading failed for '{file_path}': {img_err}")
+            # Load image safely via PIL (handles JPG, PNG, WEBP, BMP, TIFF, GIF)
+            try:
+                with Image.open(file_path) as pil_img:
+                    rgb_img = pil_img.convert("RGB")
+                    img_array = np.array(rgb_img)
+            except Exception as load_err:
+                logger.debug(f"PIL Image.open failed for '{file_path}': {load_err}, attempting fallback")
+                import cv2
+                img_bytes = np.fromfile(file_path, dtype=np.uint8)
+                img_array = cv2.imdecode(img_bytes, cv2.IMREAD_COLOR)
 
-            if image is not None:
-                # Preprocessing
-                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                results = reader.readtext(gray, detail=0)
-            else:
-                # Direct file path fallback for EasyOCR
-                results = reader.readtext(file_path, detail=0)
+            if img_array is None or img_array.size == 0:
+                logger.warning(f"Could not decode image pixel data for '{file_path}'")
+                return "", "failed"
 
-            extracted_str = " ".join(
-                [
-                    res.strip()
-                    for res in results
-                    if res and res.strip()
-                ]
-            )
+            # Run EasyOCR
+            results = reader.readtext(img_array, detail=0)
+
+            # Filter out whitespace and empty entries
+            clean_results = [
+                res.strip()
+                for res in results
+                if res and res.strip()
+            ]
+
+            extracted_str = " ".join(clean_results).strip()
 
             if not extracted_str:
+                logger.debug(f"No text detected via OCR in image '{file_path}' (status: empty)")
                 return "", "empty"
 
+            logger.info(f"OCR successfully extracted {len(clean_results)} text segments from '{file_path}' ({len(extracted_str)} chars)")
             return extracted_str, "success"
 
         except Exception as e:
             logger.error(
-                f"OCR extraction failed for '{file_path}': {e}"
+                f"OCR extraction failed for '{file_path}': {e}",
+                exc_info=True
             )
             return "", "failed"
 
@@ -354,10 +367,10 @@ class TextExtractor:
         elif ext == ".pptx":
             return cls.extract_from_pptx(file_path)
 
-        elif ext in [".txt", ".md", ".csv", ".java", ".c", ".py"]:
+        elif ext in [".txt", ".md", ".csv", ".java", ".c", ".py", ".class", ".html", ".htm", ".js", ".ts", ".css", ".scss", ".json", ".xml", ".yml", ".yaml", ".sql"]:
             return cls.extract_from_plain_text(file_path)
 
-        elif ext in [".jpg", ".jpeg", ".png", ".webp"]:
+        elif ext in cls.IMAGE_EXTENSIONS:
             return cls.extract_from_image(file_path)
 
         else:

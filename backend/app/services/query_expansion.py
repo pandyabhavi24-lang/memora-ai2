@@ -173,6 +173,24 @@ PEOPLE_ORG_TERMS: Dict[str, List[str]] = {
     "professor": ["teacher", "faculty", "instructor", "lecturer"]
 }
 
+# 11. VISUAL & MEDIA CONCEPTS (FOR MODULE 3 CONTROLLED QUERY EXPANSION)
+VISUAL_MEDIA_TERMS: Dict[str, List[str]] = {
+    "tree": ["tree", "nature", "greenery", "plant", "outdoor", "forest", "park"],
+    "trees": ["tree", "nature", "greenery", "plant", "outdoor", "forest", "park"],
+    "building": ["building", "architecture", "structure", "office", "house", "urban"],
+    "buildings": ["building", "architecture", "structure", "office", "house", "urban"],
+    "dog": ["dog", "animal", "pet", "outdoor", "park"],
+    "dogs": ["dog", "animal", "pet", "outdoor", "park"],
+    "cloud": ["cloud", "sky", "weather", "outdoor"],
+    "clouds": ["cloud", "sky", "weather", "outdoor"],
+    "sky": ["sky", "cloud", "outdoor", "nature", "weather"],
+    "mountain": ["mountain", "nature", "landscape", "outdoor", "hill"],
+    "mountains": ["mountain", "nature", "landscape", "outdoor", "hill"],
+    "car": ["car", "vehicle", "automobile", "outdoor"],
+    "cars": ["car", "vehicle", "automobile", "outdoor"],
+    "nature": ["tree", "greenery", "plant", "outdoor", "landscape", "forest"]
+}
+
 # Aggregate all modular vocabularies into a single lookup hierarchy
 ALL_VOCABULARIES: List[Dict[str, List[str]]] = [
     DESIGN_PATTERN_TERMS,
@@ -181,6 +199,7 @@ ALL_VOCABULARIES: List[Dict[str, List[str]]] = [
     PROGRAMMING_TERMS,
     FILE_TERMS,
     IMAGE_OCR_TERMS,
+    VISUAL_MEDIA_TERMS,
     BUSINESS_TERMS,
     DOCUMENT_STRUCTURE_TERMS,
     PEOPLE_ORG_TERMS,

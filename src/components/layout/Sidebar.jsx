@@ -9,7 +9,8 @@ import {
   RefreshCw, 
   Settings, 
   ShieldCheck, 
-  Cpu
+  Cpu,
+  Sparkles
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -18,6 +19,7 @@ export const Sidebar = () => {
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Organize', path: '/organize', icon: FolderTree },
+    { label: 'Media Intelligence', path: '/media', icon: Sparkles },
     { label: 'Scanned Folders', path: '/folders', icon: FolderSearch },
     { label: 'Settings', path: '/settings', icon: Settings },
   ];
