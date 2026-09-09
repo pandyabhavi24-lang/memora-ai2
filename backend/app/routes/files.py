@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import File, Chunk
-from ..schemas import FileResponse, FileDetailResponse
+from ..schemas import FileResponse, FileDetailResponse, FileTagsUpdate
 
 router = APIRouter(prefix="/api/files", tags=["Files"])
 
@@ -31,6 +31,7 @@ def get_file_detail(file_id: int, db: Session = Depends(get_db)):
         file_hash=file_rec.file_hash,
         mime_type=file_rec.mime_type,
         extraction_status=file_rec.extraction_status,
+        smart_tags=file_rec.get_smart_tags(),
         extracted_text=file_rec.extracted_text,
         chunk_count=chunk_count,
         created_at=file_rec.created_at,
@@ -50,6 +51,40 @@ def get_file_content(file_id: int, db: Session = Depends(get_db)):
         "extension": file_rec.extension,
         "extraction_status": file_rec.extraction_status,
         "extracted_text": file_rec.extracted_text or "No extracted text available."
+    }
+
+@router.put("/{file_id}/tags")
+@router.patch("/{file_id}/tags")
+def update_file_tags(file_id: int, req: FileTagsUpdate, db: Session = Depends(get_db)):
+    file_rec = db.query(File).filter(File.id == file_id).first()
+    if not file_rec:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    clean_tags = []
+    seen = set()
+    for t in req.tags:
+        if t and str(t).strip():
+            trimmed = str(t).strip()
+            if trimmed.lower() not in seen:
+                seen.add(trimmed.lower())
+                clean_tags.append(trimmed)
+
+    file_rec.set_smart_tags(clean_tags)
+
+    from ..models import OrganizationSuggestion
+    suggestions = db.query(OrganizationSuggestion).filter(OrganizationSuggestion.file_id == file_id).all()
+    for sug in suggestions:
+        sug.set_smart_tags(clean_tags)
+        sug.status = "edited"
+
+    db.commit()
+    db.refresh(file_rec)
+
+    return {
+        "status": "success",
+        "file_id": file_id,
+        "smart_tags": file_rec.get_smart_tags(),
+        "message": "Smart tags updated successfully"
     }
 
 @router.delete("/{file_id}")

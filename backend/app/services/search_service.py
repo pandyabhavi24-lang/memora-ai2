@@ -118,7 +118,15 @@ class SearchService:
     ) -> Dict[str, Any]:
         start_time = time.perf_counter()
 
-        if not query or not query.strip():
+        raw_query = (query or "").strip()
+
+        has_active_filters = False
+        if filters:
+            target_tags = filters.smart_tags or filters.labels or getattr(filters, 'tags', None)
+            if (target_tags and len(target_tags) > 0) or (filters.file_type and filters.file_type != "all") or filters.folder_id is not None or (filters.category and filters.category != "all") or (filters.location and filters.location != "all"):
+                has_active_filters = True
+
+        if not raw_query and not has_active_filters:
             return {
                 "query": "",
                 "total": 0,
@@ -127,7 +135,77 @@ class SearchService:
                 "debug": {}
             }
 
-        raw_query = query.strip()
+        # If empty text query but filters are provided, fetch all DB files as candidates for filter evaluation
+        if not raw_query and has_active_filters:
+            all_files = db.query(File, Folder).join(Folder, File.folder_id == Folder.id).all()
+            all_candidates = []
+            for file, folder in all_files:
+                f_tags = file.get_smart_tags()
+                cat_str = map_category_from_extension(file.extension)
+                mod_str = file.modified_at.isoformat() if isinstance(file.modified_at, datetime) else str(file.modified_at or "")
+                all_candidates.append({
+                    "document_id": file.id,
+                    "file_id": file.id,
+                    "filename": file.name,
+                    "file_name": file.name,
+                    "file_path": file.path,
+                    "folder_name": folder.name,
+                    "folder_id": folder.id,
+                    "extension": file.extension,
+                    "category": cat_str,
+                    "org_category": "",
+                    "smart_tags": f_tags,
+                    "labels": f_tags,
+                    "has_smart_tag_match": True,
+                    "semantic_score": 1.0,
+                    "lexical_score": 1.0,
+                    "final_score": 1.0,
+                    "score": 100.0,
+                    "matched_snippet": extract_clean_snippet(file.extracted_text or file.name, ""),
+                    "ai_explanation": f"Matches filter for '{', '.join(f_tags[:3]) if f_tags else file.name}'.",
+                    "chunk_id": 0,
+                    "modified_at": mod_str,
+                    "size_bytes": file.size
+                })
+
+            accepted_results = all_candidates
+            results = accepted_results
+
+            if filters.file_type and filters.file_type != "all":
+                target_type = filters.file_type.lower()
+                results = [r for r in results if r["category"] == target_type or r["extension"].lower().replace(".", "") == target_type]
+
+            if filters.folder_id is not None:
+                results = [r for r in results if r["folder_id"] == filters.folder_id]
+
+            if filters.date_range and filters.date_range != "any":
+                now = datetime.utcnow()
+                results = [r for r in results if self._filter_by_date(r["modified_at"], filters.date_range, now)]
+
+            if filters.size and filters.size != "any":
+                results = [r for r in results if self._filter_by_size(r["size_bytes"], filters.size)]
+
+            if filters.category and filters.category != "all":
+                results = [r for r in results if self._filter_by_category(r["category"], r.get("org_category"), filters.category, r.get("smart_tags"))]
+
+            if filters.location and filters.location != "all":
+                results = [r for r in results if self._filter_by_location(r["file_path"], r["folder_name"], filters.location)]
+
+            target_tags = filters.smart_tags or filters.labels or getattr(filters, 'tags', None)
+            if target_tags and isinstance(target_tags, list) and len(target_tags) > 0:
+                results = [r for r in results if self._filter_by_labels(r, target_tags)]
+
+            if filters.relevance and filters.relevance != "any":
+                results = [r for r in results if self._filter_by_relevance(r["score"], filters.relevance)]
+
+            execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            return {
+                "query": "",
+                "total": len(results),
+                "execution_time_ms": execution_time_ms,
+                "results": results[:top_k],
+                "debug": {}
+            }
 
         # 1. Context-aware query expansion, concept extraction & intent derivation
         expanded_terms, expanded_str, detected_concepts = query_expansion_service.build_expanded_query_terms(raw_query)
@@ -263,6 +341,30 @@ class SearchService:
                 file_path=file.path
             )
 
+            # Smart Tag relevance calculation & hybrid score boosting
+            q_clean = query_expansion_service.clean_search_intent(raw_query).lower()
+            q_tokens = [t for t in re.findall(r"\b[\w#+.-]{2,}\b", q_clean) if len(t) > 1 and t not in ["file", "files", "doc", "notes", "show", "find"]]
+            has_smart_tag_match = False
+            tag_boost = 0.0
+
+            if f_tags:
+                for tag in f_tags:
+                    t_low = tag.lower().strip()
+                    if not t_low:
+                        continue
+                    if q_clean == t_low or t_low in q_clean or q_clean in t_low:
+                        has_smart_tag_match = True
+                        tag_boost = max(tag_boost, 0.40)
+                    else:
+                        for qt in q_tokens:
+                            if qt == t_low or qt in t_low or t_low in qt:
+                                has_smart_tag_match = True
+                                tag_boost = max(tag_boost, 0.25)
+
+            if tag_boost > 0:
+                doc_semantic_score = min(1.0, max(doc_semantic_score, doc_semantic_score + (tag_boost * 0.4)))
+                doc_lexical_score = min(1.0, max(doc_lexical_score, doc_lexical_score + tag_boost))
+
             # Strict 85% Semantic + 15% Lexical formula
             final_score = (SEMANTIC_WEIGHT * doc_semantic_score) + (LEXICAL_WEIGHT * doc_lexical_score)
 
@@ -287,6 +389,7 @@ class SearchService:
                 "org_category": suggestions_by_file_id.get(file.id, ""),
                 "smart_tags": f_tags,
                 "labels": f_tags,
+                "has_smart_tag_match": has_smart_tag_match,
                 "semantic_score": round(doc_semantic_score, 4),
                 "lexical_score": round(doc_lexical_score, 4),
                 "final_score": round(final_score, 5),
@@ -295,9 +398,9 @@ class SearchService:
                 "chunk_id": best_chunk.id,
                 "modified_at": file.modified_at,
                 "size_bytes": file.size,
-                "concept_agreed": agreed,
+                "concept_agreed": agreed or has_smart_tag_match,
                 "matched_concepts": matched_concepts,
-                "agreement_reason": agreement_reason,
+                "agreement_reason": agreement_reason if not has_smart_tag_match else "Smart Tag relevance match",
                 "match_source": "OCR" if category_str == "image" else ("TEXT" if category_str != "video" else "VISUAL"),
                 "thumbnail_url": f"/api/media/{file.id}/thumbnail" if category_str in ["image", "video"] else None,
                 "preview_url": f"/api/media/{file.id}/preview" if category_str in ["image", "video"] else None
@@ -477,12 +580,13 @@ class SearchService:
         faiss_candidates_count = len(all_candidates)
 
         # 6. Strict Hard Semantic Gate & Secondary Relevance Ranking
-        # Step A: HARD SEMANTIC THRESHOLD GATE
-        # Candidates must strictly satisfy cosine similarity >= SEMANTIC_SIMILARITY_THRESHOLD.
-        # Secondary signals (labels, filenames, keywords) CANNOT bypass this gate.
+        # Step A: HARD SEMANTIC THRESHOLD GATE & HYBRID SMART TAG MATCHER
+        # Candidates must satisfy cosine similarity >= SEMANTIC_SIMILARITY_THRESHOLD or have a Smart Tag/lexical match.
+        target_tags_check = (filters.smart_tags if filters else None) or (filters.labels if filters else None) or (getattr(filters, 'tags', None) if filters else None)
+        
         after_threshold_candidates = [
             c for c in all_candidates
-            if c["semantic_score"] >= SEMANTIC_SIMILARITY_THRESHOLD
+            if c["semantic_score"] >= SEMANTIC_SIMILARITY_THRESHOLD or c.get("has_smart_tag_match") or c["lexical_score"] >= 0.40 or bool(target_tags_check)
         ]
         after_threshold_count = len(after_threshold_candidates)
 
@@ -498,7 +602,7 @@ class SearchService:
             for c in after_threshold_candidates:
                 # Check semantic gap drop-off
                 relative_drop = top_score - c["final_score"]
-                if top_score >= 0.75 and relative_drop > MAX_RELATIVE_DROP_FROM_TOP and c["lexical_score"] < 0.50:
+                if top_score >= 0.75 and relative_drop > MAX_RELATIVE_DROP_FROM_TOP and c["lexical_score"] < 0.50 and not c.get("has_smart_tag_match"):
                     rejected_diagnostics.append({
                         "filename": c["file_name"],
                         "cosine": c["semantic_score"],
@@ -550,7 +654,7 @@ class SearchService:
                     if self._filter_by_location(r["file_path"], r["folder_name"], filters.location)
                 ]
 
-            target_tags = filters.smart_tags or filters.labels
+            target_tags = filters.smart_tags or filters.labels or getattr(filters, 'tags', None)
             if target_tags and isinstance(target_tags, list) and len(target_tags) > 0:
                 results = [
                     r for r in results

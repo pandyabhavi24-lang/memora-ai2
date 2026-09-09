@@ -76,7 +76,11 @@ class SearchFilters(BaseModel):
     location: Optional[str] = None
     labels: Optional[List[str]] = None
     smart_tags: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
     relevance: Optional[str] = None
+
+class FileTagsUpdate(BaseModel):
+    tags: List[str] = []
 
 class SearchRequest(BaseModel):
     query: str

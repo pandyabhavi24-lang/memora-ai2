@@ -200,20 +200,27 @@ export const Organization = () => {
   };
 
   const handleSaveEditCategory = async (id, newCategory, smartTags) => {
+    const updatedTags = Array.isArray(smartTags) ? smartTags : [];
     setSuggestions((prev) =>
       (Array.isArray(prev) ? prev : []).map((item) =>
         item.id === id
           ? {
               ...item,
               suggestedCategory: newCategory || item.suggestedCategory,
-              smart_tags: smartTags || item.smart_tags,
+              smart_tags: updatedTags,
+              labels: updatedTags,
               status: 'Edited'
             }
           : item
       )
     );
     try {
-      await organizationService.updateSuggestion(id, 'edited', newCategory, smartTags);
+      await organizationService.updateSuggestion(id, 'edited', newCategory, updatedTags);
+      const sug = (suggestions || []).find((s) => s.id === id);
+      if (sug && (sug.file_id || sug.db_id)) {
+        const targetFileId = sug.file_id || sug.db_id;
+        await apiService.updateFileTags(targetFileId, updatedTags);
+      }
     } catch (err) {
       console.error('Failed to sync edited category on backend:', err);
     }
