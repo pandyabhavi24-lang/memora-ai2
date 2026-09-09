@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   FileText, 
   FileCode, 
@@ -15,7 +15,9 @@ import {
   Tag,
   Folder,
   Layers,
-  FolderOutput
+  FolderOutput,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 
 export const OrganizationSuggestionsTable = ({
@@ -31,11 +33,36 @@ export const OrganizationSuggestionsTable = ({
   onPreviewChanges,
   warningMessage
 }) => {
+  const [expandedFolders, setExpandedFolders] = useState({});
+  
   const safeSuggestions = Array.isArray(suggestions) ? suggestions : [];
   const safeSelectedIds = Array.isArray(selectedIds) ? selectedIds : [];
 
   const allSelected = safeSuggestions.length > 0 && safeSelectedIds.length === safeSuggestions.length;
   const someSelected = safeSelectedIds.length > 0;
+
+  // Group suggestions by physical/display folder path
+  const folderGroups = useMemo(() => {
+    const groups = {};
+    for (const item of safeSuggestions) {
+      if (!item) continue;
+      const folderKey = item.displayPath || item.currentPath || item.folderName || 'Scanned Folder';
+      if (!groups[folderKey]) {
+        groups[folderKey] = [];
+      }
+      groups[folderKey].push(item);
+    }
+    return groups;
+  }, [safeSuggestions]);
+
+  const folderEntries = Object.entries(folderGroups);
+
+  const toggleFolder = (folderKey) => {
+    setExpandedFolders(prev => ({
+      ...prev,
+      [folderKey]: !prev[folderKey]
+    }));
+  };
 
   const getFileIcon = (type) => {
     switch ((type || '').toUpperCase()) {
@@ -133,7 +160,7 @@ export const OrganizationSuggestionsTable = ({
 
   return (
     <div className="glass-panel rounded-2xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-md mb-8 overflow-hidden shadow-xl">
-      {/* Friendly Selection Warning Banner */}
+      {/* Selection Warning Banner */}
       {warningMessage && (
         <div className="px-5 py-3 bg-amber-500/15 border-b border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-between animate-fadeIn">
           <span className="flex items-center gap-2">
@@ -144,29 +171,29 @@ export const OrganizationSuggestionsTable = ({
       )}
 
       {/* Table Control Header */}
-      <div className="p-4 sm:p-5 border-b border-slate-800/80 bg-slate-950/70 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 border-b border-slate-800/80 bg-slate-950/70 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
             <span>Folder Organization Review</span>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30">
-              {safeSuggestions.length} files scanned
+              {folderEntries.length} {folderEntries.length === 1 ? 'folder' : 'folders'} ({safeSuggestions.length} files)
             </span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Review proposed AI folder suggestions and labels before organizing files into physical directories.
+            Expand folder groups below to review AI category suggestions, confidence ratings, and smart tags.
           </p>
         </div>
 
-        {/* Bulk Actions */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Bulk Actions Toolbar - Single Row Alignment */}
+        <div className="flex items-center flex-wrap sm:flex-nowrap gap-2 sm:gap-2.5 shrink-0 overflow-x-auto py-0.5">
           <button
             onClick={onSelectAll}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 font-medium text-xs transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 h-9 rounded-xl border border-slate-700/60 bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 font-semibold text-xs whitespace-nowrap shrink-0 transition-colors cursor-pointer"
           >
             {allSelected ? (
-              <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
+              <CheckSquare className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             ) : (
-              <Square className="w-3.5 h-3.5 text-slate-500" />
+              <Square className="w-3.5 h-3.5 text-slate-500 shrink-0" />
             )}
             <span>Select All</span>
           </button>
@@ -174,175 +201,223 @@ export const OrganizationSuggestionsTable = ({
           <button
             onClick={onAcceptSelected}
             disabled={!someSelected}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs whitespace-nowrap shrink-0 shadow-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
-            <Check className="w-3.5 h-3.5" />
+            <Check className="w-3.5 h-3.5 shrink-0" />
             <span>Mark Reviewed ({safeSelectedIds.length})</span>
           </button>
 
           <button
             onClick={onRejectSelected}
             disabled={!someSelected}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60 font-medium text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60 font-semibold text-xs whitespace-nowrap shrink-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5 shrink-0" />
             <span>Skip Selected</span>
           </button>
 
-          <div className="hidden sm:block w-px h-6 bg-slate-800 mx-1" />
-
           <button
             onClick={onPreviewChanges}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-blue-500/20 border border-blue-500/30 transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 h-9 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:from-blue-700 active:to-indigo-700 text-white font-semibold text-xs whitespace-nowrap shrink-0 shadow-md shadow-blue-500/20 border border-blue-500/30 transition-all cursor-pointer"
           >
-            <FolderOutput className="w-3.5 h-3.5" />
+            <FolderOutput className="w-3.5 h-3.5 shrink-0" />
             <span>Folder Organization ({safeSelectedIds.length})</span>
           </button>
         </div>
       </div>
 
-      {/* Main Suggestions Table */}
-      <div className="overflow-x-auto custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[920px]">
-          <thead>
-            <tr className="bg-slate-950/90 border-b border-slate-800/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
-              <th className="py-3 px-4 w-10">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={onSelectAll}
-                  className="rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
-                />
-              </th>
-              <th className="py-3 px-4 min-w-[180px]">File Details</th>
-              <th className="py-3 px-4 min-w-[280px]">Smart Tags</th>
-              <th className="py-3 px-4">Confidence</th>
-              <th className="py-3 px-4 min-w-[180px]">Current Physical Folder</th>
-              <th className="py-3 px-4">Status</th>
-              <th className="py-3 px-4 text-right pr-6 min-w-[160px]">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/60 text-xs">
-            {safeSuggestions.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-12 text-center text-slate-400 text-xs font-medium">
-                  No organization suggestions found. Click "Analyze Files" to scan and analyze files.
-                </td>
-              </tr>
-            ) : (
-              safeSuggestions.map((item) => {
-                if (!item) return null;
-                const isSelected = safeSelectedIds.includes(item.id);
-                
-                // Smart tags list handling
-                const tagsList = Array.isArray(item.smart_tags) && item.smart_tags.length > 0
-                  ? item.smart_tags
-                  : (Array.isArray(item.labels) && item.labels.length > 0
-                      ? item.labels
-                      : (item.suggestedCategory || '').split('/').map(s => s.trim()).filter(Boolean));
-                const displayTags = tagsList.slice(0, 5);
-                const extraCount = tagsList.length - displayTags.length;
+      {/* Expandable Folder Groups List */}
+      <div className="divide-y divide-slate-800/80">
+        {safeSuggestions.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 text-xs font-medium">
+            No organization suggestions found. Click "Analyze Files" to scan and analyze files.
+          </div>
+        ) : (
+          folderEntries.map(([folderKey, items]) => {
+            const isExpanded = !!expandedFolders[folderKey];
+            const reviewedCount = items.filter(
+              i => i.status === 'Accepted' || i.status === 'Reviewed' || i.status === 'Edited'
+            ).length;
 
-                return (
-                  <tr
-                    key={item.id || item.filename}
-                    className={`transition-colors hover:bg-slate-800/40 ${
-                      isSelected ? 'bg-blue-500/10' : ''
-                    }`}
-                  >
-                    <td className="py-3.5 px-4">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => onToggleSelect && onToggleSelect(item.id)}
-                        className="rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
-                      />
-                    </td>
+            return (
+              <div key={folderKey} className="bg-slate-900/60 transition-colors">
+                {/* Collapsed/Expanded Folder Header Card */}
+                <div
+                  onClick={() => toggleFolder(folderKey)}
+                  className="p-4 bg-slate-950/80 hover:bg-slate-800/50 border-b border-slate-800/80 flex items-center justify-between cursor-pointer select-none transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400">
+                      {isExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-blue-400" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      )}
+                    </div>
+                    <Folder className="w-5 h-5 text-blue-400 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>📁 {folderKey}</span>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                          {items.length} {items.length === 1 ? 'file' : 'files'}
+                        </span>
+                      </h3>
+                    </div>
+                  </div>
 
-                    {/* File Name & Type */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2.5 font-medium text-white">
-                        {getFileIcon(item.type)}
-                        <div>
-                          <span className="font-semibold text-slate-100 block line-clamp-1" title={item.filename || ''}>
-                            {item.filename || 'Unnamed File'}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono block">
-                            Type: {item.type || 'FILE'}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
+                  <div className="flex items-center gap-3">
+                    {reviewedCount > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        {reviewedCount}/{items.length} Reviewed
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        Pending Review
+                      </span>
+                    )}
+                    <span className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                      <span>{isExpanded ? 'Collapse' : 'Expand Files'}</span>
+                    </span>
+                  </div>
+                </div>
 
-                    {/* SMART TAGS */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {displayTags.map((tag, tIdx) => (
-                          <span key={tIdx} className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1">
-                            <Tag className="w-3 h-3 text-purple-400" />
-                            <span>{tag}</span>
-                          </span>
-                        ))}
-                        {extraCount > 0 && (
-                          <span
-                            onClick={() => onEdit && onEdit(item)}
-                            className="px-2 py-1 rounded-md text-[11px] font-bold bg-slate-800 text-purple-300 border border-slate-700 cursor-pointer hover:bg-purple-500/20"
-                          >
-                            +{extraCount}
-                          </span>
-                        )}
-                        <button
-                          onClick={() => onEdit && onEdit(item)}
-                          className="ml-1 p-1 rounded-md bg-slate-800 hover:bg-purple-500/20 text-slate-400 hover:text-purple-300 border border-slate-700/60 text-[10px] transition-colors cursor-pointer"
-                          title="Edit Smart Tags"
-                        >
-                          <Edit3 className="w-3 h-3 text-purple-400" />
-                        </button>
-                      </div>
-                    </td>
+                {/* Expanded Folder Files Table */}
+                {isExpanded && (
+                  <div className="overflow-x-auto custom-scrollbar animate-fadeIn">
+                    <table className="w-full text-left border-collapse min-w-[920px]">
+                      <thead>
+                        <tr className="bg-slate-950/90 border-b border-slate-800/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
+                          <th className="py-3 px-4 w-10">
+                            {/* Folder Specific Checkbox */}
+                          </th>
+                          <th className="py-3 px-4 min-w-[180px]">File Details</th>
+                          <th className="py-3 px-4 min-w-[280px]">Smart Tags</th>
+                          <th className="py-3 px-4">Confidence</th>
+                          <th className="py-3 px-4 min-w-[180px]">Current Physical Folder</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right pr-6 min-w-[160px]">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 text-xs">
+                        {items.map((item) => {
+                          if (!item) return null;
+                          const isSelected = safeSelectedIds.includes(item.id);
 
-                    {/* AI Confidence */}
-                    <td className="py-3.5 px-4">
-                      {getConfidenceBadge(item.confidence, item.confidenceLevel)}
-                    </td>
+                          // Smart tags list handling
+                          const tagsList = Array.isArray(item.smart_tags) && item.smart_tags.length > 0
+                            ? item.smart_tags
+                            : (Array.isArray(item.labels) && item.labels.length > 0
+                                ? item.labels
+                                : (item.suggestedCategory || '').split('/').map(s => s.trim()).filter(Boolean));
+                          const displayTags = tagsList.slice(0, 5);
+                          const extraCount = tagsList.length - displayTags.length;
 
-                    {/* Current Physical Folder */}
-                    <td className="py-3.5 px-4 font-mono text-[11px] text-slate-300 truncate max-w-[220px]" title={item.displayPath || item.currentPath || ''}>
-                      📁 {item.displayPath || item.currentPath || 'Root Folder'}
-                    </td>
+                          return (
+                            <tr
+                              key={item.id || item.filename}
+                              className={`transition-colors hover:bg-slate-800/40 ${
+                                isSelected ? 'bg-blue-500/10' : ''
+                              }`}
+                            >
+                              <td className="py-3.5 px-4">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => onToggleSelect && onToggleSelect(item.id)}
+                                  className="rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
+                                />
+                              </td>
 
-                    {/* Status Badge */}
-                    <td className="py-3.5 px-4">
-                      {getStatusBadge(item.status)}
-                    </td>
+                              {/* File Name & Type */}
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center gap-2.5 font-medium text-white">
+                                  {getFileIcon(item.type)}
+                                  <div>
+                                    <span className="font-semibold text-slate-100 block line-clamp-1" title={item.filename || ''}>
+                                      {item.filename || 'Unnamed File'}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-mono block">
+                                      Type: {item.type || 'FILE'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
 
-                    {/* Action Controls */}
-                    <td className="py-3.5 px-4 text-right pr-6">
-                      <div className="inline-flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => onAccept && onAccept(item.id)}
-                          title="Confirm Smart Tags for this file"
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors font-medium text-xs flex items-center gap-1 cursor-pointer"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Confirm</span>
-                        </button>
+                              {/* SMART TAGS */}
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {displayTags.map((tag, tIdx) => (
+                                    <span key={tIdx} className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                                      <Tag className="w-3 h-3 text-purple-400" />
+                                      <span>{tag}</span>
+                                    </span>
+                                  ))}
+                                  {extraCount > 0 && (
+                                    <span
+                                      onClick={() => onEdit && onEdit(item)}
+                                      className="px-2 py-1 rounded-md text-[11px] font-bold bg-slate-800 text-purple-300 border border-slate-700 cursor-pointer hover:bg-purple-500/20"
+                                    >
+                                      +{extraCount}
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => onEdit && onEdit(item)}
+                                    className="ml-1 p-1 rounded-md bg-slate-800 hover:bg-purple-500/20 text-slate-400 hover:text-purple-300 border border-slate-700/60 text-[10px] transition-colors cursor-pointer"
+                                    title="Edit Smart Tags"
+                                  >
+                                    <Edit3 className="w-3 h-3 text-purple-400" />
+                                  </button>
+                                </div>
+                              </td>
 
-                        <button
-                          onClick={() => onReject && onReject(item.id)}
-                          title="Skip suggestion"
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-700/60 transition-colors cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                              {/* AI Confidence */}
+                              <td className="py-3.5 px-4">
+                                {getConfidenceBadge(item.confidence, item.confidenceLevel)}
+                              </td>
+
+                              {/* Current Physical Folder */}
+                              <td className="py-3.5 px-4 font-mono text-[11px] text-slate-300 truncate max-w-[220px]" title={item.displayPath || item.currentPath || ''}>
+                                📁 {item.displayPath || item.currentPath || 'Root Folder'}
+                              </td>
+
+                              {/* Status Badge */}
+                              <td className="py-3.5 px-4">
+                                {getStatusBadge(item.status)}
+                              </td>
+
+                              {/* Action Controls */}
+                              <td className="py-3.5 px-4 text-right pr-6">
+                                <div className="inline-flex items-center justify-end gap-1.5">
+                                  <button
+                                    onClick={() => onAccept && onAccept(item.id)}
+                                    title="Confirm Smart Tags for this file"
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors font-medium text-xs flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Confirm</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => onReject && onReject(item.id)}
+                                    title="Skip suggestion"
+                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-700/60 transition-colors cursor-pointer"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -355,3 +430,4 @@ function FilePresentation(props) {
     </svg>
   );
 }
+

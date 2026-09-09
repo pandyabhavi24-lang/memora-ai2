@@ -270,6 +270,9 @@ class OrganizationApplyResponse(BaseModel):
 
 
 class DuplicateFileDetail(BaseModel):
+    id: Optional[int] = None
+    file_id: Optional[int] = None
+    db_id: Optional[int] = None
     filename: str
     path: str
     size: str

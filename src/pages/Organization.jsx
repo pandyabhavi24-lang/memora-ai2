@@ -89,19 +89,24 @@ export const Organization = () => {
   const fetchInitialData = async () => {
     try {
       const realSuggestions = await organizationService.getSuggestions();
-      if (Array.isArray(realSuggestions) && realSuggestions.length > 0) {
+      if (Array.isArray(realSuggestions)) {
         setSuggestions(realSuggestions);
         setAnalysisStatus('complete');
         setSummaryStats(prev => ({
           ...prev,
           files_analyzed: realSuggestions.length,
           suggestions_generated: realSuggestions.length,
-          high_confidence: realSuggestions.filter(s => (s.confidenceScore || 0) >= 0.8).length
+          high_confidence: realSuggestions.filter(s => (s.confidence || s.confidenceScore || 0) >= 90).length
         }));
       }
     } catch (err) {
       console.warn('Backend loading error, using initial state:', err);
     }
+  };
+
+  const handleFileDeleted = async () => {
+    await fetchInitialData();
+    setDupRefreshKey((k) => k + 1);
   };
 
   // Trigger file analysis via backend or simulated progress
@@ -315,7 +320,7 @@ export const Organization = () => {
             />
 
             {/* Lower Content Grid: Possible Duplicates & Category Overview */}
-            <DuplicatesSection refreshTrigger={dupRefreshKey} />
+            <DuplicatesSection refreshTrigger={dupRefreshKey} onFileDeleted={handleFileDeleted} />
 
             <CategoryOverview refreshTrigger={dupRefreshKey} />
           </>

@@ -575,15 +575,24 @@ class OrganizationService:
                 else:
                     return f"{size_bytes / (1024 * 1024):.1f} MB"
 
+            file_a_id = g.file_a_id if hasattr(g, 'file_a_id') and g.file_a_id else (g.file_a.id if g.file_a else None)
+            file_b_id = g.file_b_id if hasattr(g, 'file_b_id') and g.file_b_id else (g.file_b.id if g.file_b else None)
+
             file_a_detail = {
-                "filename": g.file_a.name,
-                "path": g.file_a.path,
-                "size": format_size(g.file_a.size)
+                "id": file_a_id,
+                "file_id": file_a_id,
+                "db_id": file_a_id,
+                "filename": g.file_a.name if g.file_a else "File A",
+                "path": g.file_a.path if g.file_a else "",
+                "size": format_size(g.file_a.size) if (g.file_a and g.file_a.size) else "0 B"
             }
             file_b_detail = {
-                "filename": g.file_b.name,
-                "path": g.file_b.path,
-                "size": format_size(g.file_b.size)
+                "id": file_b_id,
+                "file_id": file_b_id,
+                "db_id": file_b_id,
+                "filename": g.file_b.name if g.file_b else "File B",
+                "path": g.file_b.path if g.file_b else "",
+                "size": format_size(g.file_b.size) if (g.file_b and g.file_b.size) else "0 B"
             }
 
             results.append({
@@ -624,6 +633,12 @@ class OrganizationService:
         all_files = db.query(File).all()
         suggestions = db.query(OrganizationSuggestion).join(OrganizationCategory).all()
 
+        # Map file_id -> category name from suggestions
+        file_cat_map = {}
+        for sug in suggestions:
+            if sug.file_id and sug.category:
+                file_cat_map[sug.file_id] = sug.category.name
+
         # 1. Existing Physical Folders
         existing_folders_list = []
         files_by_folder: Dict[int, List[File]] = {}
@@ -651,24 +666,33 @@ class OrganizationService:
 
         # 2. AI Categories & Distribution
         counts: Dict[str, int] = {}
-        for sug in suggestions:
-            cat_name = sug.category.name if sug.category else "Other"
+        total_files = len(all_files)
+
+        for f in all_files:
+            if f.id in file_cat_map:
+                cat_name = file_cat_map[f.id]
+            else:
+                ext = (f.extension or "").lower()
+                if ext in ['.pdf', '.docx', '.doc', '.txt', '.rtf', '.md', '.pptx', '.xlsx']:
+                    cat_name = "Documents"
+                elif ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.svg', '.gif']:
+                    cat_name = "Images"
+                else:
+                    cat_name = "Other"
             counts[cat_name] = counts.get(cat_name, 0) + 1
 
-        total_files = len(suggestions) if suggestions else len(all_files)
-        categories = self.get_categories(db)
-
         ai_categories_list = []
-        for cat in categories:
-            f_count = counts.get(cat.name, 0)
+        for cat_name, f_count in counts.items():
             if f_count > 0:
                 pct = round((f_count / total_files) * 100, 1) if total_files > 0 else 0.0
                 ai_categories_list.append({
-                    "category": cat.name,
+                    "category": cat_name,
                     "fileCount": f_count,
                     "totalFiles": total_files,
                     "percentage": pct
                 })
+
+        ai_categories_list.sort(key=lambda x: x["fileCount"], reverse=True)
 
         return {
             "existingFolders": existing_folders_list,

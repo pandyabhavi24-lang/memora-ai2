@@ -17,6 +17,7 @@ import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { apiService } from '../services/apiService';
+import { organizationService } from '../services/organizationService';
 
 export const Dashboard = () => {
   const navigate = useNavigate();
@@ -31,19 +32,29 @@ export const Dashboard = () => {
     recent_files: [],
     recent_searches: []
   });
+  const [categories, setCategories] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
-    loadDashboardStats();
+    loadDashboardData();
   }, []);
 
-  const loadDashboardStats = async () => {
+  const loadDashboardData = async () => {
     setLoadingStats(true);
     try {
-      const data = await apiService.getStatistics();
-      setStats(data);
+      const [statsRes, overviewRes] = await Promise.allSettled([
+        apiService.getStatistics(),
+        organizationService.getOverview()
+      ]);
+
+      if (statsRes.status === 'fulfilled' && statsRes.value) {
+        setStats(statsRes.value);
+      }
+      if (overviewRes.status === 'fulfilled' && overviewRes.value && overviewRes.value.aiCategories) {
+        setCategories(overviewRes.value.aiCategories);
+      }
     } catch (err) {
-      console.error('Failed to load dashboard statistics:', err);
+      console.error('Failed to load dashboard data:', err);
     } finally {
       setLoadingStats(false);
     }
@@ -59,6 +70,23 @@ export const Dashboard = () => {
   const handleSuggestionClick = (query) => {
     setSearchQuery(query);
     navigate('/results');
+  };
+
+  const getCategoryMeta = (catName) => {
+    const name = (catName || '').toLowerCase();
+    if (name.includes('education') || name.includes('study') || name.includes('academic')) {
+      return { icon: Award, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'hover:border-purple-500/40', desc: 'Academic & study materials' };
+    }
+    if (name.includes('document') || name.includes('notes')) {
+      return { icon: FileText, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'hover:border-blue-500/40', desc: 'Textual documents & notes' };
+    }
+    if (name.includes('image') || name.includes('photo')) {
+      return { icon: ImageIcon, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'hover:border-emerald-500/40', desc: 'Photos & visual media' };
+    }
+    if (name.includes('project') || name.includes('code') || name.includes('work')) {
+      return { icon: Folder, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'hover:border-amber-500/40', desc: 'Technical projects & records' };
+    }
+    return { icon: Sparkles, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'hover:border-indigo-500/40', desc: 'Indexed category files' };
   };
 
   return (
@@ -231,59 +259,69 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* Right Column: Categories & Recent Searches */}
+        {/* Right Column: Smart Category Index (1 col) */}
         <div className="space-y-4">
-          <h3 className="font-bold text-base text-white">Smart Category Index</h3>
-          
-          <div className="space-y-2.5">
-            <div
-              onClick={() => handleSuggestionClick('resume')}
-              className="glass-panel p-4 rounded-xl flex items-center justify-between cursor-pointer hover:border-blue-500/30 transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-white">Resumes & Credentials</h4>
-                  <p className="text-[10px] text-gray-400">PDF & DOCX files</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-gray-500" />
-            </div>
-
-            <div
-              onClick={() => handleSuggestionClick('notes')}
-              className="glass-panel p-4 rounded-xl flex items-center justify-between cursor-pointer hover:border-purple-500/30 transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                  <Folder className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-white">Coursework & Study Notes</h4>
-                  <p className="text-[10px] text-gray-400">Indexed text documents</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-gray-500" />
-            </div>
-
-            <div
-              onClick={() => handleSuggestionClick('IoT')}
-              className="glass-panel p-4 rounded-xl flex items-center justify-between cursor-pointer hover:border-emerald-500/30 transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                  <Award className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-white">Projects & Documentation</h4>
-                  <p className="text-[10px] text-gray-400">Indexed technical files</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-gray-500" />
-            </div>
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-base text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span>Smart Category Index</span>
+            </h3>
+            {categories.length > 0 && (
+              <Badge variant="purple" size="sm">
+                {categories.length} {categories.length === 1 ? 'Category' : 'Categories'}
+              </Badge>
+            )}
           </div>
+          
+          {categories.length > 0 ? (
+            <div className="space-y-2.5">
+              {categories.map((cat, idx) => {
+                const meta = getCategoryMeta(cat.category);
+                const IconComponent = meta.icon;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => handleSuggestionClick(cat.category)}
+                    className={`glass-panel p-4 rounded-2xl border-gray-800/80 ${meta.border} cursor-pointer transition-all hover:bg-slate-800/40 group`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-xl ${meta.bg} ${meta.color} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}>
+                          <IconComponent className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-semibold text-white group-hover:text-blue-300 transition-colors capitalize">
+                            {cat.category}
+                          </h4>
+                          <p className="text-[10px] text-gray-400">{meta.desc}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-mono font-bold text-white block">
+                          {cat.fileCount} {cat.fileCount === 1 ? 'file' : 'files'}
+                        </span>
+                        <span className="text-[10px] font-mono text-gray-400 block">
+                          {cat.percentage}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Distribution Progress Bar */}
+                    <div className="w-full bg-gray-800/80 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-blue-500 to-purple-500 h-1.5 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, Math.max(0, cat.percentage))}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="glass-panel p-6 rounded-2xl text-center text-gray-400 text-sm">
+              No categories available yet
+            </div>
+          )}
         </div>
       </div>
     </div>

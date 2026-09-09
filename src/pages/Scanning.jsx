@@ -49,14 +49,14 @@ export const Scanning = () => {
         {/* Animated Badge Header */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400 mb-6">
           <Sparkles className="w-4 h-4 animate-spin text-blue-400" />
-          <span>Local Memory Indexer Active</span>
+          <span>Local Document Indexer Active</span>
         </div>
 
         <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">
-          {scanState.percent >= 100 ? 'Indexing Complete!' : 'Building Your Local Memory Index'}
+          {scanState.percent >= 100 ? 'Indexing Complete!' : 'Building Your Local Document Index'}
         </h1>
         <p className="text-sm text-gray-400 mb-8">
-          Extracting content, running local OCR, and generating semantic embeddings.
+          Extracting content, processing documents, and generating semantic embeddings.
         </p>
 
         {/* Large Progress Card */}

@@ -54,10 +54,74 @@ def get_file_content(file_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{file_id}")
 def delete_file(file_id: int, db: Session = Depends(get_db)):
+    import os
+    import logging
+    from ..services.indexing_service import indexing_service
+    from ..models import OrganizationSuggestion, DuplicateGroup
+
+    logger = logging.getLogger("memora.routes.files")
+
+    # 1. Validate the existing File record
     file_rec = db.query(File).filter(File.id == file_id).first()
     if not file_rec:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"File record with ID {file_id} not found in database."
+        )
 
-    db.delete(file_rec)
-    db.commit()
-    return {"message": f"File {file_id} deleted"}
+    # 2. Resolve and validate actual physical path
+    file_path = file_rec.path
+    file_name = file_rec.name
+
+    # 3. Check physical file existence and attempt physical deletion
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except Exception as err:
+            logger.error(f"Failed to delete physical file from disk '{file_path}': {err}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delete physical file from disk: {str(err)}"
+            )
+
+        # 4. Verify the file no longer exists
+        if os.path.exists(file_path):
+            raise HTTPException(
+                status_code=500,
+                detail="Physical file deletion failed; file still exists on disk."
+            )
+        logger.info(f"Successfully deleted physical file from disk: '{file_path}'")
+    else:
+        logger.warning(f"Physical file '{file_path}' was already missing from disk. Proceeding with DB/index cleanup.")
+
+    # 5. ONLY after successful physical deletion, update FAISS, SQLite chunks, vector mappings & DB records
+    try:
+        # Remove FAISS vectors, VectorMapping, and Chunk records using existing indexing service
+        indexing_service._delete_file_chunks_and_vectors(db, file_id)
+
+        # Remove related OrganizationSuggestions
+        db.query(OrganizationSuggestion).filter(OrganizationSuggestion.file_id == file_id).delete(synchronize_session=False)
+
+        # Remove related DuplicateGroups where this file is file_a or file_b
+        db.query(DuplicateGroup).filter(
+            (DuplicateGroup.file_a_id == file_id) | (DuplicateGroup.file_b_id == file_id)
+        ).delete(synchronize_session=False)
+
+        # Delete File record from SQLite DB
+        db.delete(file_rec)
+        db.commit()
+
+        logger.info(f"Completed DB metadata and FAISS vector index cleanup for file_id {file_id} ('{file_name}').")
+        return {
+            "status": "success",
+            "message": f"Successfully deleted '{file_name}' from disk and vector index.",
+            "file_id": file_id,
+            "path": file_path
+        }
+    except Exception as cleanup_err:
+        db.rollback()
+        logger.error(f"Error cleaning up database/index records for file_id {file_id}: {cleanup_err}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Physical file was deleted, but metadata/FAISS cleanup failed: {str(cleanup_err)}"
+        )

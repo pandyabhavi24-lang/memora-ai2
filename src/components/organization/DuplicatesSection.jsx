@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Copy, ArrowLeftRight, Eye, X, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Info, FolderOpen, ExternalLink, FileText } from 'lucide-react';
 import { organizationService } from '../../services/organizationService';
 import { apiService } from '../../services/apiService';
 import { useApp } from '../../context/AppContext';
 
-export const DuplicatesSection = ({ refreshTrigger }) => {
+export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
   const [duplicates, setDuplicates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -67,10 +68,12 @@ export const DuplicatesSection = ({ refreshTrigger }) => {
     if (!fileToDelete) return;
     setIsDeleting(true);
     try {
-      if (fileToDelete.db_id || fileToDelete.id) {
-        await organizationService.deleteFile(fileToDelete.db_id || fileToDelete.id);
+      const targetId = fileToDelete.id || fileToDelete.db_id || fileToDelete.file_id;
+      if (!targetId) {
+        throw new Error("File ID missing for deletion.");
       }
-      setDeleteMessage(`Successfully deleted duplicate copy: ${fileToDelete.filename}`);
+      await organizationService.deleteFile(targetId);
+      setDeleteMessage(`Successfully deleted physical file from disk: ${fileToDelete.filename}`);
       setDuplicates((prev) =>
         prev.map((item) => {
           if (activeDuplicate && item.id === activeDuplicate.id) {
@@ -80,9 +83,18 @@ export const DuplicatesSection = ({ refreshTrigger }) => {
         })
       );
       setFileToDelete(null);
+
+      // Notify parent component to refresh organization suggestions, overview & summary counts
+      if (typeof onFileDeleted === 'function') {
+        onFileDeleted();
+      }
+
+      setTimeout(() => {
+        fetchDuplicates();
+      }, 400);
     } catch (err) {
-      console.warn('Failed to delete file copy:', err);
-      setDeleteMessage(`Could not delete file: ${err.message || 'Server error'}`);
+      console.error('Failed to delete physical file copy:', err);
+      setDeleteMessage(`Deletion Failed: ${err.message || 'Could not delete file from disk'}`);
       setFileToDelete(null);
     } finally {
       setIsDeleting(false);
@@ -209,11 +221,11 @@ export const DuplicatesSection = ({ refreshTrigger }) => {
         </div>
       )}
 
-      {/* Review Modal */}
-      {activeDuplicate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
+      {/* Review Modal rendered via React Portal on document.body for viewport centering */}
+      {activeDuplicate && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
           <div
-            className="w-full max-w-xl glass-panel bg-slate-900 border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scaleUp"
+            className="w-full max-w-2xl glass-panel bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -443,7 +455,8 @@ export const DuplicatesSection = ({ refreshTrigger }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
