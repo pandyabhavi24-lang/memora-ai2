@@ -235,9 +235,9 @@ export const OrganizationSuggestionsTable = ({
                 const isSelected = safeSelectedIds.includes(item.id);
                 
                 // Smart tags list handling
-                const tagsList = Array.isArray(item.smart_tags) && item.smart_tags.length > 0
+                const tagsList = Array.isArray(item.smart_tags)
                   ? item.smart_tags
-                  : (Array.isArray(item.labels) && item.labels.length > 0
+                  : (Array.isArray(item.labels)
                       ? item.labels
                       : (item.suggestedCategory || '').split('/').map(s => s.trim()).filter(Boolean));
                 const displayTags = tagsList.slice(0, 5);

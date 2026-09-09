@@ -177,6 +177,13 @@ class ApiService {
     return await this._fetch(`/api/files/${fileId}/content`);
   }
 
+  async updateFileTags(fileId, tags) {
+    return await this._fetch(`/api/files/${fileId}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags })
+    });
+  }
+
   // --------------------------------------------------------------------------
   // Desktop Action Triggers (Locate, Open)
   // --------------------------------------------------------------------------
