@@ -12,4 +12,14 @@ opencv-python-headless
 pillow
 pypdf
 python-docx
+<<<<<<< Updated upstream
 python-pptx
+=======
+python-pptx
+opencv-python-headless
+easyocr
+scikit-learn
+sentence-transformers
+pillow
+ollama
+>>>>>>> Stashed changes

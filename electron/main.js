@@ -1,12 +1,56 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
+const http = require('http');
 
 let mainWindow;
 let pyProc = null;
 
+<<<<<<< Updated upstream
 function startPythonBackend() {
+=======
+function checkBackendHealth() {
+  return new Promise((resolve) => {
+    const req = http.get('http://127.0.0.1:8000/health', { timeout: 1500 }, (res) => {
+      if (res.statusCode === 200) {
+        resolve(true);
+      } else {
+        resolve(false);
+      }
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
+function getPythonExecutable(rootDir) {
+  const candidates = [
+    path.join(rootDir, '.venv', 'Scripts', 'python.exe'),
+    path.join(rootDir, '..', '.venv', 'Scripts', 'python.exe'),
+    path.join(rootDir, '.venv', 'bin', 'python'),
+    path.join(rootDir, '..', '.venv', 'bin', 'python')
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return 'py';
+}
+
+async function startPythonBackend() {
+  const isHealthy = await checkBackendHealth();
+  if (isHealthy) {
+    console.log('[Electron] FastAPI backend is already running on http://127.0.0.1:8000. Reusing active instance.');
+    return;
+  }
+
+>>>>>>> Stashed changes
   const rootDir = path.join(__dirname, '..');
   const venvPython = path.join(rootDir, '..', '.venv', 'Scripts', 'python.exe');
 const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python';
@@ -33,9 +77,17 @@ const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python';
 }
 
 function stopPythonBackend() {
-  if (pyProc) {
-    console.log('[Electron] Killing Python backend child process...');
-    pyProc.kill();
+  if (pyProc && pyProc.pid) {
+    console.log(`[Electron] Terminating Python backend process tree (PID ${pyProc.pid})...`);
+    if (process.platform === 'win32') {
+      try {
+        exec(`taskkill /F /T /PID ${pyProc.pid}`);
+      } catch (e) {
+        pyProc.kill();
+      }
+    } else {
+      pyProc.kill('SIGTERM');
+    }
     pyProc = null;
   }
 }

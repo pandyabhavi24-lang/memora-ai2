@@ -230,13 +230,57 @@ class MediaAnalysis(Base):
     detected_scenes = Column(Text, nullable=True)  # JSON-encoded list of scenes (e.g. ["indoor", "workshop", "office"])
     dominant_colors = Column(Text, nullable=True)  # JSON-encoded hex colors
     
-    analysis_status = Column(String, default="pending", index=True)  # pending, completed, failed, unsupported
+    # OpenAI Visual Intelligence Structured Analysis
+    ai_description = Column(Text, nullable=True)
+    object_counts = Column(Text, nullable=True)  # JSON-encoded list of dicts: [{"name": "tree", "count": 3}, {"name": "dog", "count": 2}]
+    environment = Column(String, nullable=True)  # outdoor, indoor, studio, etc.
+    activities = Column(Text, nullable=True)  # JSON-encoded list of activities
+    visual_attributes = Column(Text, nullable=True)  # JSON-encoded list of visual attributes (e.g. ["red color", "wooden", "sunny"])
+    relationships = Column(Text, nullable=True)  # JSON-encoded list of visual relationships (e.g. ["dog sitting near river", "person holding phone"])
+    search_terms = Column(Text, nullable=True)  # JSON-encoded list of AI-generated search terms
+    ai_tags = Column(Text, nullable=True)  # JSON-encoded list of AI-generated tags (e.g. ["beach", "ocean", "water", "palm trees"])
+    user_tags = Column(Text, nullable=True)  # JSON-encoded list of user-added editable tags (e.g. ["goa", "vacation", "trip"])
+    recently_inspected_at = Column(DateTime, nullable=True, index=True)  # Timestamp when user inspected this pictorial image
+    # Content Classification (Pictorial Visual Image vs Text-Heavy Document Image)
+    content_type = Column(String, default="pictorial", index=True)  # pictorial, text_heavy
+    classification_confidence = Column(Float, default=1.0)
+    classification_reason = Column(Text, nullable=True)
+
+    analysis_status = Column(String, default="pending", index=True)  # pending, completed, skipped_text_heavy, failed, unsupported
     error_message = Column(Text, nullable=True)
-    model_version = Column(String, default="1.0.0")
+    model_version = Column(String, default="openai-vision-1.0")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     file = relationship("File")
+
+    def get_ai_tags(self) -> list:
+        if not self.ai_tags:
+            return []
+        try:
+            import json
+            tags = json.loads(self.ai_tags)
+            return tags if isinstance(tags, list) else []
+        except Exception:
+            return []
+
+    def set_ai_tags(self, tags: list):
+        import json
+        self.ai_tags = json.dumps(tags if isinstance(tags, list) else [])
+
+    def get_user_tags(self) -> list:
+        if not self.user_tags:
+            return []
+        try:
+            import json
+            tags = json.loads(self.user_tags)
+            return tags if isinstance(tags, list) else []
+        except Exception:
+            return []
+
+    def set_user_tags(self, tags: list):
+        import json
+        self.user_tags = json.dumps(tags if isinstance(tags, list) else [])
 
     def get_detected_objects(self) -> list:
         if not self.detected_objects:
@@ -252,6 +296,20 @@ class MediaAnalysis(Base):
         import json
         self.detected_objects = json.dumps(objs if isinstance(objs, list) else [])
 
+    def get_object_counts(self) -> list:
+        if not self.object_counts:
+            return []
+        try:
+            import json
+            counts = json.loads(self.object_counts)
+            return counts if isinstance(counts, list) else []
+        except Exception:
+            return []
+
+    def set_object_counts(self, counts: list):
+        import json
+        self.object_counts = json.dumps(counts if isinstance(counts, list) else [])
+
     def get_detected_scenes(self) -> list:
         if not self.detected_scenes:
             return []
@@ -265,6 +323,62 @@ class MediaAnalysis(Base):
     def set_detected_scenes(self, scenes: list):
         import json
         self.detected_scenes = json.dumps(scenes if isinstance(scenes, list) else [])
+
+    def get_search_terms(self) -> list:
+        if not self.search_terms:
+            return []
+        try:
+            import json
+            terms = json.loads(self.search_terms)
+            return terms if isinstance(terms, list) else []
+        except Exception:
+            return []
+
+    def set_search_terms(self, terms: list):
+        import json
+        self.search_terms = json.dumps(terms if isinstance(terms, list) else [])
+
+    def get_activities(self) -> list:
+        if not self.activities:
+            return []
+        try:
+            import json
+            acts = json.loads(self.activities)
+            return acts if isinstance(acts, list) else []
+        except Exception:
+            return []
+
+    def set_activities(self, acts: list):
+        import json
+        self.activities = json.dumps(acts if isinstance(acts, list) else [])
+
+    def get_visual_attributes(self) -> list:
+        if not self.visual_attributes:
+            return []
+        try:
+            import json
+            attrs = json.loads(self.visual_attributes)
+            return attrs if isinstance(attrs, list) else []
+        except Exception:
+            return []
+
+    def set_visual_attributes(self, attrs: list):
+        import json
+        self.visual_attributes = json.dumps(attrs if isinstance(attrs, list) else [])
+
+    def get_relationships(self) -> list:
+        if not self.relationships:
+            return []
+        try:
+            import json
+            rels = json.loads(self.relationships)
+            return rels if isinstance(rels, list) else []
+        except Exception:
+            return []
+
+    def set_relationships(self, rels: list):
+        import json
+        self.relationships = json.dumps(rels if isinstance(rels, list) else [])
 
     def get_quality_factors(self) -> dict:
         if not self.quality_factors:
@@ -374,6 +488,40 @@ class MediaSearchContent(Base):
     __tablename__ = "media_search_content"
 
     id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    content_type = Column(String, default="visual")  # visual, visual_ocr_hybrid
+    search_text = Column(Text, nullable=False)  # e.g., "person tree mountain sky lake outdoor nature landscape photograph"
+    visual_description = Column(Text, nullable=True)  # e.g., "An outdoor landscape containing mountains, trees, sky, and water."
+    detected_objects_with_conf = Column(Text, nullable=True)  # JSON: [{"object": "tree", "confidence": 0.94}, ...]
+    detected_scenes_with_conf = Column(Text, nullable=True)  # JSON: [{"scene": "nature", "confidence": 0.96}, ...]
+    source = Column(String, default="module3")
+    confidence = Column(Float, default=0.9)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    file = relationship("File")
+
+    def get_objects_with_confidence(self) -> list:
+        if not self.detected_objects_with_conf:
+            return []
+        try:
+            import json
+            objs = json.loads(self.detected_objects_with_conf)
+            return objs if isinstance(objs, list) else []
+        except Exception:
+            return []
+
+    def get_scenes_with_confidence(self) -> list:
+        if not self.detected_scenes_with_conf:
+            return []
+        try:
+            import json
+            scns = json.loads(self.detected_scenes_with_conf)
+            return scns if isinstance(scns, list) else []
+        except Exception:
+            return []
+
+
     file_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     content_type = Column(String, default="visual")  # visual, visual_ocr_hybrid
     search_text = Column(Text, nullable=False)  # e.g., "person tree mountain sky lake outdoor nature landscape photograph"

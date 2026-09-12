@@ -114,9 +114,9 @@ class VideoAnalyzer:
             if frame_embeddings:
                 agg_vec = np.mean(frame_embeddings, axis=0)
                 norm = np.linalg.norm(agg_vec)
-                video_embedding = (agg_vec / norm).astype(np.float32) if norm > 0 else np.zeros((512,), dtype=np.float32)
+                video_embedding = (agg_vec / norm).astype(np.float32) if norm > 0 else np.zeros((visual_embedding_service.dimension,), dtype=np.float32)
             else:
-                video_embedding = np.zeros((512,), dtype=np.float32)
+                video_embedding = np.zeros((visual_embedding_service.dimension,), dtype=np.float32)
 
             # Category estimation for video
             fn_low = filename.lower()

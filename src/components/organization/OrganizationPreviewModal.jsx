@@ -59,7 +59,7 @@ export const OrganizationPreviewModal = ({
     setErrorMessage('');
     setMissingFileDetails(null);
     if (!onConfirmSuccess) return;
-    
+
     setIsSubmitting(true);
     try {
       // Sync collective folder name to all items being organized
@@ -229,11 +229,10 @@ export const OrganizationPreviewModal = ({
                 {/* Move Option Card */}
                 <div
                   onClick={() => setOperationMode('move')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
-                    operationMode === 'move'
+                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${operationMode === 'move'
                       ? 'bg-blue-600/15 border-blue-500/60 text-white shadow-md shadow-blue-500/10'
                       : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-                  }`}
+                    }`}
                 >
                   <input
                     type="radio"
@@ -253,11 +252,10 @@ export const OrganizationPreviewModal = ({
                 {/* Copy Option Card */}
                 <div
                   onClick={() => setOperationMode('copy')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
-                    operationMode === 'copy'
+                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${operationMode === 'copy'
                       ? 'bg-blue-600/15 border-blue-500/60 text-white shadow-md shadow-blue-500/10'
                       : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-                  }`}
+                    }`}
                 >
                   <input
                     type="radio"

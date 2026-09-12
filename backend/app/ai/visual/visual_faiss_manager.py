@@ -16,11 +16,10 @@ DOCUMENT_AND_CODE_EXTENSIONS = {
 class VisualFAISSManager:
     """
     Dedicated FAISS Vector Store for Module 3 (Visual & Media Intelligence).
-    Maintains a completely independent IndexFlatIP (512-dim) on normalized visual embeddings.
-    Strictly isolated from Module 1's text/document FAISS index.
-    Restricted EXCLUSIVELY to Image and Video non-document visual media.
+    Maintains an IndexFlatIP (384-dim) for normalized local sentence-transformer embeddings.
+    Strictly isolated to Image and Video non-document visual media.
     """
-    def __init__(self, data_dir: str = None, dimension: int = 512):
+    def __init__(self, data_dir: str = None, dimension: int = 384):
         if data_dir is None:
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
             data_dir = os.path.join(base_dir, "data", "faiss")
@@ -43,26 +42,29 @@ class VisualFAISSManager:
         """Loads existing visual FAISS index & id mapping, or initializes fresh index."""
         if os.path.exists(self.index_path) and os.path.exists(self.map_path):
             try:
-                self.index = faiss.read_index(self.index_path)
-                with open(self.map_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    raw_map = data.get("faiss_to_file", {})
-                    self.faiss_to_file = {}
-                    for k, v in raw_map.items():
-                        if isinstance(v, dict):
-                            self.faiss_to_file[int(k)] = {
-                                "file_id": int(v.get("file_id", 0)),
-                                "media_type": v.get("media_type", "image")
-                            }
-                        else:
-                            # Backward-compatible integer value
-                            self.faiss_to_file[int(k)] = {
-                                "file_id": int(v),
-                                "media_type": "image"
-                            }
-                    self.next_faiss_id = data.get("next_faiss_id", self.index.ntotal)
-                logger.info(f"Loaded existing Visual FAISS index with {self.index.ntotal} media vectors.")
-                return
+                loaded_index = faiss.read_index(self.index_path)
+                if loaded_index.d == self.dimension:
+                    self.index = loaded_index
+                    with open(self.map_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        raw_map = data.get("faiss_to_file", {})
+                        self.faiss_to_file = {}
+                        for k, v in raw_map.items():
+                            if isinstance(v, dict):
+                                self.faiss_to_file[int(k)] = {
+                                    "file_id": int(v.get("file_id", 0)),
+                                    "media_type": v.get("media_type", "image")
+                                }
+                            else:
+                                self.faiss_to_file[int(k)] = {
+                                    "file_id": int(v),
+                                    "media_type": "image"
+                                }
+                        self.next_faiss_id = data.get("next_faiss_id", self.index.ntotal)
+                    logger.info(f"Loaded existing Visual FAISS index with {self.index.ntotal} media vectors ({self.dimension}d).")
+                    return
+                else:
+                    logger.info(f"Visual FAISS index dimension mismatch ({loaded_index.d} != {self.dimension}). Re-initializing index.")
             except Exception as e:
                 logger.error(f"Error loading Visual FAISS index: {e}. Re-initializing new visual index.", exc_info=True)
 
@@ -88,7 +90,7 @@ class VisualFAISSManager:
 
     def add_vector(self, vector: np.ndarray, file_id: int, media_type: str = "image", extension: str = "") -> int:
         """
-        Adds a single normalized visual vector (shape: 512,) to Visual FAISS.
+        Adds a single normalized visual vector (shape: 384,) to Visual FAISS.
         Strictly excludes documents/code and accepts only image and video media.
         Returns assigned visual_faiss_id.
         """
@@ -155,10 +157,15 @@ class VisualFAISSManager:
                     "faiss_id": int(idx),
                     "file_id": fid,
                     "media_type": m_type,
-                    "similarity": float(d)
+                    "similarity": float(d),
+                    "score": float(d)
                 })
 
         return results
+
+    def search(self, query_vector: np.ndarray, top_k: int = 10) -> list[dict]:
+        """Alias for search_similar."""
+        return self.search_similar(query_vector, top_k=top_k)
 
     def remove_file(self, file_id: int):
         """Removes a file's mapping from visual index."""
@@ -168,6 +175,13 @@ class VisualFAISSManager:
         ]
         for k in keys_to_remove:
             del self.faiss_to_file[k]
+        self.save()
+
+    def clear(self):
+        """Clears the visual FAISS index and ID mapping."""
+        self.index = faiss.IndexFlatIP(self.dimension)
+        self.faiss_to_file = {}
+        self.next_faiss_id = 0
         self.save()
 
 visual_faiss_manager = VisualFAISSManager()

@@ -24,7 +24,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def init_db_schema():
-    """Safely adds smart_tags column to files and organization_suggestions if not already present."""
+    """Safely adds missing columns to SQLite tables if not already present."""
     import sqlite3
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -43,6 +43,38 @@ def init_db_schema():
         if sug_cols and "smart_tags" not in sug_cols:
             cursor.execute("ALTER TABLE organization_suggestions ADD COLUMN smart_tags TEXT;")
             conn.commit()
+
+        # Check media_analyses table
+        cursor.execute("PRAGMA table_info(media_analyses);")
+        media_cols = [row[1] for row in cursor.fetchall()]
+        if media_cols:
+            if "ai_description" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN ai_description TEXT;")
+            if "object_counts" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN object_counts TEXT;")
+            if "environment" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN environment VARCHAR;")
+            if "activities" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN activities TEXT;")
+            if "visual_attributes" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN visual_attributes TEXT;")
+            if "relationships" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN relationships TEXT;")
+            if "search_terms" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN search_terms TEXT;")
+            if "content_type" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN content_type VARCHAR DEFAULT 'pictorial';")
+            if "classification_confidence" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN classification_confidence FLOAT DEFAULT 1.0;")
+            if "classification_reason" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN classification_reason TEXT;")
+            if "ai_tags" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN ai_tags TEXT;")
+            if "user_tags" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN user_tags TEXT;")
+            if "recently_inspected_at" not in media_cols:
+                cursor.execute("ALTER TABLE media_analyses ADD COLUMN recently_inspected_at DATETIME;")
+            conn.commit()
             
         conn.close()
     except Exception as e:
@@ -55,4 +87,3 @@ def get_db():
         yield db
     finally:
         db.close()
-

@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Search, 
-  Sparkles, 
-  FileText, 
-  Image as ImageIcon, 
-  ExternalLink, 
-  FolderOpen, 
-  Eye, 
+import {
+  Search,
+  Sparkles,
+  FileText,
+  Image as ImageIcon,
+  ExternalLink,
+  FolderOpen,
+  Eye,
   Brain,
   ArrowLeft,
   AlertTriangle,
@@ -79,11 +79,10 @@ const FilterPopover = ({ name, title, activeCount = 0, activeLabel = '', isOpen,
       <button
         type="button"
         onClick={() => onToggle(name)}
-        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
-          isActive
+        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${isActive
             ? 'bg-blue-600/20 text-blue-300 border-blue-500/50 font-bold shadow-sm'
             : 'bg-gray-900 text-gray-300 border-gray-800 hover:bg-gray-800'
-        }`}
+          }`}
       >
         <span>
           {title}
@@ -119,14 +118,14 @@ const FilterPopover = ({ name, title, activeCount = 0, activeLabel = '', isOpen,
 
 export const SearchResults = () => {
   const navigate = useNavigate();
-  const { 
-    searchQuery, 
-    setSearchQuery, 
-    searchResults, 
+  const {
+    searchQuery,
+    setSearchQuery,
+    searchResults,
     searchExecutionTime,
-    isSearching, 
+    isSearching,
     searchError,
-    executeSearch, 
+    executeSearch,
     setPreviewFile,
     filters,
     setFilters,
@@ -314,7 +313,7 @@ export const SearchResults = () => {
   const matchesSmartTags = (file, tagFilters) => {
     if (!tagFilters || tagFilters === 'all' || (Array.isArray(tagFilters) && tagFilters.length === 0)) return true;
     const tagsList = Array.isArray(tagFilters) ? tagFilters : [tagFilters];
-    
+
     const fileTags = Array.isArray(file.smartTags) && file.smartTags.length > 0
       ? file.smartTags
       : (Array.isArray(file.tags) ? file.tags : []);
@@ -603,11 +602,10 @@ export const SearchResults = () => {
           <button
             type="button"
             onClick={() => setSearchMode('semantic')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-              searchMode === 'semantic'
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${searchMode === 'semantic'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                 : 'text-gray-400 hover:text-gray-200'
-            }`}
+              }`}
             title="Semantic Mode: Finds conceptually related files even if exact words differ"
           >
             <Brain className="w-3.5 h-3.5 text-purple-300" />
@@ -616,11 +614,10 @@ export const SearchResults = () => {
           <button
             type="button"
             onClick={() => setSearchMode('exact')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-              searchMode === 'exact'
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${searchMode === 'exact'
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
                 : 'text-gray-400 hover:text-gray-200'
-            }`}
+              }`}
             title="Exact Mode: Prioritizes files where the exact search phrase appears"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
@@ -647,7 +644,7 @@ export const SearchResults = () => {
       {/* FILTER TOOLBAR: [ Category ] [ Type ] [ Date ] [ Smart Tags ] [ Size ] [ Reset Filters ] */}
       <div className="p-3 rounded-2xl glass-panel border-gray-800/80 space-y-2.5 relative">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          
+
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filters Counter Indicator */}
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-900 border border-gray-800 text-xs font-bold text-gray-200">
@@ -679,11 +676,10 @@ export const SearchResults = () => {
                       setFilters(prev => ({ ...prev, category: item.id }));
                       setOpenPopover(null);
                     }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                      (filters.category || 'all').toLowerCase() === item.id.toLowerCase()
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${(filters.category || 'all').toLowerCase() === item.id.toLowerCase()
                         ? 'bg-emerald-600 text-white font-bold'
                         : 'text-gray-300 hover:bg-gray-800'
-                    }`}
+                      }`}
                   >
                     <span>{item.label}</span>
                     {(filters.category || 'all').toLowerCase() === item.id.toLowerCase() && <Check className="w-3.5 h-3.5" />}
@@ -710,9 +706,8 @@ export const SearchResults = () => {
                     setFilters(prev => ({ ...prev, fileType: item.id }));
                     setOpenPopover(null);
                   }}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                    filters.fileType === item.id ? 'bg-blue-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
-                  }`}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${filters.fileType === item.id ? 'bg-blue-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
+                    }`}
                 >
                   <span>{item.label}</span>
                   {filters.fileType === item.id && <Check className="w-3.5 h-3.5" />}
@@ -738,9 +733,8 @@ export const SearchResults = () => {
                     setFilters(prev => ({ ...prev, dateRange: item.id }));
                     setOpenPopover(null);
                   }}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                    filters.dateRange === item.id ? 'bg-purple-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
-                  }`}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${filters.dateRange === item.id ? 'bg-purple-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
+                    }`}
                 >
                   <span>{item.label}</span>
                   {filters.dateRange === item.id && <Check className="w-3.5 h-3.5" />}
@@ -758,7 +752,7 @@ export const SearchResults = () => {
               widthClass="w-72"
             >
               <div className="text-[10px] font-bold text-purple-300 px-2 py-1 uppercase tracking-wider">Smart Tags</div>
-              
+
               <div className="px-1 py-1" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="text"
@@ -787,9 +781,8 @@ export const SearchResults = () => {
                           e.stopPropagation();
                           toggleSelectLabel(item.label);
                         }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                          isChecked ? 'bg-purple-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
-                        }`}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${isChecked ? 'bg-purple-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
+                          }`}
                       >
                         <div className="flex items-center gap-2">
                           <input
@@ -828,9 +821,8 @@ export const SearchResults = () => {
                     setFilters(prev => ({ ...prev, size: item.id }));
                     setOpenPopover(null);
                   }}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                    filters.size === item.id ? 'bg-amber-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
-                  }`}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${filters.size === item.id ? 'bg-amber-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
+                    }`}
                 >
                   <span>{item.label}</span>
                   {filters.size === item.id && <Check className="w-3.5 h-3.5" />}
@@ -864,7 +856,7 @@ export const SearchResults = () => {
                 <button onClick={() => removeSingleFilter('category', 'all')} className="hover:text-white ml-0.5 cursor-pointer font-bold">×</button>
               </span>
             )}
-            
+
             {filters.fileType !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-semibold text-[11px]">
                 Type: {filters.fileType.toUpperCase()}
@@ -1071,13 +1063,12 @@ export const SearchResults = () => {
 
                   {/* Similarity / Relevance Badge with Semantic + Lexical Breakdown */}
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                      relevance.variant === 'success'
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${relevance.variant === 'success'
                         ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                         : relevance.variant === 'violet'
-                        ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                        : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
-                    }`}>
+                          ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                          : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                      }`}>
                       {relevance.text}
                     </span>
                     {typeof primaryResult.semanticScore === 'number' && (
@@ -1118,7 +1109,7 @@ export const SearchResults = () => {
                                 <Folder className="w-3.5 h-3.5 text-blue-400" />
                                 {isMultiLocation ? `Location ${rIdx + 1}:` : 'Location:'}
                               </span>
-                              
+
                               {/* Folder Breadcrumbs Tree View (EXCLUDES FILENAME) */}
                               <div className="flex items-center gap-1 text-gray-300 font-mono flex-wrap">
                                 {breadcrumbs.map((b, bIdx) => (

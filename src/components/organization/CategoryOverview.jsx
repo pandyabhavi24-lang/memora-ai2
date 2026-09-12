@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  GraduationCap, 
-  FolderKanban, 
-  Briefcase, 
-  Award, 
-  Receipt, 
-  User, 
-  Image as ImageIcon, 
-  FileText, 
-  PieChart, 
-  Folder, 
-  FolderTree, 
-  Sparkles, 
-  Loader2, 
-  RefreshCw, 
-  AlertTriangle, 
+import {
+  GraduationCap,
+  FolderKanban,
+  Briefcase,
+  Award,
+  Receipt,
+  User,
+  Image as ImageIcon,
+  FileText,
+  PieChart,
+  Folder,
+  FolderTree,
+  Sparkles,
+  Loader2,
+  RefreshCw,
+  AlertTriangle,
   FolderSearch,
   Code2
 } from 'lucide-react';
@@ -112,22 +112,20 @@ export const CategoryOverview = ({ refreshTrigger }) => {
           <button
             type="button"
             onClick={() => setActiveTab('both')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === 'both'
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === 'both'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
-            }`}
+              }`}
           >
             All Overview
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('existing')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'existing'
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${activeTab === 'existing'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
-            }`}
+              }`}
           >
             <Folder className="w-3.5 h-3.5 text-amber-400" />
             <span>Existing Folders ({existingFolders.length})</span>
@@ -135,11 +133,10 @@ export const CategoryOverview = ({ refreshTrigger }) => {
           <button
             type="button"
             onClick={() => setActiveTab('ai')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'ai'
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${activeTab === 'ai'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
-            }`}
+              }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-blue-300" />
             <span>AI Suggested / Created ({aiCategories.length})</span>

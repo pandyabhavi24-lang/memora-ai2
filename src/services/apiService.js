@@ -79,7 +79,7 @@ class ApiService {
       }
       return [];
     }
-    
+
     // Web browser fallback prompt if Electron API unavailable
     const userPath = prompt('Enter absolute folder path to scan (e.g. C:\\Users\\Name\\Documents):');
     if (userPath && userPath.trim()) {
@@ -134,7 +134,7 @@ class ApiService {
     return new Promise((resolve) => {
       const interval = setInterval(async () => {
         const status = await this.getScanStatus();
-        
+
         onProgressUpdate({
           totalFiles: status.files_found || 0,
           processedFiles: status.files_processed || 0,

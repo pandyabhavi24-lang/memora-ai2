@@ -59,6 +59,51 @@ class MediaService {
     return await this._fetch(`/api/media/${fileId}`);
   }
 
+  async searchVisualMedia(query, threshold = 60.0, topK = 20) {
+    return await this._fetch('/api/media/search', {
+      method: 'POST',
+      body: JSON.stringify({ query, threshold, top_k: topK })
+    });
+  }
+
+  async getFileTags(fileId) {
+    return await this._fetch(`/api/media/${fileId}/tags`);
+  }
+
+  async updateFileTags(fileId, userTags, aiTags = null) {
+    return await this._fetch(`/api/media/${fileId}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ user_tags: userTags, ai_tags: aiTags })
+    });
+  }
+
+  async recordFileInspection(fileId) {
+    return await this._fetch(`/api/media/${fileId}/inspect`, {
+      method: 'POST'
+    });
+  }
+
+  async getRecentlyChecked(limit = 12) {
+    return await this._fetch(`/api/media/recent?limit=${limit}`);
+  }
+
+  async createVisualGroup(groupName, fileIds, representativeFileId = null) {
+    return await this._fetch('/api/media/groups/create', {
+      method: 'POST',
+      body: JSON.stringify({
+        group_name: groupName,
+        file_ids: fileIds,
+        representative_file_id: representativeFileId
+      })
+    });
+  }
+
+  async deleteVisualGroup(groupId) {
+    return await this._fetch(`/api/media/groups/${groupId}`, {
+      method: 'DELETE'
+    });
+  }
+
   async getSimilarMedia(fileId) {
     return await this._fetch(`/api/media/similar/${fileId}`);
   }
@@ -83,6 +128,21 @@ class MediaService {
       method: 'POST',
       body: JSON.stringify({ confirmed: true })
     });
+  }
+
+  async findSimilarByExternalImage(fileBlob, filename = 'query.jpg') {
+    const formData = new FormData();
+    formData.append('file', fileBlob, filename);
+    const url = `${API_BASE_URL}/api/media/similar-image`;
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(errorData.detail || `HTTP Error ${response.status}`);
+    }
+    return await response.json();
   }
 }
 

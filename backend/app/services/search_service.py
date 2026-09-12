@@ -10,6 +10,7 @@ from .embedding_service import embedding_service
 from .query_expansion import query_expansion_service
 from ..ai.faiss_manager import faiss_manager
 from ..models import Chunk, File, Folder, SearchHistory, OrganizationSuggestion, OrganizationCategory, VectorMapping, MediaSearchContent, MediaAnalysis
+from ..ai.visual.local_vision import local_vision_analyzer
 from ..schemas import SearchFilters
 
 logger = logging.getLogger("memora.search")
@@ -370,27 +371,36 @@ class SearchService:
 
             for sc, file, folder, analysis in visual_search_items:
                 try:
-                    v_vec = embedding_service.embed_text(sc.search_text)
-                    if v_vec is None or v_vec.size == 0:
-                        continue
+                    cand_dict = {
+                        "id": str(file.id),
+                        "content_type": getattr(analysis, "content_type", "pictorial") if analysis else "pictorial",
+                        "description": getattr(analysis, "ai_description", "") or "",
+                        "objects": analysis.get_detected_objects() if analysis else [],
+                        "scene": ", ".join(analysis.get_detected_scenes() or []) if analysis else "",
+                        "environment": getattr(analysis, "environment", "") or "",
+                        "relationships": analysis.get_relationships() if analysis else [],
+                        "colors": analysis.get_visual_attributes() if analysis else [],
+                        "user_tags": analysis.get_user_tags() if analysis else [],
+                        "searchable_text": sc.search_text
+                    }
 
-                    cos_sim = float(np.dot(query_vector, v_vec))
-                    visual_semantic_score = max(0.0, min(1.0, cos_sim))
+                    eval_res = local_vision_analyzer.evaluate_semantic_relevance(raw_query, [cand_dict])
+                    if eval_res:
+                        r_eval = eval_res[0]
+                        v_is_relevant = bool(r_eval.get("relevant", False))
+                        v_score_pct = float(r_eval.get("relevance_score", 0.0))
+                        v_reason = r_eval.get("reason", "")
+                        visual_semantic_score = max(0.0, min(1.0, v_score_pct / 100.0))
+                    else:
+                        v_is_relevant = False
+                        visual_semantic_score = 0.0
+                        v_reason = "No visual relevance."
 
                     objs = analysis.get_detected_objects() if analysis else []
                     scenes = analysis.get_detected_scenes() if analysis else []
-                    cat = analysis.visual_category if analysis else "photo"
-
-                    q_words = [w.lower() for w in re.findall(r"\b[\w#+.-]{2,}\b", raw_query) if len(w) > 1]
-                    matched_visual_objs = [o for o in objs if any(qw in o.lower() or o.lower() in qw for qw in q_words)]
-                    matched_visual_scenes = [s for s in scenes if any(qw in s.lower() or s.lower() in qw for qw in q_words)]
-
-                    # If query explicitly seeks a detected object/scene (e.g. tree, sky, nature, mountain, person)
-                    if matched_visual_objs or matched_visual_scenes:
-                        visual_semantic_score = max(visual_semantic_score, 0.72)
-
                     f_tags = labels_by_file_id.get(file.id, [])
                     category_str = map_category_from_extension(file.extension)
+
                     visual_lexical_score = query_expansion_service.calculate_field_aware_lexical_score(
                         concept_groups=concept_groups,
                         content_text=sc.search_text,
@@ -399,38 +409,48 @@ class SearchService:
                         file_path=file.path
                     )
 
+                    q_words = [w.lower() for w in re.findall(r"\b[\w#+.-]{2,}\b", raw_query) if len(w) > 1]
+                    matched_visual_objs = [o for o in objs if any(qw in o.lower() or o.lower() in qw for qw in q_words)]
+                    matched_visual_scenes = [s for s in scenes if any(qw in s.lower() or s.lower() in qw for qw in q_words)]
+                    matched_visual_concepts = matched_visual_objs + matched_visual_scenes
+
                     if file.id in cand_by_file_id:
-                        # Merge with existing text/OCR candidate into HYBRID
                         existing_c = cand_by_file_id[file.id]
-                        old_sem = existing_c.get("semantic_score", 0.0)
-                        merged_sem = max(old_sem, visual_semantic_score)
-                        merged_lex = max(existing_c.get("lexical_score", 0.0), visual_lexical_score)
-                        merged_final = (SEMANTIC_WEIGHT * merged_sem) + (LEXICAL_WEIGHT * merged_lex)
+                        ocr_text = (file.extracted_text or "").lower()
+                        ocr_matches_query = any(qw in ocr_text for qw in q_words) if q_words else False
 
-                        existing_c["semantic_score"] = round(merged_sem, 4)
-                        existing_c["lexical_score"] = round(merged_lex, 4)
-                        existing_c["final_score"] = round(merged_final, 5)
-                        existing_c["score"] = round(merged_final * 100, 1)
+                        if v_is_relevant:
+                            merged_sem = visual_semantic_score
+                            merged_lex = max(existing_c.get("lexical_score", 0.0), visual_lexical_score)
+                            merged_final = (SEMANTIC_WEIGHT * merged_sem) + (LEXICAL_WEIGHT * merged_lex)
 
-                        if old_sem >= SEMANTIC_SIMILARITY_THRESHOLD and visual_semantic_score >= SEMANTIC_SIMILARITY_THRESHOLD:
-                            existing_c["match_source"] = "HYBRID"
-                        elif visual_semantic_score > old_sem:
-                            existing_c["match_source"] = "VISUAL"
+                            existing_c["semantic_score"] = round(merged_sem, 4)
+                            existing_c["lexical_score"] = round(merged_lex, 4)
+                            existing_c["final_score"] = round(merged_final, 5)
+                            existing_c["score"] = round(merged_final * 100, 1)
+                            existing_c["match_source"] = "HYBRID" if ocr_matches_query else "VISUAL"
+                            existing_c["agreement_reason"] = v_reason
+                            existing_c["concept_agreed"] = True
+                            existing_c["visual_match_details"] = {
+                                "objects": objs,
+                                "scenes": scenes,
+                                "description": sc.visual_description
+                            }
+                            existing_c["thumbnail_url"] = f"/api/media/{file.id}/thumbnail"
+                            existing_c["preview_url"] = f"/api/media/{file.id}/preview"
+                            if matched_visual_concepts:
+                                existing_c["matched_concepts"] = list(set(existing_c.get("matched_concepts", []) + matched_visual_concepts))
+                        else:
+                            if not ocr_matches_query:
+                                # Clamped to ground visual reality (strict visual absence)
+                                existing_c["semantic_score"] = round(visual_semantic_score, 4)
+                                existing_c["final_score"] = round(visual_semantic_score * SEMANTIC_WEIGHT, 5)
+                                existing_c["score"] = round(visual_semantic_score * SEMANTIC_WEIGHT * 100, 1)
+                                existing_c["concept_agreed"] = False
+                                existing_c["agreement_reason"] = v_reason
 
-                        existing_c["visual_match_details"] = {
-                            "objects": objs,
-                            "scenes": scenes,
-                            "description": sc.visual_description
-                        }
-                        existing_c["thumbnail_url"] = f"/api/media/{file.id}/thumbnail"
-                        existing_c["preview_url"] = f"/api/media/{file.id}/preview"
-                        if matched_visual_objs or matched_visual_scenes:
-                            existing_c["matched_concepts"] = list(set(existing_c.get("matched_concepts", []) + matched_visual_objs + matched_visual_scenes))
-
-                    else:
+                    elif v_is_relevant:
                         final_score = (SEMANTIC_WEIGHT * visual_semantic_score) + (LEXICAL_WEIGHT * visual_lexical_score)
-                        matched_visual_concepts = matched_visual_objs + matched_visual_scenes
-
                         cand_entry = {
                             "document_id": file.id,
                             "file_id": file.id,
@@ -452,9 +472,9 @@ class SearchService:
                             "chunk_id": 0,
                             "modified_at": file.modified_at,
                             "size_bytes": file.size,
-                            "concept_agreed": bool(matched_visual_concepts) or visual_semantic_score >= SEMANTIC_SIMILARITY_THRESHOLD,
+                            "concept_agreed": True,
                             "matched_concepts": matched_visual_concepts,
-                            "agreement_reason": "Visual object and scene detection match",
+                            "agreement_reason": v_reason,
                             "match_source": "VISUAL",
                             "visual_match_details": {
                                 "objects": objs,
@@ -581,12 +601,14 @@ class SearchService:
                 vis_str = f" ({', '.join(vis_elements[:3])})" if vis_elements else ""
                 explanation = f"Hybrid match: OCR text & visual content{vis_str}."
             elif match_source == "VISUAL":
-                elements = []
-                if matched_objs:
-                    elements.append(f"Objects: {', '.join(matched_objs[:4])}")
-                if matched_scns:
-                    elements.append(f"Scene: {', '.join(matched_scns[:2])}")
-                explanation = f"Visual match: { ' • '.join(elements) if elements else 'Detected visual features.'}"
+                explanation = r.get("agreement_reason")
+                if not explanation:
+                    elements = []
+                    if matched_objs:
+                        elements.append(f"Objects: {', '.join(matched_objs[:4])}")
+                    if matched_scns:
+                        elements.append(f"Scene: {', '.join(matched_scns[:2])}")
+                    explanation = f"Visual match: { ' • '.join(elements) if elements else 'Detected visual features.'}"
             elif match_source == "OCR":
                 explanation = "Matched your query based on text extracted from image (OCR)."
             elif "design pattern" in q_low or "pattern" in q_low:
