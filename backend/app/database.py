@@ -43,6 +43,30 @@ def init_db_schema():
         if sug_cols and "smart_tags" not in sug_cols:
             cursor.execute("ALTER TABLE organization_suggestions ADD COLUMN smart_tags TEXT;")
             conn.commit()
+
+        # Check media_analyses table for Module 3 attributes
+        cursor.execute("PRAGMA table_info(media_analyses);")
+        media_cols = [row[1] for row in cursor.fetchall()]
+        if media_cols:
+            new_media_cols = {
+                "object_counts": "TEXT",
+                "environment": "TEXT",
+                "activities": "TEXT",
+                "visual_attributes": "TEXT",
+                "relationships": "TEXT",
+                "search_terms": "TEXT",
+                "ai_description": "TEXT",
+                "content_type": "TEXT DEFAULT 'pictorial'",
+                "classification_confidence": "FLOAT DEFAULT 1.0",
+                "classification_reason": "TEXT",
+                "recently_inspected_at": "DATETIME",
+                "ai_tags": "TEXT",
+                "user_tags": "TEXT"
+            }
+            for col_name, col_type in new_media_cols.items():
+                if col_name not in media_cols:
+                    cursor.execute(f"ALTER TABLE media_analyses ADD COLUMN {col_name} {col_type};")
+            conn.commit()
             
         conn.close()
     except Exception as e:

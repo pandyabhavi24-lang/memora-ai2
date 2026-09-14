@@ -64,16 +64,62 @@ class TextExtractor:
 
             full_text = "\n\n".join(pages_text).strip()
 
-            if not full_text:
+            if full_text:
+                return full_text, "success"
+
+            # -------------------------------------------------------------
+            # Scanned / Image-only PDF Fallback: Run existing EasyOCR
+            # -------------------------------------------------------------
+            logger.info(f"No embedded text found in PDF '{file_path}'. Processing scanned PDF via EasyOCR...")
+            ocr_pages_text = []
+            
+            import io
+            import tempfile
+            from PIL import Image
+
+            for idx, page in enumerate(reader.pages):
+                page_ocr_text = []
+
+                # Extract embedded images on this page
+                if hasattr(page, "images") and page.images:
+                    for img_count, img_obj in enumerate(page.images):
+                        try:
+                            with Image.open(io.BytesIO(img_obj.data)) as pil_img:
+                                tmp_fd, tmp_path = tempfile.mkstemp(suffix=".png")
+                                os.close(tmp_fd)
+                                pil_img.save(tmp_path, format="PNG")
+
+                                extracted_ocr, st = TextExtractor.extract_from_image(tmp_path)
+
+                                if os.path.exists(tmp_path):
+                                    try:
+                                        os.remove(tmp_path)
+                                    except Exception:
+                                        pass
+
+                                if extracted_ocr and extracted_ocr.strip():
+                                    page_ocr_text.append(extracted_ocr.strip())
+                        except Exception as img_err:
+                            logger.debug(f"OCR image extraction failed for page {idx + 1} img {img_count + 1}: {img_err}")
+
+                if page_ocr_text:
+                    ocr_pages_text.append(" ".join(page_ocr_text))
+
+            ocr_full_text = "\n\n".join(ocr_pages_text).strip()
+
+            if not ocr_full_text:
+                logger.info(f"No OCR text found in scanned PDF '{file_path}'.")
                 return "", "empty"
 
-            return full_text, "success"
+            logger.info(f"OCR successfully extracted text from scanned PDF '{file_path}' ({len(ocr_full_text)} chars).")
+            return ocr_full_text, "success"
 
         except Exception as e:
             logger.error(
                 f"PDF extraction failed for '{file_path}': {e}"
             )
             return "", "failed"
+
 
     @staticmethod
     def extract_from_docx(file_path: str) -> Tuple[str, str]:

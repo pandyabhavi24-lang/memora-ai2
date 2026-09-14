@@ -203,6 +203,130 @@ class ApiService {
     console.log(`[Desktop Action] Locating file in File Explorer: ${filePath}`);
     alert(`Locating file in folder:\n${filePath}`);
   }
+
+  // --------------------------------------------------------------------------
+  // Module 4 — PDF Studio API
+  // --------------------------------------------------------------------------
+  async getPDFStudioHealth() {
+    return await this._fetch('/api/pdf/health');
+  }
+
+  async inspectPDF(filePath) {
+    return await this._fetch('/api/pdf/inspect', {
+      method: 'POST',
+      body: JSON.stringify({ file_path: filePath })
+    });
+  }
+
+  async createBlankPDF(data) {
+    return await this._fetch('/api/pdf/create-blank', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async manipulatePDFPages(data) {
+    return await this._fetch('/api/pdf/manipulate', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async reorderPDFPages(data) {
+    return await this._fetch('/api/pdf/reorder', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async extractPDFPages(data) {
+    return await this._fetch('/api/pdf/extract-pages', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async mergePDFs(data) {
+    return await this._fetch('/api/pdf/merge', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async splitPDF(data) {
+    return await this._fetch('/api/pdf/split', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async imagesToPDF(data) {
+    return await this._fetch('/api/pdf/images-to-pdf', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async pdfToImages(data) {
+    return await this._fetch('/api/pdf/convert/pdf-to-images', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async registerPDFDocument(data) {
+    return await this._fetch('/api/pdf/documents', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async getPDFDocument(documentId) {
+    return await this._fetch(`/api/pdf/documents/${documentId}`);
+  }
+
+  async savePDFAnnotations(documentId, annotations) {
+    return await this._fetch(`/api/pdf/documents/${documentId}/annotations`, {
+      method: 'POST',
+      body: JSON.stringify({ annotations })
+    });
+  }
+
+  async getPDFAnnotations(documentId, pageIndex = null) {
+    const query = pageIndex !== null ? `?page_index=${pageIndex}` : '';
+    return await this._fetch(`/api/pdf/documents/${documentId}/annotations${query}`);
+  }
+
+  async exportPDFWithAnnotations(data) {
+    return await this._fetch('/api/pdf/export-with-annotations', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async getMemoraFilesForPDFStudio(params = {}) {
+    const queryParams = new URLSearchParams();
+    if (params.file_type) queryParams.append('file_type', params.file_type);
+    if (params.query) queryParams.append('query', params.query);
+    if (params.folder_id) queryParams.append('folder_id', params.folder_id);
+    const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return await this._fetch(`/api/pdf/memora/files${qs}`);
+  }
+
+  async searchMemoraFilesForPDFStudio(query, top_k = 20, file_type = null) {
+    return await this._fetch('/api/pdf/memora/search', {
+      method: 'POST',
+      body: JSON.stringify({ query, top_k, filters: file_type ? { file_type } : null })
+    });
+  }
+
+  async exportImageComparisonToPDF(data) {
+    return await this._fetch('/api/pdf/export-image-comparison', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
 }
 
 export const apiService = new ApiService();
+

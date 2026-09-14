@@ -227,8 +227,21 @@ class MediaAnalysis(Base):
     screenshot_confidence = Column(Float, default=0.0)
     
     detected_objects = Column(Text, nullable=True)  # JSON-encoded list of objects (e.g. ["person", "laptop", "tree"])
+    object_counts = Column(Text, nullable=True)  # JSON-encoded list of objects with counts
     detected_scenes = Column(Text, nullable=True)  # JSON-encoded list of scenes (e.g. ["indoor", "workshop", "office"])
+    environment = Column(String, nullable=True)  # indoor, outdoor, natural, office, etc.
+    activities = Column(Text, nullable=True)  # JSON-encoded list of activities
+    visual_attributes = Column(Text, nullable=True)  # JSON-encoded list of visual attributes
+    relationships = Column(Text, nullable=True)  # JSON-encoded list of relationships
+    search_terms = Column(Text, nullable=True)  # JSON-encoded list of search terms
     dominant_colors = Column(Text, nullable=True)  # JSON-encoded hex colors
+    ai_description = Column(Text, nullable=True)  # AI visual description text
+    content_type = Column(String, nullable=True, default="pictorial")  # pictorial vs text_heavy
+    classification_confidence = Column(Float, nullable=True, default=1.0)
+    classification_reason = Column(Text, nullable=True)
+    recently_inspected_at = Column(DateTime, nullable=True)
+    ai_tags = Column(Text, nullable=True)  # JSON-encoded list of AI tags
+    user_tags = Column(Text, nullable=True)  # JSON-encoded list of user tags
     
     analysis_status = Column(String, default="pending", index=True)  # pending, completed, failed, unsupported
     error_message = Column(Text, nullable=True)
@@ -252,6 +265,20 @@ class MediaAnalysis(Base):
         import json
         self.detected_objects = json.dumps(objs if isinstance(objs, list) else [])
 
+    def get_object_counts(self) -> list:
+        if not self.object_counts:
+            return []
+        try:
+            import json
+            counts = json.loads(self.object_counts)
+            return counts if isinstance(counts, list) else []
+        except Exception:
+            return []
+
+    def set_object_counts(self, counts: list):
+        import json
+        self.object_counts = json.dumps(counts if isinstance(counts, list) else [])
+
     def get_detected_scenes(self) -> list:
         if not self.detected_scenes:
             return []
@@ -266,6 +293,90 @@ class MediaAnalysis(Base):
         import json
         self.detected_scenes = json.dumps(scenes if isinstance(scenes, list) else [])
 
+    def get_activities(self) -> list:
+        if not self.activities:
+            return []
+        try:
+            import json
+            acts = json.loads(self.activities)
+            return acts if isinstance(acts, list) else []
+        except Exception:
+            return []
+
+    def set_activities(self, acts: list):
+        import json
+        self.activities = json.dumps(acts if isinstance(acts, list) else [])
+
+    def get_visual_attributes(self) -> list:
+        if not self.visual_attributes:
+            return []
+        try:
+            import json
+            attrs = json.loads(self.visual_attributes)
+            return attrs if isinstance(attrs, list) else []
+        except Exception:
+            return []
+
+    def set_visual_attributes(self, attrs: list):
+        import json
+        self.visual_attributes = json.dumps(attrs if isinstance(attrs, list) else [])
+
+    def get_relationships(self) -> list:
+        if not self.relationships:
+            return []
+        try:
+            import json
+            rels = json.loads(self.relationships)
+            return rels if isinstance(rels, list) else []
+        except Exception:
+            return []
+
+    def set_relationships(self, rels: list):
+        import json
+        self.relationships = json.dumps(rels if isinstance(rels, list) else [])
+
+    def get_search_terms(self) -> list:
+        if not self.search_terms:
+            return []
+        try:
+            import json
+            terms = json.loads(self.search_terms)
+            return terms if isinstance(terms, list) else []
+        except Exception:
+            return []
+
+    def set_search_terms(self, terms: list):
+        import json
+        self.search_terms = json.dumps(terms if isinstance(terms, list) else [])
+
+    def get_ai_tags(self) -> list:
+        if not self.ai_tags:
+            return []
+        try:
+            import json
+            tags = json.loads(self.ai_tags)
+            return tags if isinstance(tags, list) else []
+        except Exception:
+            return []
+
+    def set_ai_tags(self, tags: list):
+        import json
+        self.ai_tags = json.dumps(tags if isinstance(tags, list) else [])
+
+    def get_user_tags(self) -> list:
+        if not self.user_tags:
+            return []
+        try:
+            import json
+            tags = json.loads(self.user_tags)
+            return tags if isinstance(tags, list) else []
+        except Exception:
+            return []
+
+    def set_user_tags(self, tags: list):
+        import json
+        self.user_tags = json.dumps(tags if isinstance(tags, list) else [])
+
     def get_quality_factors(self) -> dict:
         if not self.quality_factors:
             return {}
@@ -279,6 +390,7 @@ class MediaAnalysis(Base):
     def set_quality_factors(self, factors: dict):
         import json
         self.quality_factors = json.dumps(factors if isinstance(factors, dict) else {})
+
 
 
 class MediaEmbedding(Base):
@@ -406,5 +518,70 @@ class MediaSearchContent(Base):
             return scns if isinstance(scns, list) else []
         except Exception:
             return []
+
+
+# ==========================================
+# MODULE 4 MODELS - PDF STUDIO
+# ==========================================
+
+class PDFDocument(Base):
+    """
+    Persistent document tracking state for PDF Studio.
+    Links directly to an existing Memora File record (`file_id`).
+    """
+    __tablename__ = "pdf_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("files.id", ondelete="SET NULL"), nullable=True, index=True)
+    working_file_path = Column(String, nullable=False, unique=True, index=True)
+    title = Column(String, nullable=False)
+    page_count = Column(Integer, nullable=False, default=1)
+    is_draft = Column(Boolean, default=True)
+    has_annotations = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    file = relationship("File")
+    pages = relationship("PDFPage", back_populates="document", cascade="all, delete-orphan")
+    annotations = relationship("PDFAnnotation", back_populates="document", cascade="all, delete-orphan")
+
+
+class PDFPage(Base):
+    """
+    Persistent page metadata for PDF Studio documents (page ordering, rotation, dimensions).
+    """
+    __tablename__ = "pdf_pages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pdf_document_id = Column(Integer, ForeignKey("pdf_documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    page_index = Column(Integer, nullable=False)
+    original_page_number = Column(Integer, nullable=True)
+    width = Column(Float, nullable=False, default=612.0)
+    height = Column(Float, nullable=False, default=792.0)
+    rotation = Column(Integer, nullable=False, default=0)
+    source_file_path = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    document = relationship("PDFDocument", back_populates="pages")
+
+
+class PDFAnnotation(Base):
+    """
+    Persistent annotation, text layer, and shape metadata associated with PDF Studio pages.
+    """
+    __tablename__ = "pdf_annotations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pdf_document_id = Column(Integer, ForeignKey("pdf_documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    page_index = Column(Integer, nullable=False)
+    annotation_type = Column(String, nullable=False)
+    content_text = Column(Text, nullable=True)
+    properties_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    document = relationship("PDFDocument", back_populates="annotations")
+
 
 

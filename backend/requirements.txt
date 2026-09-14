@@ -16,3 +16,4 @@ easyocr
 scikit-learn
 sentence-transformers
 pillow
+ollama==0.6.2

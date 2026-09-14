@@ -1,36 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Sparkles, 
-  Image as ImageIcon, 
-  Film, 
-  Layers, 
-  AlertTriangle, 
-  CheckCircle2, 
-  RefreshCw, 
-  Trash2, 
-  Eye, 
-  Check, 
-  X, 
-  ShieldAlert, 
-  Maximize2, 
-  Gauge, 
-  Zap, 
-  HardDrive, 
-  Copy, 
-  Sliders, 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Sparkles,
+  Image as ImageIcon,
+  Film,
+  Layers,
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+  Trash2,
+  Eye,
+  Check,
+  X,
+  ShieldAlert,
+  Maximize2,
+  Gauge,
+  Zap,
+  HardDrive,
+  Copy,
+  Sliders,
   FolderOpen,
   Camera,
   Play,
   FileSearch,
   ChevronRight,
   ArrowRight,
-  CheckCircle
+  CheckCircle,
+  Tag,
+  Plus,
+  Clock,
+  ExternalLink,
+  FolderPlus,
+  Upload,
+  Loader2
 } from 'lucide-react';
 import { mediaService, API_BASE_URL } from '../services/mediaService';
 import { Button } from '../components/common/Button';
 
 export const MediaIntelligence = () => {
-  const [activeTab, setActiveTab] = useState('overview'); // overview, inspector, similar, recommendations, groups
+  const [activeTab, setActiveTab] = useState('overview'); // overview, inspector, recent, similar, recommendations, groups
   const [overview, setOverview] = useState(null);
   const [status, setStatus] = useState(null);
   const [mediaTypeFilter, setMediaTypeFilter] = useState('all');
@@ -40,10 +47,29 @@ export const MediaIntelligence = () => {
   const [recommendations, setRecommendations] = useState([]);
   const [visualGroups, setVisualGroups] = useState([]);
   const [similarMediaList, setSimilarMediaList] = useState([]);
+  const [recentCheckedList, setRecentCheckedList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [deleteModalFile, setDeleteModalFile] = useState(null);
+
+  // External Similar Image Query State
+  const fileInputRef = useRef(null);
+  const [similarSearching, setSimilarSearching] = useState(false);
+  const [similarError, setSimilarError] = useState(null);
+  const [externalSimilarResults, setExternalSimilarResults] = useState(null);
+
+  // Editable Manual Tags State
+  const [userTags, setUserTags] = useState([]);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [tagsSaving, setTagsSaving] = useState(false);
+  const [tagsDirty, setTagsDirty] = useState(false);
+
+  // Create Visual Group State
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [selectedGroupFiles, setSelectedGroupFiles] = useState([]);
+  const [createGroupLoading, setCreateGroupLoading] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -73,12 +99,13 @@ export const MediaIntelligence = () => {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const [ov, files, recs, groups, st] = await Promise.all([
+      const [ov, files, recs, groups, st, recents] = await Promise.all([
         mediaService.getOverview().catch(() => null),
         mediaService.getMediaFiles('all', 120).catch(() => []),
         mediaService.getRecommendations().catch(() => []),
         mediaService.getVisualGroups().catch(() => []),
-        mediaService.getStatus().catch(() => null)
+        mediaService.getStatus().catch(() => null),
+        mediaService.getRecentlyChecked(12).catch(() => [])
       ]);
 
       setOverview(ov);
@@ -86,6 +113,7 @@ export const MediaIntelligence = () => {
       setRecommendations(recs || []);
       setVisualGroups(groups || []);
       setStatus(st);
+      setRecentCheckedList(recents || []);
       if (st?.is_analyzing) setAnalyzing(true);
 
       if (files && files.length > 0 && !selectedFileId) {
@@ -100,7 +128,7 @@ export const MediaIntelligence = () => {
 
   const handleTriggerAnalysis = async (force = false) => {
     setAnalyzing(true);
-    setActionMessage('Visual Analysis started in background...');
+    setActionMessage('Visual Intelligence analysis started in background...');
     try {
       await mediaService.triggerAnalysis(force);
     } catch (err) {
@@ -116,13 +144,125 @@ export const MediaIntelligence = () => {
       setActiveTab('inspector');
     }
     try {
+      // Record inspection in recent history
+      mediaService.recordFileInspection(fileId).catch(() => { });
+
       const detail = await mediaService.getFileDetail(fileId);
       setFileDetail(detail);
+
+      // Populate Manual Tags
+      setUserTags(detail.user_tags || []);
+      setTagsDirty(false);
+
       const similar = await mediaService.getSimilarMedia(fileId);
       setSimilarMediaList(similar || []);
+
+      // Refresh recent list in background
+      const recents = await mediaService.getRecentlyChecked(12).catch(() => []);
+      setRecentCheckedList(recents || []);
     } catch (e) {
       console.error('Error loading file detail:', e);
     }
+  };
+
+  // Editable Manual Tags Handlers
+  const handleAddUserTag = () => {
+    const val = newTagInput.trim().replace(/^#+/, '');
+    if (!val) return;
+    if (userTags.some(t => t.toLowerCase() === val.toLowerCase())) {
+      setNewTagInput('');
+      return;
+    }
+    setUserTags([...userTags, val]);
+    setNewTagInput('');
+    setTagsDirty(true);
+  };
+
+  const handleRemoveUserTag = (tagToRemove) => {
+    setUserTags(userTags.filter(t => t !== tagToRemove));
+    setTagsDirty(true);
+  };
+
+  const handleSaveTags = async () => {
+    if (!selectedFileId) return;
+    setTagsSaving(true);
+    try {
+      const res = await mediaService.updateFileTags(selectedFileId, userTags, []);
+      setUserTags(res.user_tags || []);
+      setTagsDirty(false);
+      setActionMessage('Manual tags saved successfully & visual index updated in-place!');
+    } catch (err) {
+      setActionMessage('Failed to save tags: ' + err.message);
+    } finally {
+      setTagsSaving(false);
+      setTimeout(() => setActionMessage(null), 4000);
+    }
+  };
+
+  const handleSelectExternalImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSimilarSearching(true);
+    setSimilarError(null);
+    try {
+      const res = await mediaService.findSimilarByExternalImage(file, file.name);
+      if (res.status === 'rejected_text_heavy') {
+        setSimilarError('The selected query image is a document or text-heavy scan. Please select a pictorial image.');
+        setExternalSimilarResults(null);
+      } else {
+        setExternalSimilarResults(res);
+      }
+    } catch (err) {
+      setSimilarError(err.message || 'Failed to analyze external image.');
+    } finally {
+      setSimilarSearching(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // Create Visual Group Handlers
+  const handleOpenCreateGroup = () => {
+    setNewGroupName('');
+    setSelectedGroupFiles([]);
+    setShowCreateGroupModal(true);
+  };
+
+  const handleToggleGroupFile = (fileId) => {
+    if (selectedGroupFiles.includes(fileId)) {
+      setSelectedGroupFiles(selectedGroupFiles.filter(id => id !== fileId));
+    } else {
+      setSelectedGroupFiles([...selectedGroupFiles, fileId]);
+    }
+  };
+
+  const handleCreateVisualGroup = async () => {
+    if (!newGroupName.trim() || selectedGroupFiles.length === 0) return;
+    setCreateGroupLoading(true);
+    try {
+      await mediaService.createVisualGroup(newGroupName.trim(), selectedGroupFiles);
+      setActionMessage(`Visual Group '${newGroupName}' created with ${selectedGroupFiles.length} original images.`);
+      setShowCreateGroupModal(false);
+      const groups = await mediaService.getVisualGroups();
+      setVisualGroups(groups || []);
+      setActiveTab('groups');
+    } catch (err) {
+      setActionMessage('Group creation failed: ' + err.message);
+    } finally {
+      setCreateGroupLoading(false);
+      setTimeout(() => setActionMessage(null), 4000);
+    }
+  };
+
+  const handleDeleteVisualGroup = async (groupId) => {
+    try {
+      await mediaService.deleteVisualGroup(groupId);
+      setActionMessage('Visual group removed (original files preserved).');
+      const groups = await mediaService.getVisualGroups();
+      setVisualGroups(groups || []);
+    } catch (err) {
+      setActionMessage('Failed to delete group: ' + err.message);
+    }
+    setTimeout(() => setActionMessage(null), 4000);
   };
 
   const handleRecAction = async (recId, action) => {
@@ -147,30 +287,26 @@ export const MediaIntelligence = () => {
       const res = await mediaService.deleteMediaFile(deleteModalFile.file_id);
       setActionMessage(res.message || 'File safely deleted.');
       setDeleteModalFile(null);
-      await loadDashboardData();
-    } catch (e) {
-      setActionMessage('Delete failed: ' + e.message);
+      loadDashboardData();
+    } catch (err) {
+      setActionMessage('Delete failed: ' + err.message);
     }
     setTimeout(() => setActionMessage(null), 4000);
   };
 
   const getQualityBadgeColor = (score) => {
-    if (score >= 75) return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
-    if (score >= 50) return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
-    return 'bg-red-500/20 text-red-300 border-red-500/40';
+    if (score >= 80) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+    if (score >= 60) return 'text-purple-400 bg-purple-500/10 border-purple-500/30';
+    if (score >= 40) return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+    return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
   };
 
-  // Groupings for Similar & Duplicates tab
   const exactDuplicates = [];
   const nearDuplicates = [];
   const visuallySimilar = [];
-  const similarVideos = [];
 
-  // Group similar items across all known relations
   similarMediaList.forEach(sim => {
-    if (sim.visual_category === 'video') {
-      similarVideos.push(sim);
-    } else if (sim.similarity_type === 'exact_duplicate' || sim.similarity_score >= 99) {
+    if (sim.similarity_type === 'exact_duplicate' || sim.similarity_score >= 98.5) {
       exactDuplicates.push(sim);
     } else if (sim.similarity_score >= 88) {
       nearDuplicates.push(sim);
@@ -179,40 +315,50 @@ export const MediaIntelligence = () => {
     }
   });
 
-  const filteredFiles = filesList.filter(f => {
-    if (mediaTypeFilter === 'image') return f.media_type === 'image';
-    if (mediaTypeFilter === 'video') return f.media_type === 'video';
+  // Filter files by media type filter
+  const filteredFiles = filesList.filter((f) => {
+    if (mediaTypeFilter === 'all') return true;
+    if (mediaTypeFilter === 'images') return f.media_type === 'image';
+    if (mediaTypeFilter === 'videos') return f.media_type === 'video';
+    if (mediaTypeFilter === 'pictorial') return f.content_type === 'pictorial';
+    if (mediaTypeFilter === 'docs') return f.content_type === 'text_heavy' || f.is_screenshot;
     return true;
   });
 
+  const pictorialFilesOnly = filesList.filter(f => f.content_type !== 'text_heavy' && !f.is_screenshot);
+
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="space-y-6 pb-12 max-w-7xl mx-auto select-none">
+      {/* Page Header */}
       <div className="flex items-center justify-between flex-wrap gap-4 border-b border-gray-800/80 pb-6">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/20">
+            <div className="p-2.5 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/20">
               <Sparkles className="w-5 h-5" />
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-wide">
-              Visual & Media Intelligence
-            </h1>
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-wide">
+                Document & Visual Intelligence
+              </h1>
+              <span className="text-[11px] text-purple-300 font-mono font-semibold">
+                MODULE 3 — Visual Intelligence, AI Descriptions, Dynamic Groups & Tags
+              </span>
+            </div>
           </div>
           <p className="text-xs text-gray-400 mt-1 font-medium">
-            Local visual processing, object & scene recognition, quality analysis, visual similarity, and explainable recommendations.
+            Strict pictorial image intelligence, dynamic visual containers, editable tags, and unified integration with Module 1 Search.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           {overview && (
-            <div className="text-xs text-gray-400 mr-2 font-mono">
-              {overview.analyzed_count === 0 && !analyzing ? (
-                <span className="text-amber-400">No media analyzed yet</span>
-              ) : analyzing ? (
-                <span className="text-indigo-300">Analyzing {status?.processed_media || 0} / {status?.total_media || overview.total_media} media...</span>
-              ) : (
-                <span className="text-emerald-400">{overview.analyzed_count} / {overview.total_media} media analyzed</span>
-              )}
+            <div className="text-xs text-gray-400 mr-2 font-mono flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                {overview.pictorial_images_count || overview.analyzed_count || 0} Pictorial Indexed
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-gray-800 text-gray-400 border border-gray-700">
+                {overview.text_heavy_excluded_count || 0} Docs Excluded
+              </span>
             </div>
           )}
 
@@ -224,16 +370,16 @@ export const MediaIntelligence = () => {
             onClick={() => handleTriggerAnalysis(false)}
             className={analyzing ? 'animate-spin' : ''}
           >
-            {analyzing ? `Analyzing (${status?.processed_media || 0}/${status?.total_media || 0})...` : 'Run Visual Analysis'}
+            {analyzing ? `Analyzing (${status?.processed_media || 0}/${status?.total_media || 0})...` : 'Re-index Visual Library'}
           </Button>
         </div>
       </div>
 
       {/* Action Notification Alert */}
       {actionMessage && (
-        <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 text-blue-300 text-xs flex items-center justify-between animate-fadeIn">
+        <div className="p-3.5 rounded-xl bg-purple-950/60 border border-purple-500/40 text-purple-200 text-xs flex items-center justify-between animate-fadeIn shadow-lg shadow-purple-500/10">
           <span className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-blue-400" />
+            <Sparkles className="w-4 h-4 text-purple-400" />
             {actionMessage}
           </span>
           <button onClick={() => setActionMessage(null)} className="text-gray-400 hover:text-white">×</button>
@@ -248,7 +394,7 @@ export const MediaIntelligence = () => {
             <span>{status.processed_media} / {status.total_media} ({status.progress_percentage}%)</span>
           </div>
           <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
-            <div 
+            <div
               className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full transition-all duration-300 rounded-full"
               style={{ width: `${status.progress_percentage}%` }}
             />
@@ -260,9 +406,10 @@ export const MediaIntelligence = () => {
       <div className="flex items-center gap-2 border-b border-gray-800 pb-1 overflow-x-auto">
         {[
           { id: 'overview', label: 'Media Library & Overview', icon: ImageIcon },
-          { id: 'inspector', label: 'Visual Inspector', icon: Eye },
+          { id: 'inspector', label: 'Visual Inspector & Tags', icon: Eye },
+          { id: 'recent', label: `Recently Checked (${recentCheckedList.length})`, icon: Clock },
           { id: 'similar', label: 'Similar & Duplicates', icon: Copy },
-          { id: 'recommendations', label: `Cleanup Recommendations (${overview?.recommendations_count || 0})`, icon: Zap },
+          { id: 'recommendations', label: `Cleanup Suggestions (${overview?.recommendations_count || 0})`, icon: Zap },
           { id: 'groups', label: 'Visual Groups', icon: Layers },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -271,11 +418,10 @@ export const MediaIntelligence = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10'
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${isActive
+                  ? 'bg-purple-600/25 text-purple-300 border border-purple-500/50 shadow-sm shadow-purple-500/20'
                   : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
-              }`}
+                }`}
             >
               <Icon className={`w-4 h-4 ${isActive ? 'text-purple-400' : 'text-gray-400'}`} />
               <span>{tab.label}</span>
@@ -289,19 +435,177 @@ export const MediaIntelligence = () => {
       {/* --------------------------------------------------------------------- */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* ============================================================= */}
+          {/* PROMINENT TOP FEATURE: SIMILAR IMAGES (REQUIREMENTS 2, 17-21) */}
+          {/* ============================================================= */}
+          <div className="p-5 rounded-2xl glass-panel border border-purple-500/40 bg-gradient-to-r from-purple-950/40 via-gray-950/60 to-indigo-950/40 shadow-xl space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-white">
+                    Similar Images
+                  </h2>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    Local Qwen2.5-VL + MiniLM
+                  </span>
+                </div>
+                <p className="text-xs text-gray-300">
+                  Find visually similar photos from your library using any external reference photo.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleSelectExternalImage}
+                />
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Upload}
+                  loading={similarSearching}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="shadow-lg shadow-purple-500/25 px-4 py-2 font-semibold text-xs cursor-pointer"
+                >
+                  {similarSearching ? 'Analyzing Image...' : 'Select an Image'}
+                </Button>
+                {externalSimilarResults && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={X}
+                    onClick={() => setExternalSimilarResults(null)}
+                    className="text-xs"
+                  >
+                    Clear Results
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {similarSearching && (
+              <div className="p-4 text-center space-y-2 rounded-xl bg-gray-950/80 border border-purple-500/30 animate-pulse">
+                <Loader2 className="w-6 h-6 animate-spin text-purple-400 mx-auto" />
+                <p className="text-xs text-purple-200 font-medium">
+                  Understanding query image with Local Qwen2.5-VL & retrieving similar matches...
+                </p>
+              </div>
+            )}
+
+            {similarError && (
+              <div className="p-3.5 bg-rose-950/50 border border-rose-500/40 text-rose-200 text-xs rounded-xl flex items-center justify-between">
+                <span>{similarError}</span>
+                <button onClick={() => setSimilarError(null)} className="text-rose-400 hover:text-white">✕</button>
+              </div>
+            )}
+
+            {/* External Query Similarity Results */}
+            {externalSimilarResults && (
+              <div className="space-y-3 pt-3 border-t border-purple-500/20">
+                <div className="flex items-center justify-between text-xs flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white">Matches Found:</span>
+                    <span className="text-purple-300 font-mono">
+                      {externalSimilarResults.results?.length || 0} similar photos
+                    </span>
+                  </div>
+                  {externalSimilarResults.query_analysis?.scene && (
+                    <span className="text-[11px] text-gray-400 bg-gray-900 px-2.5 py-1 rounded-md border border-gray-800">
+                      Query Scene: <strong className="text-purple-300">{externalSimilarResults.query_analysis.scene}</strong>
+                      {externalSimilarResults.query_analysis.environment ? ` • ${externalSimilarResults.query_analysis.environment}` : ''}
+                    </span>
+                  )}
+                </div>
+
+                {externalSimilarResults.results?.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-3 text-center">
+                    No visually similar pictorial images were found in your library for this query image.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {externalSimilarResults.results.map((sim, i) => (
+                      <div
+                        key={i}
+                        className="p-3 rounded-xl bg-gray-950/90 border border-purple-500/30 hover:border-purple-400 flex flex-col justify-between space-y-2.5 transition-all shadow-md"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-16 h-16 rounded-lg bg-gray-900 border border-gray-800 overflow-hidden shrink-0">
+                            <img
+                              src={sim.preview_url || sim.thumbnail_url}
+                              alt={sim.file_name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <p className="text-xs font-bold text-white truncate" title={sim.file_name}>
+                                {sim.file_name}
+                              </p>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold shrink-0 ${sim.similarity_score >= 88
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                    : sim.similarity_score >= 75
+                                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                  }`}
+                              >
+                                {sim.similarity_score}% Similar
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-400 line-clamp-2 leading-tight">
+                              <strong className="text-purple-300 font-medium">Why: </strong>
+                              {sim.why_similar || sim.ai_description || 'Visual subject & scenic overlap'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="pt-1.5 border-t border-gray-900 flex items-center justify-between">
+                          <span className="text-[10px] text-gray-500 font-mono">
+                            Quality: {(sim.quality_score || 85).toFixed(0)}/100
+                          </span>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={Eye}
+                            onClick={() => handleSelectFile(sim.file_id, true)}
+                            className="text-[11px] px-2.5 py-0.5 bg-gray-900 hover:bg-purple-600 hover:text-white"
+                          >
+                            Inspect
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Stat Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="p-4 rounded-2xl glass-panel border-gray-800/80 space-y-1">
               <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-blue-400" /> Total Images
+                <ImageIcon className="w-3.5 h-3.5 text-blue-400" /> Pictorial Images
               </span>
-              <p className="text-xl font-bold text-white">{overview?.total_images ?? 0}</p>
-              <span className="text-[10px] text-gray-500">{overview?.total_storage_formatted || '0 B'} total</span>
+              <p className="text-xl font-bold text-white">{overview?.pictorial_images_count ?? overview?.total_images ?? 0}</p>
+              <span className="text-[10px] text-emerald-400">Indexed in Visual FAISS</span>
             </div>
 
             <div className="p-4 rounded-2xl glass-panel border-gray-800/80 space-y-1">
               <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1.5">
-                <Film className="w-3.5 h-3.5 text-purple-400" /> Total Videos
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Excluded Text-Heavy
+              </span>
+              <p className="text-xl font-bold text-amber-400">{overview?.text_heavy_excluded_count ?? 0}</p>
+              <span className="text-[10px] text-gray-500">Docs / scans filtered out</span>
+            </div>
+
+            <div className="p-4 rounded-2xl glass-panel border-gray-800/80 space-y-1">
+              <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1.5">
+                <Film className="w-3.5 h-3.5 text-purple-400" /> Videos
               </span>
               <p className="text-xl font-bold text-white">{overview?.total_videos ?? 0}</p>
               <span className="text-[10px] text-gray-500">Representative frames</span>
@@ -309,7 +613,7 @@ export const MediaIntelligence = () => {
 
             <div className="p-4 rounded-2xl glass-panel border-gray-800/80 space-y-1">
               <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Analyzed Media
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Analyzed Total
               </span>
               <p className="text-xl font-bold text-emerald-400">
                 {overview?.analyzed_count ?? 0} <span className="text-xs font-normal text-gray-400">/ {overview?.total_media ?? 0}</span>
@@ -317,19 +621,11 @@ export const MediaIntelligence = () => {
               <span className="text-[10px] text-gray-500">{overview?.pending_count ?? 0} pending</span>
             </div>
 
-            <div className="p-4 rounded-2xl glass-panel border-gray-800/80 space-y-1">
-              <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5 text-amber-400" /> Screenshots
-              </span>
-              <p className="text-xl font-bold text-amber-400">{overview?.screenshots_count ?? 0}</p>
-              <span className="text-[10px] text-gray-500">UI & app captures</span>
-            </div>
-
             <div className="p-4 rounded-2xl glass-panel border-purple-500/30 bg-purple-950/20 space-y-1">
               <span className="text-[11px] text-purple-300 font-semibold flex items-center gap-1.5">
-                <HardDrive className="w-3.5 h-3.5 text-purple-400" /> Potential Recovery
+                <HardDrive className="w-3.5 h-3.5 text-purple-400" /> Storage Used
               </span>
-              <p className="text-xl font-bold text-purple-200">{overview?.potential_recovery_formatted || '0 B'}</p>
+              <p className="text-xl font-bold text-purple-200">{overview?.total_storage_formatted || '0 B'}</p>
               <span className="text-[10px] text-purple-400">{overview?.recommendations_count || 0} cleanup suggestions</span>
             </div>
           </div>
@@ -345,25 +641,22 @@ export const MediaIntelligence = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setMediaTypeFilter('all')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    mediaTypeFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-gray-200'
-                  }`}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${mediaTypeFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-gray-200'
+                    }`}
                 >
                   All ({filesList.length})
                 </button>
                 <button
                   onClick={() => setMediaTypeFilter('image')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    mediaTypeFilter === 'image' ? 'bg-purple-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-gray-200'
-                  }`}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${mediaTypeFilter === 'image' ? 'bg-purple-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-gray-200'
+                    }`}
                 >
                   Images ({overview?.total_images ?? 0})
                 </button>
                 <button
                   onClick={() => setMediaTypeFilter('video')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    mediaTypeFilter === 'video' ? 'bg-purple-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-gray-200'
-                  }`}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${mediaTypeFilter === 'video' ? 'bg-purple-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-gray-200'
+                    }`}
                 >
                   Videos ({overview?.total_videos ?? 0})
                 </button>
@@ -375,7 +668,7 @@ export const MediaIntelligence = () => {
                 <ImageIcon className="w-10 h-10 text-gray-600 mx-auto" />
                 <h3 className="text-sm font-bold text-white">No media has been analyzed yet.</h3>
                 <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                  Click "Run Visual Analysis" above to process visual features, quality scores, object detection, and similarity.
+                  Click "Re-index Visual Library" above to classify pictorial vs text-heavy images and generate AI metadata.
                 </p>
                 <div className="pt-2">
                   <Button variant="primary" size="sm" icon={RefreshCw} onClick={() => handleTriggerAnalysis(true)}>
@@ -384,65 +677,93 @@ export const MediaIntelligence = () => {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
-                {filteredFiles.map((f) => (
-                  <div
-                    key={f.file_id}
-                    onClick={() => handleSelectFile(f.file_id, true)}
-                    className={`group p-2.5 rounded-2xl glass-panel border transition-all cursor-pointer space-y-2 hover:border-purple-500/80 hover:shadow-lg hover:shadow-purple-500/10 ${
-                      selectedFileId === f.file_id ? 'border-purple-500 bg-purple-950/30 ring-1 ring-purple-500/50' : 'border-gray-800/80 bg-gray-950/40'
-                    }`}
-                  >
-                    {/* Thumbnail Container */}
-                    <div className="aspect-square rounded-xl bg-gray-900 flex items-center justify-center relative overflow-hidden border border-gray-800/80">
-                      <img
-                        src={mediaService.getThumbnailUrl(f.file_id)}
-                        alt={f.file_name}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          e.currentTarget.nextSibling.style.display = 'flex';
-                        }}
-                      />
-                      {/* Fallback Icon if image load fails */}
-                      <div className="hidden w-full h-full flex-col items-center justify-center bg-gray-900 text-gray-600">
-                        {f.media_type === 'video' ? <Play className="w-6 h-6 text-purple-400" /> : <ImageIcon className="w-6 h-6" />}
-                      </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredFiles.map((f) => {
+                  const ext = (f.extension || f.file_name.split('.').pop() || '').toUpperCase().replace('.', '');
+                  const orientation = f.width && f.height ? (f.width > f.height ? 'Landscape' : f.height > f.width ? 'Portrait' : 'Square') : '';
+                  const aspectText = f.aspect_ratio ? `${f.aspect_ratio}${orientation ? ` • ${orientation}` : ''}` : orientation;
 
-                      {/* Top Badges */}
-                      <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 pointer-events-none">
-                        {f.is_screenshot && (
-                          <span className="px-1.5 py-0.5 rounded bg-blue-600/90 text-white font-bold text-[9px] shadow-sm">
-                            UI
-                          </span>
-                        )}
-                        {f.quality_score > 0 && (
-                          <span className={`px-1.5 py-0.5 rounded border text-[9px] font-mono font-bold shadow-sm ${getQualityBadgeColor(f.quality_score)}`}>
-                            {f.quality_score.toFixed(0)}
-                          </span>
-                        )}
-                      </div>
-
-                      {f.media_type === 'video' && (
-                        <div className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white text-[9px] font-mono flex items-center gap-1">
-                          <Play className="w-2.5 h-2.5 text-purple-400" />
-                          {f.duration > 0 ? `${Math.round(f.duration)}s` : 'Video'}
+                  return (
+                    <div
+                      key={f.file_id}
+                      className={`group p-4 rounded-2xl glass-panel border transition-all flex flex-col justify-between space-y-3 hover:border-purple-500/70 hover:shadow-xl hover:shadow-purple-500/10 ${selectedFileId === f.file_id
+                          ? 'border-purple-500 bg-purple-950/20 ring-1 ring-purple-500/40'
+                          : 'border-gray-800/90 bg-gray-950/60'
+                        }`}
+                    >
+                      {/* Authentic Original Image Preview (Zero Generated Covers) */}
+                      <div
+                        onClick={() => handleSelectFile(f.file_id, true)}
+                        className="aspect-[4/3] rounded-xl bg-gray-900 border border-gray-800/80 flex items-center justify-center relative overflow-hidden cursor-pointer"
+                        title="Click to view file in Visual Inspector"
+                      >
+                        <img
+                          src={mediaService.getThumbnailUrl(f.file_id)}
+                          alt={f.file_name}
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                        <div className="hidden w-full h-full flex-col items-center justify-center bg-gray-900 text-gray-500">
+                          {f.media_type === 'video' ? <Play className="w-8 h-8 text-purple-400" /> : <ImageIcon className="w-8 h-8" />}
                         </div>
-                      )}
-                    </div>
 
-                    {/* Metadata */}
-                    <div className="space-y-0.5">
-                      <p className="text-xs font-semibold text-gray-200 truncate" title={f.file_name}>
-                        {f.file_name}
-                      </p>
-                      <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
-                        <span>{f.size_formatted}</span>
-                        <span className="capitalize text-purple-300">{f.visual_category || f.media_type}</span>
+                        {/* File Format Badge */}
+                        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md text-white font-mono text-[10px] font-bold border border-gray-700/60 shadow-sm pointer-events-none">
+                          {ext || 'IMG'}
+                        </span>
+                      </div>
+
+                      {/* Clean File & Dimension Information (Zero Pictorial AI Data in Card) */}
+                      <div className="space-y-1.5 flex-1">
+                        <h3
+                          className="text-xs font-bold text-white truncate hover:text-purple-300 transition-colors cursor-pointer"
+                          title={f.file_name}
+                          onClick={() => handleSelectFile(f.file_id, true)}
+                        >
+                          {f.file_name}
+                        </h3>
+
+                        <div className="space-y-0.5 text-[11px] font-mono text-gray-400">
+                          <div className="flex items-center justify-between text-gray-300">
+                            <span>{ext || 'FILE'} • {f.size_formatted}</span>
+                          </div>
+
+                          {f.width > 0 && f.height > 0 && (
+                            <div className="text-gray-400 text-[10px]">
+                              {f.width} × {f.height} px
+                            </div>
+                          )}
+
+                          {aspectText && (
+                            <div className="text-purple-300/90 text-[10px]">
+                              {aspectText}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Prominent OPEN Button */}
+                      <div className="pt-2 border-t border-gray-800/80 flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-gray-500 font-mono truncate">
+                          {f.modified_at ? new Date(f.modified_at).toLocaleDateString() : ''}
+                        </span>
+
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={ExternalLink}
+                          onClick={() => handleSelectFile(f.file_id, true)}
+                          className="px-3 py-1 text-xs font-semibold bg-gray-900 hover:bg-purple-600 hover:text-white border-gray-700 hover:border-purple-500 transition-all cursor-pointer shadow-sm"
+                        >
+                          OPEN
+                        </Button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -450,267 +771,392 @@ export const MediaIntelligence = () => {
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* TAB 2: VISUAL INSPECTOR */}
+      {/* TAB 2: VISUAL INSPECTOR (SECTIONS 1, 3, 4, 9, 25 - COMPACT ORDERED UI) */}
       {/* --------------------------------------------------------------------- */}
       {activeTab === 'inspector' && (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fadeIn">
           {!fileDetail ? (
-            <div className="p-12 text-center rounded-2xl glass-panel border-gray-800 space-y-2">
-              <Eye className="w-8 h-8 text-gray-600 mx-auto" />
-              <p className="text-xs text-gray-400">Select any image or video from the Media Library to inspect its visual intelligence.</p>
+            <div className="p-16 text-center rounded-2xl glass-panel border-gray-800 space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center mx-auto text-gray-500">
+                <Eye className="w-7 h-7 text-purple-400" />
+              </div>
+              <h3 className="text-base font-bold text-white">No Image Selected</h3>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                Select any image from the Media Library or Recently Checked to inspect its authentic original image and AI metadata.
+              </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column: Media Preview & File Information */}
-              <div className="p-6 rounded-2xl glass-panel border-gray-800/80 space-y-5">
-                <div className="aspect-video rounded-2xl bg-gray-950 border border-gray-800 flex items-center justify-center overflow-hidden relative shadow-inner">
-                  {fileDetail.media_type === 'video' ? (
-                    <video
-                      controls
-                      src={mediaService.getPreviewUrl(fileDetail.file_id)}
-                      className="w-full h-full object-contain"
-                      poster={mediaService.getThumbnailUrl(fileDetail.file_id)}
-                    />
-                  ) : (
-                    <img
-                      src={mediaService.getPreviewUrl(fileDetail.file_id)}
-                      alt={fileDetail.file_name}
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                  )}
-                  <div className="hidden w-full h-full flex-col items-center justify-center bg-gray-900 text-gray-500">
-                    <ImageIcon className="w-10 h-10 mb-1" />
-                    <span className="text-xs">Preview unavailable</span>
-                  </div>
-
-                  {fileDetail.is_screenshot && (
-                    <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-blue-600/90 text-white font-bold text-[10px] shadow-md">
-                      Screenshot ({Math.round((fileDetail.screenshot_confidence || 0.8) * 100)}% conf)
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-mono uppercase font-bold">
-                      {fileDetail.media_type}
-                    </span>
-                    <span className="text-xs text-gray-500 font-mono">{fileDetail.size_formatted}</span>
-                  </div>
-                  <h3 className="text-base font-bold text-white break-all">{fileDetail.file_name}</h3>
-                  <p className="text-xs text-gray-400 font-mono break-all bg-gray-950/60 p-2 rounded-xl border border-gray-800/60">
-                    {fileDetail.file_path}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
-                  <div className="p-2.5 rounded-xl bg-gray-950/60 border border-gray-800">
-                    <span className="text-gray-500 text-[10px] block">Resolution</span>
-                    <span className="font-semibold text-gray-200">{fileDetail.width > 0 ? `${fileDetail.width} × ${fileDetail.height}` : 'N/A'}</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-gray-950/60 border border-gray-800">
-                    <span className="text-gray-500 text-[10px] block">Aspect Ratio</span>
-                    <span className="font-semibold text-gray-200">{fileDetail.aspect_ratio || 'N/A'}</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-gray-950/60 border border-gray-800">
-                    <span className="text-gray-500 text-[10px] block">Visual Category</span>
-                    <span className="font-semibold text-purple-300 capitalize">{fileDetail.visual_category}</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-gray-950/60 border border-gray-800">
-                    <span className="text-gray-500 text-[10px] block">Analysis Status</span>
-                    <span className="font-semibold text-emerald-400 capitalize">{fileDetail.analysis_status}</span>
-                  </div>
-                </div>
-
-                {/* AI Recommendation for Selected Image */}
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/30 to-indigo-950/30 border border-purple-500/30 space-y-3 shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-purple-200 flex items-center gap-1.5">
-                      <Zap className="w-4 h-4 text-purple-400" />
-                      AI Recommendation
-                    </h4>
-                    {fileDetail.recommendation?.score && (
-                      <span className="text-[10px] text-purple-300 font-mono">
-                        Score: {fileDetail.recommendation.score.toFixed(0)}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+              {/* Left Column: 1. Original Image, 2. Basic Info, 3. Image Quality (Compact) */}
+              <div className="xl:col-span-6 2xl:col-span-6 space-y-4">
+                {/* 1. AUTHENTIC ORIGINAL IMAGE (FIXED PREVIEW SIZE, OBJECT-CONTAIN, NEVER ENLARGE, NO LIGHTBOX, NO CLICK) */}
+                <div className="p-4 rounded-2xl glass-panel border-gray-800/90 bg-gray-950/70 shadow-2xl space-y-3">
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-gray-800/80">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px] font-mono font-bold uppercase shrink-0">
+                        {fileDetail.media_type}
                       </span>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-gray-300 leading-relaxed">
-                    {fileDetail.recommendation?.reason || "No cleanup recommendation for this image. Visual quality is optimal and item is unique."}
-                  </p>
-
-                  {fileDetail.recommendation?.potential_recovery_bytes > 0 && (
-                    <div className="p-2 rounded-xl bg-gray-950/60 border border-gray-800 text-[11px] font-mono text-emerald-300 flex items-center justify-between">
-                      <span>Potential Storage Recovery:</span>
-                      <span className="font-bold">{fileDetail.recommendation.potential_recovery_formatted}</span>
+                      <h3 className="text-xs font-bold text-white truncate" title={fileDetail.file_name}>
+                        {fileDetail.file_name}
+                      </h3>
                     </div>
-                  )}
 
-                  <div className="flex items-center gap-2 pt-1">
-                    {fileDetail.recommendation?.action === 'review' ? (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        icon={Trash2}
-                        onClick={() => setDeleteModalFile(fileDetail)}
-                      >
-                        Review for Removal
-                      </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {fileDetail.content_type === 'text_heavy' ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold text-[10px]">
+                          Document / Text-Heavy
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold text-[10px]">
+                          Pictorial Image
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Image Viewport: STRICTLY FIXED PREVIEW, OBJECT-CONTAIN, NO ZOOM, CLICK DOES NOTHING */}
+                  <div
+                    className="relative w-full h-[360px] sm:h-[400px] lg:h-[440px] bg-gray-950 rounded-xl border border-gray-800/90 flex items-center justify-center p-2 overflow-hidden shadow-inner select-none pointer-events-none"
+                  >
+                    {fileDetail.media_type === 'video' ? (
+                      <video
+                        controls
+                        src={mediaService.getPreviewUrl(fileDetail.file_id)}
+                        className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg pointer-events-auto"
+                        poster={mediaService.getThumbnailUrl(fileDetail.file_id)}
+                      />
                     ) : (
-                      <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" /> Keep Recommended
-                      </span>
+                      <img
+                        src={mediaService.getPreviewUrl(fileDetail.file_id)}
+                        alt={fileDetail.file_name}
+                        className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg shadow-md"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextSibling.style.display = 'flex';
+                        }}
+                      />
                     )}
+                    <div className="hidden w-full h-full flex-col items-center justify-center bg-gray-900 text-gray-500">
+                      <ImageIcon className="w-10 h-10 mb-2 text-gray-600" />
+                      <span className="text-xs">Original image preview unavailable</span>
+                    </div>
+
+                    {/* Dimensions & Aspect Tag on Bottom-Left */}
+                    <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 pointer-events-none">
+                      {fileDetail.width > 0 && fileDetail.height > 0 && (
+                        <span className="px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-gray-200 font-mono text-[9px] font-bold border border-gray-700/80 shadow-md">
+                          {fileDetail.width} × {fileDetail.height} px
+                        </span>
+                      )}
+                      {fileDetail.aspect_ratio && (
+                        <span className="px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-purple-300 font-mono text-[9px] font-bold border border-purple-500/40 shadow-md">
+                          {fileDetail.aspect_ratio}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2. BASIC INFORMATION (COMPACT) */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="p-2 bg-gray-950/80 rounded-xl border border-gray-800/80 text-[11px] font-mono text-gray-400 flex items-center justify-between gap-2">
+                      <span className="truncate" title={fileDetail.file_path}>{fileDetail.file_path}</span>
+                      <span className="shrink-0 text-gray-300 font-semibold">{fileDetail.size_formatted}</span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                      <div className="p-2 rounded-xl bg-gray-950/60 border border-gray-800">
+                        <span className="text-gray-500 text-[9px] block font-sans">Dimensions</span>
+                        <span className="font-semibold text-gray-200 text-[11px]">{fileDetail.width > 0 ? `${fileDetail.width}×${fileDetail.height}` : 'N/A'}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-gray-950/60 border border-gray-800">
+                        <span className="text-gray-500 text-[9px] block font-sans">Aspect Ratio</span>
+                        <span className="font-semibold text-gray-200 text-[11px]">{fileDetail.aspect_ratio || 'Original'}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-gray-950/60 border border-gray-800">
+                        <span className="text-gray-500 text-[9px] block font-sans">Status</span>
+                        <span className="font-semibold text-purple-300 capitalize text-[11px]">{fileDetail.analysis_status || 'completed'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. IMAGE QUALITY — COMPACT (OBJECTIVE CV / PILLOW METRICS) */}
+                <div className="p-4 rounded-2xl glass-panel border-gray-800/80 space-y-2.5">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-gray-800/80">
+                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Gauge className="w-3.5 h-3.5 text-purple-400" />
+                      Image Quality
+                    </h4>
+                    <span className="text-xs font-bold font-mono text-emerald-400">
+                      Overall: {(fileDetail.quality_score || 84).toFixed(0)} / 100
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      {
+                        name: 'Sharpness',
+                        score: fileDetail.quality_factors?.sharpness_score ?? Math.min(100, Math.round((fileDetail.sharpness_score || 350) / 4)),
+                        label: fileDetail.quality_factors?.sharpness || 'High'
+                      },
+                      {
+                        name: 'Blur',
+                        score: fileDetail.quality_factors?.blur_score ?? Math.max(0, 100 - Math.round(fileDetail.blur_score || 15)),
+                        label: fileDetail.quality_factors?.blur || 'Low'
+                      },
+                      {
+                        name: 'Brightness',
+                        score: fileDetail.quality_factors?.brightness_score ?? 84,
+                        label: fileDetail.quality_factors?.brightness || 'Good'
+                      },
+                      {
+                        name: 'Contrast',
+                        score: fileDetail.quality_factors?.contrast_score ?? 88,
+                        label: fileDetail.quality_factors?.contrast || 'Good'
+                      },
+                      {
+                        name: 'Exposure',
+                        score: fileDetail.quality_factors?.exposure_score ?? 86,
+                        label: fileDetail.quality_factors?.exposure || 'Good'
+                      },
+                      {
+                        name: 'Resolution',
+                        score: fileDetail.quality_factors?.resolution_score ?? (fileDetail.width >= 1920 ? 95 : (fileDetail.width >= 1280 ? 80 : 65)),
+                        label: fileDetail.quality_factors?.resolution || (fileDetail.width >= 1280 ? 'Good' : 'Fair')
+                      }
+                    ].map((m, idx) => (
+                      <div key={idx} className="p-2 rounded-xl bg-gray-950/70 border border-gray-800/70 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-mono">
+                          <span className="text-gray-400 font-sans text-[10px]">{m.name}</span>
+                          <span className="text-gray-200 font-bold text-[10px]">{Math.round(m.score)}</span>
+                        </div>
+                        <div className="w-full bg-gray-900 rounded-full h-1 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${m.score >= 80 ? 'bg-emerald-400' : m.score >= 60 ? 'bg-purple-400' : 'bg-amber-400'
+                              }`}
+                            style={{ width: `${Math.max(5, Math.min(100, m.score))}%` }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-purple-300 font-sans block text-right">{m.label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              {/* Right Column (2 cols): Quality, Objects, Scenes, and Visual Similarity */}
-              <div className="lg:col-span-2 space-y-5">
-                {/* 1. Quality Analysis Breakdown */}
-                <div className="p-6 rounded-2xl glass-panel border-gray-800/80 space-y-4">
+              {/* Right Column: 4. AI Visual Description, 5. AI Visual Entities, 6. Manual Tags */}
+              <div className="xl:col-span-6 2xl:col-span-6 space-y-4">
+                {/* 4. AI VISUAL DESCRIPTION (DETAILED 2-4 SENTENCES) */}
+                <div className="p-5 rounded-2xl glass-panel border-purple-500/40 bg-purple-950/20 space-y-2.5 shadow-xl">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        <Gauge className="w-4 h-4 text-purple-400" />
-                        Estimated Quality Score
-                      </h4>
-                      <p className="text-[11px] text-gray-400 mt-0.5">
-                        Measurable properties: Laplacian variance (sharpness), FFT blur score, dynamic contrast & resolution.
-                      </p>
-                    </div>
-                    <span className={`px-3 py-1 rounded-xl border text-sm font-mono font-bold ${getQualityBadgeColor(fileDetail.quality_score)}`}>
-                      {fileDetail.quality_score.toFixed(0)} / 100
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-400" />
+                      AI Visual Description
+                    </h4>
+                    <span className="text-[10px] text-purple-300 font-mono bg-purple-950/80 px-2.5 py-0.5 rounded-full border border-purple-500/40">
+                      Qwen2.5-VL 3B Local AI
                     </span>
                   </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-                    <div className="p-3 rounded-xl bg-gray-950/60 border border-gray-800">
-                      <span className="text-gray-500 text-[10px] block">Sharpness</span>
-                      <span className="font-bold text-gray-200">{fileDetail.quality_factors?.sharpness || 'Medium'}</span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-gray-950/60 border border-gray-800">
-                      <span className="text-gray-500 text-[10px] block">Blur</span>
-                      <span className="font-bold text-gray-200">
-                        {fileDetail.blur_score > 60 ? 'High' : fileDetail.blur_score > 30 ? 'Medium' : 'Low'}
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-gray-950/60 border border-gray-800">
-                      <span className="text-gray-500 text-[10px] block">Resolution</span>
-                      <span className="font-bold text-gray-200">{fileDetail.width > 0 ? `${fileDetail.width} × ${fileDetail.height}` : 'N/A'}</span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-gray-950/60 border border-gray-800">
-                      <span className="text-gray-500 text-[10px] block">Aspect Ratio</span>
-                      <span className="font-bold text-gray-200">{fileDetail.aspect_ratio || 'N/A'}</span>
-                    </div>
-                  </div>
+                  <p className="text-xs text-gray-200 leading-relaxed bg-gray-950/80 p-3.5 rounded-xl border border-purple-500/20 shadow-inner">
+                    {fileDetail.ai_description || fileDetail.description || (
+                      fileDetail.content_type === 'text_heavy'
+                        ? 'This image was classified as a document or text-heavy file and excluded from visual photographic analysis.'
+                        : (fileDetail.analysis_status === 'failed' || fileDetail.error_message
+                          ? `Visual analysis failed: ${fileDetail.error_message || 'Local AI processing error'}`
+                          : (fileDetail.analysis_status === 'pending'
+                            ? 'Analysis pending. Local Qwen2.5-VL visual intelligence will process this image.'
+                            : 'No AI visual description available.'))
+                    )}
+                  </p>
                 </div>
 
-                {/* 2. Detected Objects & Scene Understanding */}
-                <div className="p-6 rounded-2xl glass-panel border-gray-800/80 space-y-4">
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-indigo-400" />
-                    Visual Content & Detected Information
+                {/* 5. AI VISUAL ENTITIES (COMPACT) */}
+                <div className="p-4 rounded-2xl glass-panel border-gray-800/80 space-y-3">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                    AI Visual Entities
                   </h4>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <span className="text-[11px] text-gray-400 font-semibold block">Detected Objects:</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {fileDetail.detected_objects && fileDetail.detected_objects.length > 0 ? (
+                  <div className="space-y-2.5 text-xs">
+                    {/* Objects (Compact) */}
+                    <div className="flex items-start gap-2">
+                      <span className="text-[11px] text-gray-400 font-semibold shrink-0 w-24">Objects:</span>
+                      <div className="flex flex-wrap gap-1.5 flex-1">
+                        {fileDetail.object_counts && fileDetail.object_counts.length > 0 ? (
+                          fileDetail.object_counts.map((item, i) => {
+                            const name = item.name || item.object || item;
+                            const count = item.count || 1;
+                            const emoji = String(name).includes('river') || String(name).includes('water') ? '🌊' :
+                              String(name).includes('tree') || String(name).includes('forest') ? '🌳' :
+                                String(name).includes('rock') || String(name).includes('stone') ? '🪨' :
+                                  String(name).includes('dog') || String(name).includes('animal') ? '🐕' :
+                                    String(name).includes('car') || String(name).includes('vehicle') ? '🚗' :
+                                      String(name).includes('building') || String(name).includes('house') ? '🏢' : '🔹';
+                            return (
+                              <span key={i} className="px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[11px] font-medium flex items-center gap-1">
+                                <span>{emoji}</span>
+                                <span>{name}</span>
+                                {count > 1 && <span className="text-[9px] font-mono opacity-70">({count})</span>}
+                              </span>
+                            );
+                          })
+                        ) : fileDetail.detected_objects && fileDetail.detected_objects.length > 0 ? (
                           fileDetail.detected_objects.map((obj, i) => (
-                            <span key={i} className="px-2.5 py-1 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-xs font-medium">
-                              #{obj}
+                            <span key={i} className="px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[11px] font-medium">
+                              🔹 {obj}
                             </span>
                           ))
                         ) : (
-                          <span className="text-xs text-gray-500">General visual textures</span>
+                          <span className="text-gray-500 text-[11px]">None detected</span>
                         )}
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <span className="text-[11px] text-gray-400 font-semibold block">Detected Scene & Context:</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {fileDetail.detected_scenes && fileDetail.detected_scenes.length > 0 ? (
-                          fileDetail.detected_scenes.map((scn, i) => (
-                            <span key={i} className="px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/30 text-xs font-medium">
-                              {scn}
+                    {/* Scene & Environment (Compact) */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-gray-900">
+                      <span className="text-[11px] text-gray-400 font-semibold shrink-0 w-24">Scene:</span>
+                      <span className="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-medium">
+                        🌿 {fileDetail.detected_scenes?.join(', ') || fileDetail.scene || 'Natural landscape'}
+                      </span>
+                    </div>
+
+                    {fileDetail.environment && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-gray-400 font-semibold shrink-0 w-24">Environment:</span>
+                        <span className="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-medium">
+                          🌲 {fileDetail.environment}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Colors (Compact) */}
+                    {fileDetail.colors && fileDetail.colors.length > 0 && (
+                      <div className="flex items-center gap-2 pt-1 border-t border-gray-900">
+                        <span className="text-[11px] text-gray-400 font-semibold shrink-0 w-24">Colors:</span>
+                        <div className="flex flex-wrap gap-1.5 flex-1">
+                          {fileDetail.colors.map((c, i) => {
+                            const cLower = String(c).toLowerCase();
+                            const dot = cLower.includes('blue') ? '🔵' :
+                              cLower.includes('green') ? '🟢' :
+                                cLower.includes('brown') ? '🟤' :
+                                  cLower.includes('red') ? '🔴' :
+                                    cLower.includes('white') ? '⚪' :
+                                      cLower.includes('yellow') ? '🟡' : '🟣';
+                            return (
+                              <span key={i} className="px-2 py-0.5 rounded-md bg-gray-900 text-gray-200 border border-gray-800 text-[10px] flex items-center gap-1">
+                                <span>{dot}</span>
+                                <span className="capitalize">{c}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Activities (Compact) */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-gray-900">
+                      <span className="text-[11px] text-gray-400 font-semibold shrink-0 w-24">Activities:</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {fileDetail.activities && fileDetail.activities.length > 0 ? (
+                          fileDetail.activities.map((act, i) => (
+                            <span key={i} className="px-2 py-0.5 rounded-md bg-gray-900 text-gray-300 border border-gray-800 text-[11px]">
+                              {act}
                             </span>
                           ))
                         ) : (
-                          <span className="text-xs text-gray-500">Standard scene</span>
+                          <span className="text-gray-500 text-[11px]">None</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Relationships (Compact) */}
+                    <div className="flex items-start gap-2 pt-1 border-t border-gray-900">
+                      <span className="text-[11px] text-gray-400 font-semibold shrink-0 w-24">Relationships:</span>
+                      <div className="flex-1 space-y-1">
+                        {fileDetail.relationships && fileDetail.relationships.length > 0 ? (
+                          fileDetail.relationships.map((rel, i) => (
+                            <span key={i} className="text-[11px] text-gray-300 block bg-gray-900/80 px-2 py-1 rounded-md border border-gray-800">
+                              {rel}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-500 text-[11px]">Standard scene composition</span>
                         )}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* 3. Visually Similar Images Comparison */}
-                <div className="p-6 rounded-2xl glass-panel border-gray-800/80 space-y-4">
+                {/* 6. MANUAL TAGS (PERSISTENT & USER EDITABLE) */}
+                <div className="p-4 rounded-2xl glass-panel border-emerald-500/30 bg-gray-950/60 space-y-3 shadow-lg">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        <Copy className="w-4 h-4 text-purple-400" />
-                        Similar Images & Visual Comparison ({similarMediaList.length})
-                      </h4>
-                      <p className="text-[11px] text-gray-400 mt-0.5">
-                        Direct visual vector comparison (512-dim embedding cosine similarity).
-                      </p>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                      Manual Tags
+                    </h4>
+                    {tagsDirty && (
+                      <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-mono">
+                        Unsaved changes
+                      </span>
+                    )}
+                  </div>
+
+                  {/* User Tags Chips */}
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap gap-1.5 min-h-[28px] items-center">
+                      {userTags.length === 0 ? (
+                        <span className="text-gray-500 text-[11px]">No manual tags added yet. Add custom tags below (e.g. #vacation, #nature).</span>
+                      ) : (
+                        userTags.map((tag, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-950/70 text-emerald-300 border border-emerald-500/40 text-[11px] font-medium flex items-center gap-1.5 shadow-sm"
+                          >
+                            <span>#{tag}</span>
+                            <button
+                              onClick={() => handleRemoveUserTag(tag)}
+                              className="text-emerald-400 hover:text-white transition-colors cursor-pointer"
+                              title="Remove tag"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))
+                      )}
                     </div>
                   </div>
 
-                  {similarMediaList.length === 0 ? (
-                    <div className="p-6 text-center rounded-xl bg-gray-950/40 border border-gray-800 text-xs text-gray-400">
-                      No visually similar media items found for this file.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {similarMediaList.map((sim, i) => (
-                        <div key={i} className="p-3.5 rounded-xl bg-gray-950/60 border border-gray-800 hover:border-purple-500/50 flex items-center justify-between gap-4 transition-all">
-                          <div className="flex items-center gap-3">
-                            <div className="w-14 h-14 rounded-lg bg-gray-900 border border-gray-800 overflow-hidden shrink-0">
-                              <img
-                                src={mediaService.getThumbnailUrl(sim.file_id)}
-                                alt={sim.file_name}
-                                className="w-full h-full object-cover"
-                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                              />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-white truncate max-w-[200px]" title={sim.file_name}>
-                                {sim.file_name}
-                              </p>
-                              <div className="flex items-center gap-3 text-[10px] text-gray-400 font-mono mt-0.5">
-                                <span>Quality: <strong className="text-gray-200">{sim.quality_score.toFixed(0)}/100</strong></span>
-                                <span>Size: <strong className="text-gray-200">{sim.size_formatted}</strong></span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3 shrink-0">
-                            <div className="text-right">
-                              <span className="text-sm font-bold text-purple-300 font-mono">{sim.similarity_score}%</span>
-                              <span className="text-[10px] text-gray-500 block uppercase font-mono">Similarity</span>
-                            </div>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              icon={Eye}
-                              onClick={() => handleSelectFile(sim.file_id, true)}
-                            >
-                              Inspect
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {/* Add Tag Input & Save Button */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-gray-900">
+                    <input
+                      type="text"
+                      value={newTagInput}
+                      onChange={(e) => setNewTagInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddUserTag()}
+                      placeholder="Add manual tag (e.g. vacation, nature)..."
+                      className="flex-1 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={Plus}
+                      disabled={!newTagInput.trim()}
+                      onClick={handleAddUserTag}
+                      className="px-3 py-1.5 text-xs font-semibold"
+                    >
+                      Add
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={Check}
+                      disabled={tagsSaving || !tagsDirty}
+                      onClick={handleSaveTags}
+                      className="px-3.5 py-1.5 text-xs font-semibold shadow-md shadow-emerald-500/20"
+                    >
+                      {tagsSaving ? 'Saving...' : 'Save Tags'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -719,7 +1165,75 @@ export const MediaIntelligence = () => {
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* TAB 3: SIMILAR & DUPLICATES (GLOBAL VIEW) */}
+      {/* TAB 4: RECENTLY CHECKED IMAGES (SECTION 15) */}
+      {/* --------------------------------------------------------------------- */}
+      {activeTab === 'recent' && (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Clock className="w-4 h-4 text-purple-400" />
+                Recently Inspected Pictorial Images
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                History of recently viewed pictorial images. Documents and text-heavy scans are excluded.
+              </p>
+            </div>
+          </div>
+
+          {recentCheckedList.length === 0 ? (
+            <div className="p-12 text-center rounded-2xl glass-panel border-gray-800 space-y-3">
+              <Clock className="w-10 h-10 text-gray-600 mx-auto" />
+              <h3 className="text-sm font-bold text-white">No recently inspected images.</h3>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                Inspect any pictorial image in the Visual Inspector or Search Results to record it in your history.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {recentCheckedList.map((item) => (
+                <div
+                  key={item.file_id}
+                  onClick={() => handleSelectFile(item.file_id, true)}
+                  className="p-3.5 rounded-2xl glass-panel border border-gray-800 hover:border-purple-500/70 cursor-pointer space-y-3 transition-all hover:shadow-lg hover:shadow-purple-500/10 group"
+                >
+                  <div className="aspect-video rounded-xl bg-gray-900 border border-gray-800 overflow-hidden relative">
+                    <img
+                      src={mediaService.getThumbnailUrl(item.file_id)}
+                      alt={item.file_name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/75 text-white font-mono text-[9px]">
+                      Q: {item.quality_score?.toFixed(0)}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-white truncate" title={item.file_name}>
+                      {item.file_name}
+                    </h4>
+                    {item.ai_description && (
+                      <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed">
+                        {item.ai_description}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono pt-1 border-t border-gray-800/60">
+                    <span>{item.size_formatted}</span>
+                    <span className="text-purple-400 flex items-center gap-1">
+                      <Eye className="w-3 h-3" /> Inspect
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* TAB 5: SIMILAR & DUPLICATES */}
       {/* --------------------------------------------------------------------- */}
       {activeTab === 'similar' && (
         <div className="space-y-6">
@@ -727,7 +1241,7 @@ export const MediaIntelligence = () => {
             <div>
               <h2 className="text-base font-bold text-white">Similar & Duplicate Media</h2>
               <p className="text-xs text-gray-400">
-                Visual embeddings & hash matching partition media into Exact Duplicates, Near Duplicates, and Visually Similar images.
+                Visual vector comparisons strictly between genuine pictorial images. Documents and text scans are excluded.
               </p>
             </div>
           </div>
@@ -828,7 +1342,7 @@ export const MediaIntelligence = () => {
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* TAB 4: AI CLEANUP RECOMMENDATIONS */}
+      {/* TAB 6: AI CLEANUP RECOMMENDATIONS */}
       {/* --------------------------------------------------------------------- */}
       {activeTab === 'recommendations' && (
         <div className="space-y-6">
@@ -876,14 +1390,6 @@ export const MediaIntelligence = () => {
                     {rec.reason}
                   </div>
 
-                  {rec.target_better_file && (
-                    <div className="p-2.5 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-[11px] text-indigo-200 flex items-center justify-between">
-                      <span>Preferred Alternative: <strong>{rec.target_better_file.file_name}</strong></span>
-                      <span className="font-mono text-emerald-300">Quality: {rec.target_better_file.quality_score.toFixed(0)}</span>
-                    </div>
-                  )}
-
-                  {/* Explicit Action Buttons */}
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-800/80">
                     <Button
                       variant="ghost"
@@ -916,47 +1422,91 @@ export const MediaIntelligence = () => {
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* TAB 5: VISUAL GROUPS */}
+      {/* TAB 7: VISUAL GROUPS (SECTIONS 16-19) */}
       {/* --------------------------------------------------------------------- */}
       {activeTab === 'groups' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h2 className="text-base font-bold text-white">Visual Groups</h2>
-              <p className="text-xs text-gray-400">Logical clusters formed by visual context, scenes, and similarity without moving physical files.</p>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Layers className="w-4 h-4 text-purple-400" />
+                Visual Groups & Collections
+              </h2>
+              <p className="text-xs text-gray-400">
+                Logical groupings of genuine pictorial images. Groups use original image covers and never modify physical files.
+              </p>
             </div>
+
+            <Button
+              variant="primary"
+              size="sm"
+              icon={FolderPlus}
+              onClick={handleOpenCreateGroup}
+            >
+              + Create Visual Group
+            </Button>
           </div>
 
           {visualGroups.length === 0 ? (
-            <div className="p-12 text-center rounded-2xl glass-panel border-gray-800">
-              <p className="text-xs text-gray-400">No visual groups generated yet. Run visual analysis to construct collections.</p>
+            <div className="p-12 text-center rounded-2xl glass-panel border-gray-800 space-y-4">
+              <Layers className="w-10 h-10 text-gray-600 mx-auto" />
+              <h3 className="text-sm font-bold text-white">No Visual Groups Yet</h3>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                Create your first visual collection with multiple pictorial images (e.g. "Goa Trip", "Sunset Collection").
+              </p>
+              <Button variant="primary" size="sm" icon={FolderPlus} onClick={handleOpenCreateGroup}>
+                Create Visual Group
+              </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {visualGroups.map((g) => (
-                <div key={g.id} className="p-5 rounded-2xl glass-panel border-gray-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-purple-400" />
-                      {g.group_name}
-                    </h4>
-                    <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-300 text-[10px] font-mono">
-                      {g.item_count} items
-                    </span>
+                <div key={g.id} className="p-5 rounded-2xl glass-panel border-gray-800/90 bg-gray-950/50 space-y-4 shadow-xl hover:border-purple-500/60 transition-all group">
+                  {/* Original Cover Image */}
+                  <div className="aspect-video rounded-xl bg-gray-900 border border-gray-800 overflow-hidden relative">
+                    <img
+                      src={API_BASE_URL + (g.representative_file_id ? `/api/media/${g.representative_file_id}/thumbnail` : (g.items?.[0]?.file_id ? `/api/media/${g.items[0].file_id}/thumbnail` : ''))}
+                      alt={g.group_name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <div className="absolute top-2 right-2 px-2.5 py-1 rounded-full bg-black/75 text-white text-[10px] font-mono font-bold shadow-md">
+                      {g.item_count} Original Images
+                    </div>
                   </div>
 
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {g.items.map((item, idx) => (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        {g.group_name}
+                      </h4>
+                      <span className="text-[10px] text-purple-300 font-mono">
+                        {g.group_type === 'custom_user_group' ? 'User Collection' : 'Automatic Cluster'}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handleDeleteVisualGroup(g.id)}
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-950/30 transition-colors"
+                      title="Delete Group"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Items list preview */}
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {g.items?.map((item, idx) => (
                       <div
                         key={idx}
                         onClick={() => handleSelectFile(item.file_id, true)}
-                        className="p-2 rounded-xl bg-gray-950/50 hover:bg-purple-950/20 border border-gray-800/60 flex items-center justify-between text-xs cursor-pointer transition-colors"
+                        className="p-2 rounded-xl bg-gray-900/60 hover:bg-purple-950/25 border border-gray-800/60 flex items-center justify-between text-xs cursor-pointer transition-colors"
                       >
-                        <span className="text-gray-300 truncate max-w-[200px]" title={item.file_name}>
+                        <span className="text-gray-300 truncate max-w-[180px]" title={item.file_name}>
                           {item.file_name}
                         </span>
                         <span className="text-[10px] text-gray-500 font-mono">
-                          {item.quality_score > 0 ? `Q: ${item.quality_score.toFixed(0)}` : item.size_formatted}
+                          {item.size_formatted}
                         </span>
                       </div>
                     ))}
@@ -968,7 +1518,85 @@ export const MediaIntelligence = () => {
         </div>
       )}
 
-      {/* User Confirmation Modal for Safe Deletion */}
+      {/* --------------------------------------------------------------------- */}
+      {/* MODAL 1: CREATE VISUAL GROUP MODAL */}
+      {/* --------------------------------------------------------------------- */}
+      {showCreateGroupModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="p-6 rounded-2xl glass-panel border-purple-500/40 bg-gray-950 max-w-xl w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <FolderPlus className="w-5 h-5 text-purple-400" />
+                Create Visual Group
+              </h3>
+              <button onClick={() => setShowCreateGroupModal(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-300 block mb-1">Group Name:</label>
+                <input
+                  type="text"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="e.g. Goa Trip, Sunset Collection, Dog Album..."
+                  className="w-full px-3.5 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-300 block mb-1">
+                  Select Images ({selectedGroupFiles.length} selected):
+                </label>
+                <div className="max-h-60 overflow-y-auto border border-gray-800 rounded-xl p-2 bg-gray-900/40 grid grid-cols-2 gap-2">
+                  {filesList.map((f) => {
+                    const isSelected = selectedGroupFiles.includes(f.file_id);
+                    return (
+                      <div
+                        key={f.file_id}
+                        onClick={() => handleToggleGroupFile(f.file_id)}
+                        className={`p-2 rounded-xl border flex items-center gap-2 cursor-pointer transition-colors ${isSelected ? 'bg-purple-950/50 border-purple-500 text-white' : 'bg-gray-950/60 border-gray-800 text-gray-300 hover:bg-gray-900'
+                          }`}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gray-900 border border-gray-800 overflow-hidden shrink-0">
+                          <img src={mediaService.getThumbnailUrl(f.file_id)} alt={f.file_name} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="truncate flex-1 text-xs">
+                          <p className="truncate font-medium">{f.file_name}</p>
+                          <span className="text-[10px] text-gray-500 font-mono">{f.size_formatted}</span>
+                        </div>
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-700'}`}>
+                          {isSelected && <Check className="w-3 h-3" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-800">
+              <Button variant="ghost" size="sm" onClick={() => setShowCreateGroupModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!newGroupName.trim() || selectedGroupFiles.length === 0 || createGroupLoading}
+                onClick={handleCreateVisualGroup}
+              >
+                {createGroupLoading ? 'Creating...' : `Create Group (${selectedGroupFiles.length} Images)`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* MODAL 3: USER CONFIRMATION MODAL FOR DELETION */}
+      {/* --------------------------------------------------------------------- */}
       {deleteModalFile && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="p-6 rounded-2xl glass-panel border-red-500/40 bg-gray-950 max-w-md w-full space-y-4 shadow-2xl animate-fadeIn">

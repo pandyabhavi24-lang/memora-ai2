@@ -303,3 +303,262 @@ class FileOperationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ==========================================
+# MODULE 4 SCHEMAS - PDF STUDIO
+# ==========================================
+
+class PDFHealthResponse(BaseModel):
+    status: str
+    pypdf_available: bool
+    pil_available: bool
+    version: str = "1.0.0"
+
+
+class PDFInspectRequest(BaseModel):
+    file_path: str
+
+
+class PDFPageInfo(BaseModel):
+    page_index: int
+    width: float
+    height: float
+    rotation: int = 0
+
+
+class PDFInspectResponse(BaseModel):
+    file_path: str
+    file_name: str
+    file_size_bytes: int
+    page_count: int
+    encrypted: bool
+    pages: List[PDFPageInfo]
+    metadata: dict = {}
+
+
+class PDFCreateBlankRequest(BaseModel):
+    file_name: str
+    output_dir: Optional[str] = None
+    page_count: Optional[int] = 1
+    page_size: Optional[str] = "A4"  # A4, Letter, Legal
+    orientation: Optional[str] = "portrait"  # portrait, landscape
+    folder_id: Optional[int] = None
+    register_in_db: Optional[bool] = True
+
+
+class PDFPageAction(BaseModel):
+    action: str  # rotate, delete, duplicate, add_blank, add_source, reorder
+    page_index: Optional[int] = None
+    target_index: Optional[int] = None
+    degrees: Optional[int] = None  # 90, 180, 270
+    page_size: Optional[str] = "A4"
+    orientation: Optional[str] = "portrait"
+    source_pdf_path: Optional[str] = None
+    source_page_index: Optional[int] = None
+
+
+class PDFManipulateRequest(BaseModel):
+    source_path: str
+    output_path: Optional[str] = None
+    actions: List[PDFPageAction]
+    sync_db: Optional[bool] = True
+
+
+class PDFReorderRequest(BaseModel):
+    source_path: str
+    output_path: Optional[str] = None
+    new_page_order: List[int]
+    sync_db: Optional[bool] = True
+
+
+class PDFExtractPagesRequest(BaseModel):
+    source_path: str
+    output_path: str
+    pages: List[int]
+    sync_db: Optional[bool] = True
+
+
+class PDFMergeRequest(BaseModel):
+    source_paths: List[str]
+    output_path: str
+    folder_id: Optional[int] = None
+    register_in_db: Optional[bool] = True
+
+
+class PDFSplitRequest(BaseModel):
+    source_path: str
+    output_dir: str
+    split_mode: str  # every_page, selected_pages, range
+    pages: Optional[List[int]] = None
+
+
+class PDFImagesToPDFRequest(BaseModel):
+    image_paths: List[str]
+    output_path: str
+    page_size: Optional[str] = None  # auto or A4, Letter, Legal
+    orientation: Optional[str] = "portrait"
+    fit_to_page: Optional[bool] = False
+    folder_id: Optional[int] = None
+    register_in_db: Optional[bool] = True
+
+
+class PDFToImagesRequest(BaseModel):
+    source_path: str
+    output_dir: str
+    image_format: str = "PNG"  # PNG, JPG, WebP
+    page_selection: str = "all"  # all, selected, range
+    pages: Optional[List[int]] = None
+    start_page: Optional[int] = None
+    end_page: Optional[int] = None
+    quality: Optional[int] = 95
+
+
+class PDFSplitToPagesRequest(BaseModel):
+    source_path: str
+    output_dir: str
+    split_mode: str = "every_page"  # every_page, selected_pages, range
+    pages: Optional[List[int]] = None
+    start_page: Optional[int] = None
+    end_page: Optional[int] = None
+    naming_prefix: Optional[str] = None
+    register_in_db: Optional[bool] = True
+
+
+class PDFMultiConversionResponse(BaseModel):
+    status: str
+    source_path: str
+    total_generated_files: int
+    output_dir: str
+    generated_files: List[str]
+    message: str
+
+
+class PDFOperationResponse(BaseModel):
+    status: str
+    output_path: str
+    file_name: str
+    page_count: int
+    file_size_bytes: int
+    file_id: Optional[int] = None
+    pdf_document_id: Optional[int] = None
+    message: str
+
+
+class PDFPageRecordResponse(BaseModel):
+    id: int
+    pdf_document_id: int
+    page_index: int
+    original_page_number: Optional[int] = None
+    width: float
+    height: float
+    rotation: int
+    source_file_path: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PDFDocumentRecordResponse(BaseModel):
+    id: int
+    file_id: Optional[int] = None
+    working_file_path: str
+    title: str
+    page_count: int
+    is_draft: bool
+    has_annotations: bool
+    created_at: datetime
+    updated_at: datetime
+    pages: List[PDFPageRecordResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class PDFPageUpdateSchema(BaseModel):
+    rotation: Optional[int] = None
+    page_index: Optional[int] = None
+
+
+class PDFAnnotationCreateSchema(BaseModel):
+    page_index: int
+    annotation_type: str  # text, highlight, draw, line, arrow, rectangle, circle, note
+    content_text: Optional[str] = None
+    x: Optional[float] = 0.0
+    y: Optional[float] = 0.0
+    width: Optional[float] = 0.0
+    height: Optional[float] = 0.0
+    x2: Optional[float] = None
+    y2: Optional[float] = None
+    color: Optional[str] = "#000000"
+    fill_color: Optional[str] = None
+    stroke_width: Optional[float] = 2.0
+    font_size: Optional[float] = 14.0
+    font_family: Optional[str] = "Helvetica"
+    font_style: Optional[str] = "normal"  # bold, italic, normal
+    alignment: Optional[str] = "left"  # left, center, right
+    opacity: Optional[float] = 1.0
+    points: Optional[List[List[float]]] = None  # for freehand drawing [[x1,y1], [x2,y2]...]
+    properties: Optional[dict] = {}
+
+
+class PDFAnnotationResponse(BaseModel):
+    id: int
+    pdf_document_id: int
+    page_index: int
+    annotation_type: str
+    content_text: Optional[str] = None
+    properties_json: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PDFBatchSaveAnnotationsRequest(BaseModel):
+    annotations: List[PDFAnnotationCreateSchema]
+
+
+class PDFExportWithAnnotationsRequest(BaseModel):
+    source_path: str
+    output_path: str
+    annotations: Optional[List[PDFAnnotationCreateSchema]] = None
+    flatten: Optional[bool] = True
+    register_in_db: Optional[bool] = True
+
+
+class PDFDocumentCreateSchema(BaseModel):
+    file_path: str
+    title: Optional[str] = None
+    file_id: Optional[int] = None
+
+
+class PDFMemoraFilesQuerySchema(BaseModel):
+    file_type: Optional[str] = "all"  # pdf, image, scanned, all
+    folder_id: Optional[int] = None
+    query: Optional[str] = None
+    limit: Optional[int] = 50
+    offset: Optional[int] = 0
+
+
+class PDFMemoraFilesResponseSchema(BaseModel):
+    total: int
+    files: List[FileResponse]
+
+
+class PDFExportImageComparisonRequest(BaseModel):
+    image_paths: List[str]
+    output_path: str
+    title: Optional[str] = "Image Comparison Report"
+    similarity_score: Optional[float] = None
+    notes: Optional[str] = None
+    folder_id: Optional[int] = None
+    register_in_db: Optional[bool] = True
+
+
+
+
+
