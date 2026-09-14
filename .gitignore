@@ -106,3 +106,14 @@ backend/test_module1_search.py
 # ==============================
 backend/sample_documents/
 backend/test_module1_docs/
+
+# ==============================
+# MemoraAI Runtime / Generated Files
+# ==============================
+
+# Media thumbnail/cache files
+backend/data/media_cache/
+
+# Generated/test PDF files
+test_text.pdf
+text.pdf
