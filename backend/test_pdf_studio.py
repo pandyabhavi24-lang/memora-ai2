@@ -643,9 +643,11 @@ def run_pdf_studio_tests():
             count_before = db_mod2.query(File).filter(File.folder_id == target_folder.id).count()
 
             # Create PDF in target folder
-            pdf_mod2_path = os.path.join(target_folder.path, "Module2_New_Report_Test.pdf")
+            import uuid
+            unique_name = f"Module2_New_Report_{uuid.uuid4().hex[:6]}.pdf"
+            pdf_mod2_path = os.path.join(target_folder.path, unique_name)
             res_create_mod2 = client.post("/api/pdf/create-blank", json={
-                "file_name": "Module2_New_Report_Test.pdf",
+                "file_name": unique_name,
                 "output_dir": target_folder.path,
                 "page_count": 2,
                 "folder_id": target_folder.id,
@@ -710,8 +712,64 @@ def run_pdf_studio_tests():
         assert res_comp_export.json()["file_id"] is not None
         print("  SUCCESS: Module 3 Image Comparison exported into registered PDF Studio document!")
 
+        # 31. Workspace Dynamic Export Test (/api/pdf/export-workspace)
+        print("\n[31/31] Testing POST /api/pdf/export-workspace (Mixed Workspace Pages + Annotations Export)...")
+        ws_export_target = os.path.join(temp_dir, "workspace_compiled_output.pdf")
+        ws_payload = {
+            "output_path": ws_export_target,
+            "title": "Compiled Workspace PDF",
+            "page_size": "A4",
+            "register_in_db": True,
+            "pages": [
+                {
+                    "id": "p1",
+                    "type": "pdf",
+                    "source_path": created_path,
+                    "page_number": 1,
+                    "rotation": 0,
+                    "width": 595,
+                    "height": 841,
+                    "annotations": [
+                        {
+                            "annotation_type": "text",
+                            "content_text": "Workspace Overlay Text",
+                            "x": 10.0,
+                            "y": 20.0,
+                            "font_size": 18,
+                            "color": "#000000"
+                        }
+                    ]
+                },
+                {
+                    "id": "p2",
+                    "type": "image",
+                    "source_path": img1_path,
+                    "rotation": 0,
+                    "width": 595,
+                    "height": 841,
+                    "annotations": []
+                },
+                {
+                    "id": "p3",
+                    "type": "blank",
+                    "rotation": 0,
+                    "width": 595,
+                    "height": 841,
+                    "annotations": []
+                }
+            ]
+        }
+        res_ws_exp = client.post("/api/pdf/export-workspace", json=ws_payload)
+        print(f"  Response ({res_ws_exp.status_code}): {res_ws_exp.json()}")
+        assert res_ws_exp.status_code == 200
+        assert os.path.exists(ws_export_target)
+        assert res_ws_exp.json()["file_size_bytes"] > 0
+        assert res_ws_exp.json()["page_count"] == 3
+        assert res_ws_exp.json()["verified"] is True
+        print("  SUCCESS: Dynamic Workspace exported and verified physically on disk!")
+
         print("\n==================================================")
-        print("ALL 30 PDF STUDIO MEMORA INTEGRATION TESTS PASSED!")
+        print("ALL 31 PDF STUDIO MEMORA INTEGRATION TESTS PASSED!")
         print("==================================================")
 
     finally:
@@ -719,6 +777,7 @@ def run_pdf_studio_tests():
 
 if __name__ == "__main__":
     run_pdf_studio_tests()
+
 
 
 

@@ -45,7 +45,7 @@ export const MemoraFilePickerModal = ({
   // --------------------------------------------------------------------------
   // API Integration Boundary: Search Memora Vector Store
   // --------------------------------------------------------------------------
-  const performMemoraSearch = useCallback(async (query, typeFilter, folderFilter) => {
+  const performMemoraSearch = async (query, typeFilter, folderFilter) => {
     setIsLoading(true);
     setErrorMessage(null);
 
@@ -60,27 +60,28 @@ export const MemoraFilePickerModal = ({
         const transformed = (response.results || []).map(r => r.file || r);
         setResults(transformed);
       } else {
-        // Fallback: Fetch indexed files or recent files from AppContext / Statistics API
+        // Fetch real Memora files via PDF Studio file endpoint
         try {
-          const stats = await apiService.getStatistics();
-          const backendRecent = stats.recent_files || [];
-          if (backendRecent.length > 0) {
-            setResults(backendRecent);
+          const res = await apiService.getMemoraFilesForPDFStudio({
+            file_type: typeFilter !== 'all' ? typeFilter : null
+          });
+          if (res && res.files && res.files.length > 0) {
+            setResults(res.files);
           } else {
-            setResults(recentFiles);
+            setResults(recentFiles || []);
           }
         } catch (e) {
-          setResults(recentFiles);
+          setResults(recentFiles || []);
         }
       }
     } catch (err) {
       console.warn('Memora API search error in file picker:', err);
       setErrorMessage('Could not query local Memora index. Showing recent local documents.');
-      setResults(recentFiles);
+      setResults(recentFiles || []);
     } finally {
       setIsLoading(false);
     }
-  }, [recentFiles]);
+  };
 
   // Initial Load and Search Debounce
   useEffect(() => {
@@ -91,7 +92,7 @@ export const MemoraFilePickerModal = ({
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [isOpen, searchQuery, fileTypeFilter, selectedFolder, performMemoraSearch]);
+  }, [isOpen, searchQuery, fileTypeFilter, selectedFolder]);
 
   // Reset selection when modal opens
   useEffect(() => {
@@ -309,7 +310,7 @@ export const MemoraFilePickerModal = ({
         )}
 
         {/* Results List Viewport */}
-        <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+        <div className="space-y-2 h-80 overflow-y-auto custom-scrollbar pr-1">
           {isLoading ? (
             <div className="py-12 text-center space-y-3 glass-panel rounded-xl border border-gray-800/80">
               <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto" />

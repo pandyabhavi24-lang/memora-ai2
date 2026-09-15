@@ -442,7 +442,34 @@ class PDFOperationResponse(BaseModel):
     file_size_bytes: int
     file_id: Optional[int] = None
     pdf_document_id: Optional[int] = None
+    verified: bool = True
+    indexed: bool = False
     message: str
+
+
+class PDFWorkspacePageSchema(BaseModel):
+    id: Optional[str] = None
+    type: str = "blank"  # blank, image, pdf_page
+    source_pdf_path: Optional[str] = None
+    source_page_index: Optional[int] = 0
+    image_path: Optional[str] = None
+    preview_url: Optional[str] = None
+    path: Optional[str] = None
+    rotation: Optional[int] = 0
+    title: Optional[str] = None
+    textOverlays: Optional[List[dict]] = []
+    text_overlays: Optional[List[dict]] = []
+    annotations: Optional[List[dict]] = []
+
+
+class PDFWorkspaceExportRequest(BaseModel):
+    output_path: str
+    pages: List[PDFWorkspacePageSchema]
+    page_size: Optional[str] = "A4"
+    orientation: Optional[str] = "portrait"
+    register_in_db: Optional[bool] = True
+    folder_id: Optional[int] = None
+
 
 
 class PDFPageRecordResponse(BaseModel):

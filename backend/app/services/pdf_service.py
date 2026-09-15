@@ -1254,6 +1254,247 @@ class PdfService:
 
         return (0, 0, 0, alpha_val)
 
+    @staticmethod
+    def _get_font(font_size_px: float, is_bold: bool = False):
+        from PIL import ImageFont
+        font_names = []
+        if is_bold:
+            font_names.extend(["arialbd.ttf", "calibrib.ttf", "segoeuib.ttf"])
+        font_names.extend(["arial.ttf", "calibri.ttf", "segoeui.ttf", "DejaVuSans.ttf"])
+
+        for fname in font_names:
+            for sys_path in [
+                fname,
+                os.path.join("C:\\Windows\\Fonts", fname),
+                os.path.join("/usr/share/fonts", fname),
+                os.path.join("/System/Library/Fonts", fname)
+            ]:
+                try:
+                    return ImageFont.truetype(sys_path, int(max(8, font_size_px)))
+                except Exception:
+                    pass
+        return ImageFont.load_default()
+
+    def export_workspace_pdf(
+        self,
+        output_path: str,
+        pages: List[Dict[str, Any]],
+        page_size: str = "A4",
+        orientation: str = "portrait",
+        db=None,
+        folder_id: Optional[int] = None,
+        register_in_db: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Compiles physical PDF from PDF Studio workspace state:
+        - Assembles base pages (PDF pages, image pages, blank pages) in exact workspace sequence with rotations.
+        - Renders text overlays using percentage-to-point coordinate conversion and crisp TrueType fonts.
+        - Renders annotations (highlights, shapes, drawings, notes).
+        - Verifies physical output file exists, is non-empty, and is a valid readable PDF.
+        - Registers and indexes in Memora DB if requested.
+        """
+        import tempfile
+        import math
+        from PIL import Image, ImageDraw
+
+        if not PYPDF_AVAILABLE:
+            raise RuntimeError("pypdf is required for PDF Studio backend operations.")
+
+        if not pages:
+            raise ValueError("Workspace page sequence cannot be empty.")
+
+        abs_output = os.path.abspath(output_path)
+        os.makedirs(os.path.dirname(abs_output), exist_ok=True)
+
+        writer = pypdf.PdfWriter()
+        temp_files_to_clean = []
+
+        try:
+            for idx, raw_page in enumerate(pages):
+                p_data = raw_page.dict() if hasattr(raw_page, "dict") else dict(raw_page)
+                p_type = p_data.get("type", "blank")
+                rotation = int(p_data.get("rotation", 0) or 0) % 360
+
+                base_page = None
+
+                src_pdf = p_data.get("source_pdf_path") or p_data.get("path")
+                src_idx = int(p_data.get("source_page_index", 0) or 0)
+                img_path = p_data.get("image_path") or p_data.get("path")
+
+                if (p_type == "pdf_page" or (src_pdf and str(src_pdf).lower().endswith(".pdf"))) and src_pdf and os.path.exists(src_pdf):
+                    try:
+                        reader = pypdf.PdfReader(src_pdf)
+                        if 0 <= src_idx < len(reader.pages):
+                            base_page = reader.pages[src_idx]
+                            if rotation != 0:
+                                base_page.rotate(rotation)
+                    except Exception as ex:
+                        logger.warning(f"Failed to read source PDF page at '{src_pdf}' index {src_idx}: {ex}")
+
+                elif (p_type == "image" or (img_path and not str(img_path).lower().endswith(".pdf"))) and img_path and os.path.exists(img_path):
+                    try:
+                        with Image.open(img_path) as img:
+                            if img.mode in ("RGBA", "P"):
+                                img = img.convert("RGB")
+                            if rotation != 0:
+                                img = img.rotate(-rotation, expand=True)
+
+                            t_fd, temp_img_pdf = tempfile.mkstemp(suffix="_img.pdf")
+                            os.close(t_fd)
+                            temp_files_to_clean.append(temp_img_pdf)
+
+                            img.save(temp_img_pdf, "PDF")
+                            img_reader = pypdf.PdfReader(temp_img_pdf)
+                            if len(img_reader.pages) > 0:
+                                base_page = img_reader.pages[0]
+                    except Exception as ex:
+                        logger.warning(f"Failed to convert image '{img_path}' to PDF page: {ex}")
+
+                if base_page is None:
+                    w, h = self.get_page_dimensions(page_size, orientation)
+                    writer.add_blank_page(width=w, height=h)
+                    base_page = writer.pages[-1]
+                    if rotation != 0:
+                        base_page.rotate(rotation)
+                else:
+                    writer.add_page(base_page)
+
+                target_page = writer.pages[-1]
+
+                # Render Text Overlays & Annotations onto Page
+                w_pt = float(target_page.mediabox.width) if target_page.mediabox else 595.28
+                h_pt = float(target_page.mediabox.height) if target_page.mediabox else 841.89
+
+                text_overlays = p_data.get("textOverlays") or p_data.get("text_overlays") or []
+                annotations = p_data.get("annotations") or []
+
+                if text_overlays or annotations:
+                    scale = 2.0
+                    canvas_w = int(w_pt * scale)
+                    canvas_h = int(h_pt * scale)
+
+                    overlay_img = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+                    draw = ImageDraw.Draw(overlay_img, "RGBA")
+
+                    # Render Text Overlays with Percentage-to-Point Conversion
+                    for t_item in text_overlays:
+                        t_data = dict(t_item)
+                        text_str = str(t_data.get("text", "")).strip()
+                        if not text_str:
+                            continue
+
+                        x_pct = float(t_data.get("xPct", 20.0) or 20.0)
+                        y_pct = float(t_data.get("yPct", 20.0) or 20.0)
+
+                        phys_x = (x_pct / 100.0) * w_pt * scale
+                        phys_y = (y_pct / 100.0) * h_pt * scale
+
+                        font_size_px = float(t_data.get("fontSize", 16.0) or 16.0) * scale
+                        is_bold = bool(t_data.get("isBold", False))
+                        font_obj = self._get_font(font_size_px, is_bold=is_bold)
+
+                        color_str = t_data.get("color", "#1e293b")
+                        opacity = float(t_data.get("opacity", 1.0) if t_data.get("opacity") is not None else 1.0)
+                        rgba_color = self._parse_rgba_color(color_str, opacity)
+
+                        draw.text((phys_x, phys_y), text_str, fill=rgba_color, font=font_obj)
+
+                    # Render Shapes & Annotations
+                    for a_item in annotations:
+                        a_data = dict(a_item)
+                        a_type = a_data.get("annotation_type") or a_data.get("type", "highlight")
+                        x = float(a_data.get("x", 0.0) or 0.0) * scale
+                        y = float(a_data.get("y", 0.0) or 0.0) * scale
+                        w = float(a_data.get("width", 0.0) or 0.0) * scale
+                        h = float(a_data.get("height", 0.0) or 0.0) * scale
+
+                        color_str = a_data.get("color", "#000000")
+                        stroke_w = float(a_data.get("stroke_width", 2.0) or 2.0) * scale
+                        opacity = float(a_data.get("opacity", 1.0) if a_data.get("opacity") is not None else 1.0)
+                        rgba_stroke = self._parse_rgba_color(color_str, opacity)
+
+                        if a_type == "highlight":
+                            hl_color = self._parse_rgba_color(color_str or "#ffff00", alpha_factor=0.4 * opacity)
+                            draw.rectangle([x, y, x + max(10.0, w), y + max(10.0, h)], fill=hl_color)
+                        elif a_type == "rectangle":
+                            draw.rectangle([x, y, x + max(1.0, w), y + max(1.0, h)], outline=rgba_stroke, width=max(1, int(stroke_w)))
+                        elif a_type == "circle":
+                            draw.ellipse([x, y, x + max(1.0, w), y + max(1.0, h)], outline=rgba_stroke, width=max(1, int(stroke_w)))
+
+                    # Save and merge overlay
+                    t_fd, temp_overlay_pdf = tempfile.mkstemp(suffix="_overlay.pdf")
+                    os.close(t_fd)
+                    temp_files_to_clean.append(temp_overlay_pdf)
+
+                    overlay_img.save(temp_overlay_pdf, "PDF", dpi=(144, 144))
+                    overlay_img.close()
+
+                    overlay_reader = pypdf.PdfReader(temp_overlay_pdf)
+                    if len(overlay_reader.pages) > 0:
+                        target_page.merge_page(overlay_reader.pages[0])
+
+            # Write to output file safely
+            temp_out = abs_output + ".tmp"
+            with open(temp_out, "wb") as f:
+                writer.write(f)
+
+            if os.path.exists(abs_output):
+                os.remove(abs_output)
+            os.rename(temp_out, abs_output)
+
+            # Verification Step
+            if not os.path.exists(abs_output):
+                raise RuntimeError(f"Physical PDF output file not created at '{abs_output}'.")
+
+            file_size_bytes = os.path.getsize(abs_output)
+            if file_size_bytes <= 0:
+                raise RuntimeError(f"Created PDF file at '{abs_output}' is empty (0 bytes).")
+
+            try:
+                verify_reader = pypdf.PdfReader(abs_output)
+                final_page_count = len(verify_reader.pages)
+            except Exception as v_err:
+                raise RuntimeError(f"Generated PDF file at '{abs_output}' is unreadable or corrupted: {v_err}")
+
+            if final_page_count != len(pages):
+                logger.warning(f"Page count mismatch in exported PDF: expected {len(pages)}, got {final_page_count}.")
+
+            # Memora DB Registration & Indexing
+            file_id = None
+            pdf_doc_id = None
+            indexed = False
+
+            if db and register_in_db:
+                try:
+                    file_id = self.register_file_in_memora_db(db, abs_output, folder_id)
+                    pdf_doc = self.register_or_get_document_record(db, abs_output, title=os.path.basename(abs_output), file_id=file_id)
+                    pdf_doc_id = pdf_doc.id
+                    indexed = file_id is not None
+                except Exception as idx_err:
+                    logger.error(f"Memora indexing failed for '{abs_output}': {idx_err}", exc_info=True)
+                    indexed = False
+
+            return {
+                "status": "success",
+                "output_path": abs_output,
+                "file_name": os.path.basename(abs_output),
+                "page_count": final_page_count,
+                "file_size_bytes": file_size_bytes,
+                "file_id": file_id,
+                "pdf_document_id": pdf_doc_id,
+                "verified": True,
+                "indexed": indexed,
+                "message": f"Successfully compiled and verified PDF document '{os.path.basename(abs_output)}' ({final_page_count} page(s))."
+            }
+
+        finally:
+            for tmp_f in temp_files_to_clean:
+                if os.path.exists(tmp_f):
+                    try:
+                        os.remove(tmp_f)
+                    except Exception:
+                        pass
+
     def export_pdf_with_annotations(
         self,
         source_path: str,

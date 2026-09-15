@@ -190,9 +190,15 @@ export const ExportModal = ({
           <div>
             <label className="block text-gray-300 font-medium mb-1.5">Output Directory / Destination</label>
             <div className="flex gap-2">
-              <div className="flex-1 flex items-center gap-2 p-2 rounded-xl bg-gray-950/60 border border-gray-800 text-gray-300 font-mono text-xs overflow-hidden">
-                <Folder className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="truncate">{outputFolder}</span>
+              <div className="flex-1 flex items-center gap-2 p-1.5 rounded-xl bg-gray-950/60 border border-gray-800 text-gray-300 text-xs">
+                <Folder className="w-4 h-4 text-blue-400 shrink-0 ml-1.5" />
+                <input
+                  type="text"
+                  value={outputFolder}
+                  onChange={(e) => setOutputFolder(e.target.value)}
+                  placeholder="C:\Users\Bhargavi\Downloads"
+                  className="w-full bg-transparent text-white font-mono text-xs focus:outline-none"
+                />
               </div>
               <Button
                 variant="secondary"

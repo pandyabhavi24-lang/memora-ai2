@@ -304,6 +304,13 @@ class ApiService {
     });
   }
 
+  async exportWorkspacePDF(data) {
+    return await this._fetch('/api/pdf/export-workspace', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
   async getMemoraFilesForPDFStudio(params = {}) {
     const queryParams = new URLSearchParams();
     if (params.file_type) queryParams.append('file_type', params.file_type);

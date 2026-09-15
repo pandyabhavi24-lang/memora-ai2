@@ -23,9 +23,9 @@ export const Modal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity">
       <div
-        className={`w-full ${maxWidth} glass-panel border-gray-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scaleUp`}
+        className={`w-full ${maxWidth} glass-panel border-gray-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-transform`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}

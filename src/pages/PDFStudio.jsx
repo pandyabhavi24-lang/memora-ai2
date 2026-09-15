@@ -16,6 +16,7 @@ import { PDFPageContextMenu } from '../components/pdfStudio/PDFPageContextMenu';
 import { FileText } from 'lucide-react';
 
 import { apiService } from '../services/apiService';
+import { useApp } from '../context/AppContext';
 
 // Error Boundary Protection for PDF Studio
 class PDFStudioErrorBoundary extends React.Component {
@@ -59,6 +60,8 @@ class PDFStudioErrorBoundary extends React.Component {
 }
 
 export const PDFStudio = () => {
+  const { addToast } = useApp();
+
   // Document Workspace State (null when in Empty State)
   const [activeDocument, setActiveDocument] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
@@ -84,6 +87,41 @@ export const PDFStudio = () => {
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, pageIndex }
   const [isExporting, setIsExporting] = useState(false);
+
+  // Helper: Inspect PDF and load real page structure into workspace
+  const loadPdfDocumentPages = async (filePath, title) => {
+    try {
+      const inspectData = await apiService.inspectPDF(filePath);
+      const realPages = (inspectData.pages || []).map((p, idx) => ({
+        id: 'p_' + Math.random().toString(36).substring(2, 9),
+        type: 'pdf_page',
+        sourcePdfPath: filePath,
+        sourcePageIndex: p.page_index,
+        rotation: p.rotation || 0,
+        title: `Page ${idx + 1}`,
+        width: p.width,
+        height: p.height,
+        textOverlays: []
+      }));
+
+      return {
+        title: title || inspectData.file_name || 'Opened Document.pdf',
+        path: filePath,
+        pages: realPages.length > 0 ? realPages : [
+          { id: 'p1', type: 'blank', rotation: 0, title: '', content: '', textOverlays: [] }
+        ]
+      };
+    } catch (err) {
+      console.warn('Could not inspect PDF pages, creating basic document:', err);
+      return {
+        title: title || 'Opened Document.pdf',
+        path: filePath,
+        pages: [
+          { id: 'p1', type: 'blank', rotation: 0, title: '', content: '', textOverlays: [] }
+        ]
+      };
+    }
+  };
 
   // Real Save Draft Persistence
   const handleSaveDraft = async () => {
@@ -120,10 +158,10 @@ export const PDFStudio = () => {
         savedAt: new Date().toISOString()
       }));
 
-      alert(`Workspace draft and annotations successfully persisted in Memora Database for '${activeDocument.title}'.`);
+      addToast(`Workspace draft saved for '${activeDocument.title}'.`, 'success');
     } catch (err) {
       console.error('Failed to save workspace draft:', err);
-      alert(`Save Draft Notice:\nWorkspace draft saved locally. (${err.message || 'Database sync error'})`);
+      addToast(`Workspace draft saved locally. (${err.message || 'Database sync notice'})`, 'info');
     }
   };
 
@@ -135,63 +173,57 @@ export const PDFStudio = () => {
     try {
       const outFmt = (exportConfig.outputFormat || 'pdf').toLowerCase();
       const outFileName = exportConfig.fileName || exportFileName;
+      const outFolder = exportConfig.outputFolder || 'C:\\Users\\Bhargavi\\Downloads';
+
+      let fullOutputPath = outFileName;
+      if (outFolder && !outFileName.includes('/') && !outFileName.includes('\\')) {
+        const cleanFolder = outFolder.replace(/[/\\]+$/, '');
+        fullOutputPath = `${cleanFolder}/${outFileName}`;
+      }
 
       if (outFmt === 'png' || outFmt === 'jpg') {
+        let sourcePath = activeDocument.path;
+        if (!sourcePath) {
+          const workspaceRes = await apiService.exportWorkspacePDF({
+            output_path: fullOutputPath.replace(/\.(png|jpg|jpeg)$/i, '.pdf'),
+            pages: activeDocument.pages,
+            page_size: pageSize,
+            orientation: orientation,
+            register_in_db: false
+          });
+          sourcePath = workspaceRes.output_path;
+        }
+
         const res = await apiService.pdfToImages({
-          source_path: activeDocument.path || outFileName,
-          output_dir: exportConfig.outputFolder || 'rendered_images',
+          source_path: sourcePath,
+          output_dir: outFolder,
           image_format: outFmt.toUpperCase(),
           page_selection: exportConfig.exportRange || 'all'
         });
 
         setIsExportModalOpen(false);
-        alert(
-          `Export Successful!\n• Format: ${outFmt.toUpperCase()}\n• Generated Images: ${res.total_generated_files}\n• Output Location: ${res.output_dir}`
+        addToast(
+          `Export Successful! Generated ${res.total_generated_files} ${outFmt.toUpperCase()} image(s) in '${res.output_dir}'`,
+          'success'
         );
       } else {
-        // PDF Export
-        let sourcePath = activeDocument.path;
-        
-        // If document is purely new/in-memory, create blank PDF base first
-        if (!sourcePath) {
-          const blankRes = await apiService.createBlankPDF({
-            file_name: outFileName,
-            page_count: activeDocument.pages.length,
-            page_size: pageSize,
-            orientation: orientation,
-            register_in_db: exportConfig.indexWithMemora
-          });
-          sourcePath = blankRes.output_path;
-        }
-
-        // Build annotations payload
-        const annotations = activeDocument.pages.flatMap((page, pIdx) => {
-          return (page.textOverlays || []).map((t) => ({
-            page_index: pIdx,
-            annotation_type: 'text',
-            content_text: t.text,
-            x: t.xPct || 0,
-            y: t.yPct || 0,
-            font_size: t.fontSize || 14,
-            color: t.color || '#000000'
-          }));
-        });
-
-        const res = await apiService.exportPDFWithAnnotations({
-          source_path: sourcePath,
-          output_path: outFileName,
-          annotations: annotations,
+        const res = await apiService.exportWorkspacePDF({
+          output_path: fullOutputPath,
+          pages: activeDocument.pages,
+          page_size: pageSize,
+          orientation: orientation,
           register_in_db: exportConfig.indexWithMemora
         });
 
         setIsExportModalOpen(false);
-        alert(
-          `Export Successful!\n• Output PDF: ${res.file_name}\n• Page Count: ${res.page_count}\n• Size: ${(res.file_size_bytes / 1024).toFixed(1)} KB\n• Memora Indexing: ${res.file_id ? 'SUCCESS' : 'Local Only'}`
+        addToast(
+          `Export Successful!\n• Output PDF: ${res.file_name}\n• Page Count: ${res.page_count}\n• Size: ${(res.file_size_bytes / 1024).toFixed(1)} KB\n• Memora Indexing: ${res.indexed ? 'SUCCESS' : 'Local Only'}`,
+          'success'
         );
       }
     } catch (err) {
       console.error('Real PDF export error:', err);
-      alert(`Export Error:\n${err.message || 'Failed to generate exported PDF file on backend.'}`);
+      addToast(`Export Error: ${err.message || 'Failed to generate exported PDF file.'}`, 'error');
     } finally {
       setIsExporting(false);
     }
@@ -328,100 +360,164 @@ export const PDFStudio = () => {
   };
 
   const handleOpenPDF = async () => {
-    if (window.electronAPI && window.electronAPI.openDirectory) {
+    if (window.electronAPI && window.electronAPI.openFile) {
       try {
-        const result = await window.electronAPI.openDirectory();
+        const result = await window.electronAPI.openFile([{ name: 'PDF Files', extensions: ['pdf'] }]);
         if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
           const filePath = result.filePaths[0];
           const fileName = filePath.split(/[\\/]/).pop() || 'Opened Document.pdf';
-          setActiveDocument({
-            title: fileName,
-            path: filePath,
-            pages: [
-              { id: 'p1', type: 'blank', rotation: 0, title: '', content: '', textOverlays: [] }
-            ]
-          });
+          const docObj = await loadPdfDocumentPages(filePath, fileName);
+          
+          setActiveDocument(docObj);
           setActivePageIndex(0);
           setSelectedPageIndices([0]);
           setSelectedTextId(null);
           setExportFileName(fileName.replace(/\.pdf$/i, '') + '_edited.pdf');
           setZoomLevel(100);
           setZoomMode('custom');
+          addToast(`Opened PDF: ${fileName} (${docObj.pages.length} pages)`, 'success');
           return;
         }
       } catch (err) {
-        console.error('Electron open dialog error:', err);
+        console.error('Electron open file dialog error:', err);
       }
     }
-    const userTitle = prompt('Enter document title to open in PDF Studio:', 'Project Document');
-    if (userTitle && userTitle.trim()) {
-      setActiveDocument({
-        title: userTitle.trim(),
-        pages: [
-          { id: 'p1', type: 'blank', rotation: 0, title: '', content: '', textOverlays: [] }
-        ]
-      });
+
+    const userPath = prompt('Enter absolute path or title of PDF to open in PDF Studio:', 'C:\\Users\\Bhargavi\\Downloads\\test.pdf');
+    if (userPath && userPath.trim()) {
+      const trimmed = userPath.trim();
+      const fileName = trimmed.split(/[\\/]/).pop() || 'Opened Document.pdf';
+      const docObj = await loadPdfDocumentPages(trimmed, fileName);
+
+      setActiveDocument(docObj);
       setActivePageIndex(0);
       setSelectedPageIndices([0]);
       setSelectedTextId(null);
-      setExportFileName(userTitle.trim().toLowerCase().replace(/\s+/g, '_') + '.pdf');
+      setExportFileName(fileName.replace(/\.pdf$/i, '') + '_edited.pdf');
       setZoomLevel(100);
       setZoomMode('custom');
+      addToast(`Opened document: ${fileName}`, 'success');
     }
   };
 
-  const handleSelectFromMemora = (file) => {
-    setActiveDocument({
-      title: file.name || 'Memora Document',
-      path: file.path,
-      pages: [
-        { id: 'p1', type: 'blank', rotation: 0, title: file.name, content: '', textOverlays: [], annotations: [] }
-      ]
-    });
+  const handleSelectFromMemora = async (file) => {
+    const ext = (file.extension || file.fileExtension || file.name?.split('.').pop() || 'pdf').toLowerCase();
+    let docObj;
+    
+    if (ext === 'pdf' && file.path) {
+      docObj = await loadPdfDocumentPages(file.path, file.name);
+    } else {
+      docObj = {
+        title: file.name || 'Memora Document',
+        path: file.path,
+        pages: [
+          {
+            id: 'memora_' + Math.random().toString(36).substring(2, 9),
+            type: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'].includes(ext) ? 'image' : 'blank',
+            imagePath: file.path,
+            previewUrl: file.previewUrl || file.path,
+            rotation: 0,
+            title: file.name,
+            textOverlays: [],
+            annotations: []
+          }
+        ]
+      };
+    }
+
+    setActiveDocument(docObj);
     setActivePageIndex(0);
     setSelectedPageIndices([0]);
     setSelectedTextId(null);
-    setSelectedAnnotationId(null);
     setExportFileName((file.name || 'memora_doc').replace(/\.pdf$/i, '') + '_edited.pdf');
     setZoomLevel(100);
     setZoomMode('custom');
+    addToast(`Imported '${file.name}' from Memora into PDF Studio`, 'success');
   };
 
-  const handleAddSelectedFilesFromMemora = (selectedList) => {
+  const handleAddSelectedFilesFromMemora = async (selectedList) => {
     if (!selectedList || selectedList.length === 0) return;
 
-    const newPages = selectedList.map((item, idx) => {
+    const importedPages = [];
+
+    for (let idx = 0; idx < selectedList.length; idx++) {
+      const item = selectedList[idx];
       const f = item.file || item;
       const fileName = f.name || f.filename || f.file_name || `Imported Document ${idx + 1}`;
       const ext = (f.extension || f.fileExtension || fileName.split('.').pop() || 'pdf').toLowerCase();
-      const isImage = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'].includes(ext);
+      const filePath = f.path;
 
-      return {
-        id: 'memora_' + Math.random().toString(36).substring(2, 9),
-        type: isImage ? 'image' : 'blank',
-        name: fileName,
-        previewUrl: f.previewUrl || f.thumbnailUrl || null,
-        path: f.path,
-        rotation: 0,
-        title: fileName,
-        textOverlays: [],
-        annotations: [],
-        importMode: item.importMode || 'entire',
-        pageRange: item.pageRange || '1-5'
-      };
-    });
+      if (ext === 'pdf' && filePath) {
+        try {
+          const inspectData = await apiService.inspectPDF(filePath);
+          const pdfPages = (inspectData.pages || []).map((p, pIdx) => ({
+            id: 'memora_pdf_' + Math.random().toString(36).substring(2, 9),
+            type: 'pdf_page',
+            sourcePdfPath: filePath,
+            sourcePageIndex: p.page_index,
+            rotation: p.rotation || 0,
+            title: `${fileName} (Page ${pIdx + 1})`,
+            width: p.width,
+            height: p.height,
+            textOverlays: [],
+            annotations: []
+          }));
+          if (pdfPages.length > 0) {
+            importedPages.push(...pdfPages);
+          } else {
+            importedPages.push({
+              id: 'memora_' + Math.random().toString(36).substring(2, 9),
+              type: 'blank',
+              name: fileName,
+              path: filePath,
+              rotation: 0,
+              title: fileName,
+              textOverlays: [],
+              annotations: []
+            });
+          }
+        } catch (e) {
+          importedPages.push({
+            id: 'memora_' + Math.random().toString(36).substring(2, 9),
+            type: 'blank',
+            name: fileName,
+            path: filePath,
+            rotation: 0,
+            title: fileName,
+            textOverlays: [],
+            annotations: []
+          });
+        }
+      } else {
+        const isImage = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'].includes(ext);
+        importedPages.push({
+          id: 'memora_' + Math.random().toString(36).substring(2, 9),
+          type: isImage ? 'image' : 'blank',
+          name: fileName,
+          imagePath: filePath,
+          previewUrl: f.previewUrl || f.thumbnailUrl || filePath || null,
+          path: filePath,
+          rotation: 0,
+          title: fileName,
+          textOverlays: [],
+          annotations: []
+        });
+      }
+    }
+
+    if (importedPages.length === 0) return;
 
     if (!activeDocument) {
       setActiveDocument({
         title: selectedList[0].file?.name || 'Memora Workspace Document.pdf',
-        pages: newPages
+        pages: importedPages
       });
       setActivePageIndex(0);
       setSelectedPageIndices([0]);
     } else {
       setActiveDocument((prev) => ({
         ...prev,
-        pages: [...prev.pages, ...newPages]
+        pages: [...prev.pages, ...importedPages]
       }));
       const newIndex = activeDocument.pages.length;
       setActivePageIndex(newIndex);
@@ -429,7 +525,7 @@ export const PDFStudio = () => {
     }
 
     setSelectedTextId(null);
-    setSelectedAnnotationId(null);
+    addToast(`Added ${importedPages.length} page(s) from selected Memora file(s)`, 'success');
   };
 
   const handleCloseDocument = () => {
@@ -663,40 +759,38 @@ export const PDFStudio = () => {
   const handleConfirmExtractPages = async ({ fileName, indexWithMemora }) => {
     if (!activeDocument) return;
     try {
-      let sourcePath = activeDocument.path;
-      if (!sourcePath) {
-        // If document is in-memory blank, compile base PDF on backend first
-        const blankRes = await apiService.createBlankPDF({
-          file_name: fileName || 'base_document.pdf',
-          page_count: activeDocument.pages.length,
-          page_size: pageSize,
-          orientation: orientation
-        });
-        sourcePath = blankRes.output_path;
-      }
+      const outName = fileName || `extracted_pages.pdf`;
+      const outFolder = 'C:\\Users\\Bhargavi\\Downloads';
+      const fullOutputPath = `${outFolder}/${outName}`;
 
-      const res = await apiService.extractPDFPages({
-        source_path: sourcePath,
-        selected_pages: selectedPageIndices.map((i) => i + 1),
-        output_name: fileName,
+      const extractedPages = activeDocument.pages.filter((_, idx) => selectedPageIndices.includes(idx));
+      if (extractedPages.length === 0) return;
+
+      const res = await apiService.exportWorkspacePDF({
+        output_path: fullOutputPath,
+        pages: extractedPages,
+        page_size: pageSize,
+        orientation: orientation,
         register_in_db: indexWithMemora
       });
 
       setIsExtractModalOpen(false);
-      alert(
-        `Page Extraction Complete!\n• File Name: ${res.file_name}\n• Extracted Pages: ${res.page_count}\n• Output Location: ${res.output_path}\n• Memora Indexing: ${res.file_id ? 'Indexed' : 'Local Only'}`
+      addToast(
+        `Page Extraction Complete!\n• File Name: ${res.file_name}\n• Extracted Pages: ${res.page_count}\n• Output Location: ${res.output_path}\n• Memora Indexing: ${res.indexed ? 'Indexed' : 'Local Only'}`,
+        'success'
       );
     } catch (err) {
       console.error('Page extraction error:', err);
-      alert(`Page Extraction Error:\n${err.message || 'Failed to extract selected pages on backend.'}`);
+      addToast(`Page Extraction Error: ${err.message || 'Failed to extract selected pages on backend.'}`, 'error');
     }
   };
 
   const handleConfirmConversion = ({ tool, result }) => {
     if (!result) return;
     const toolTitle = tool ? tool.toUpperCase() : 'DOCUMENT CONVERSION';
-    alert(
-      `Conversion Complete (${toolTitle})!\n• Status: Success\n• Output: ${result.output_path || result.output_dir || 'Generated successfully'}\n• Pages/Files: ${result.total_generated_files || result.page_count || 1}\n• Memora Indexing: ${result.file_id ? 'Indexed' : 'Complete'}`
+    addToast(
+      `Conversion Complete (${toolTitle})!\n• Output: ${result.output_path || result.output_dir || 'Generated successfully'}\n• Pages/Files: ${result.total_generated_files || result.page_count || 1}`,
+      'success'
     );
   };
 

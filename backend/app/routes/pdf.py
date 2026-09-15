@@ -32,7 +32,8 @@ from ..schemas import (
     SearchResponse,
     PDFMemoraFilesQuerySchema,
     PDFMemoraFilesResponseSchema,
-    PDFExportImageComparisonRequest
+    PDFExportImageComparisonRequest,
+    PDFWorkspaceExportRequest
 )
 from ..services.pdf_service import pdf_service
 
@@ -448,6 +449,37 @@ def export_pdf_with_annotations(req: PDFExportWithAnnotationsRequest, db: Sessio
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unable to export PDF with annotations: {e}"
+        )
+
+
+@router.post("/export-workspace", response_model=PDFOperationResponse)
+def export_workspace_pdf(req: PDFWorkspaceExportRequest, db: Session = Depends(get_db)):
+    """
+    Compiles physical PDF directly from complete PDF Studio frontend workspace state.
+    Assembles base pages (PDF pages, image pages, blank pages), applies text overlays and annotations,
+    verifies output file on disk, and registers in Memora database if requested.
+    """
+    try:
+        pages_dict = [p.model_dump() for p in req.pages]
+        res = pdf_service.export_workspace_pdf(
+            output_path=req.output_path,
+            pages=pages_dict,
+            page_size=req.page_size or "A4",
+            orientation=req.orientation or "portrait",
+            db=db,
+            folder_id=req.folder_id,
+            register_in_db=req.register_in_db if req.register_in_db is not None else True
+        )
+        return PDFOperationResponse(**res)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to export workspace PDF: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unable to export workspace PDF: {e}"
         )
 
 

@@ -114,11 +114,20 @@ app.on('will-quit', () => {
   stopPythonBackend();
 });
 
-// IPC Handlers - Native Folder Dialog & File Actions
+// IPC Handlers - Native Folder & File Dialogs & File Actions
 ipcMain.handle('dialog:openDirectory', async () => {
   if (!mainWindow) return { canceled: true, filePaths: [] };
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory', 'multiSelections']
+  });
+  return result;
+});
+
+ipcMain.handle('dialog:openFile', async (event, filters) => {
+  if (!mainWindow) return { canceled: true, filePaths: [] };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: filters || [{ name: 'PDF Files', extensions: ['pdf'] }]
   });
   return result;
 });
