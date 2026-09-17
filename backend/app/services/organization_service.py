@@ -16,6 +16,7 @@ from ..models import (
 )
 from .classification_service import classification_service, DEFAULT_CATEGORY_DESCRIPTIONS
 from .duplicate_service import duplicate_service
+from .scanner import is_temp_or_test_path, is_subpath, is_valid_user_file
 
 logger = logging.getLogger("memora.organization")
 
@@ -30,19 +31,6 @@ DEFAULT_CATEGORIES = [
     ("Images", "Photos, diagrams, graphic illustrations, and screenshots."),
     ("Other", "Miscellaneous files, system text notes, and unclassified log data.")
 ]
-
-def is_subpath(child_path: Path, parent_path: Path) -> bool:
-    r"""
-    Windows-safe path containment check.
-    Returns True if child_path is strictly inside or equal to parent_path,
-    handling drive-letter casing differences (e.g. c:\ vs C:\) safely.
-    """
-    try:
-        norm_child = os.path.normcase(os.path.abspath(str(child_path)))
-        norm_parent = os.path.normcase(os.path.abspath(str(parent_path)))
-        return os.path.commonpath([norm_child, norm_parent]) == norm_parent
-    except Exception:
-        return False
 
 
 def format_friendly_display_path(file_path: str, root_folder_path: Optional[str] = None, root_folder_name: Optional[str] = None) -> str:
@@ -120,7 +108,7 @@ class OrganizationService:
         query = db.query(File)
         if folder_id:
             query = query.filter(File.folder_id == folder_id)
-        files = query.all()
+        files = [f for f in query.all() if is_valid_user_file(f)]
 
         if not files:
             logger.info("No files found in database to analyze.")
@@ -204,7 +192,7 @@ class OrganizationService:
         if status:
             query = query.filter(OrganizationSuggestion.status == status)
 
-        suggestions = query.all()
+        suggestions = [sug for sug in query.all() if is_valid_user_file(sug.file)]
         results = []
 
         for sug in suggestions:
@@ -595,6 +583,12 @@ class OrganizationService:
                 "size": format_size(g.file_b.size) if (g.file_b and g.file_b.size) else "0 B"
             }
 
+            path_a = g.file_a.path if g.file_a else ""
+            path_b = g.file_b.path if g.file_b else ""
+
+            if is_temp_or_test_path(path_a) or is_temp_or_test_path(path_b):
+                continue
+
             results.append({
                 "id": g.group_key,
                 "fileA": file_a_detail,
@@ -630,8 +624,8 @@ class OrganizationService:
         2. Memora AI suggested & created categories
         """
         folders = db.query(Folder).filter(Folder.is_active == True).all()
-        all_files = db.query(File).all()
-        suggestions = db.query(OrganizationSuggestion).join(OrganizationCategory).all()
+        all_files = [f for f in db.query(File).all() if is_valid_user_file(f)]
+        suggestions = [s for s in db.query(OrganizationSuggestion).join(OrganizationCategory).all() if is_valid_user_file(s.file)]
 
         # Map file_id -> category name from suggestions
         file_cat_map = {}

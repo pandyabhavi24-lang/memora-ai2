@@ -28,7 +28,10 @@ def run_pdf_studio_tests():
 
     # Setup temp directory for PDF files
     temp_dir = tempfile.mkdtemp(prefix="memora_pdf_test_")
+    user_test_dir = os.path.join(os.path.expanduser("~"), "Documents", "MemoraTestTemp")
+    os.makedirs(user_test_dir, exist_ok=True)
     print(f"\nCreated temporary workspace: {temp_dir}")
+    print(f"Created user test workspace for DB registration: {user_test_dir}")
 
     try:
         # 2. Blank PDF Creation Test (A4, Letter, Legal, portrait, landscape)
@@ -485,7 +488,7 @@ def run_pdf_studio_tests():
         e2e_file_name = "e2e_lifecycle_test.pdf"
         res_create_e2e = client.post("/api/pdf/create-blank", json={
             "file_name": e2e_file_name,
-            "output_dir": temp_dir,
+            "output_dir": user_test_dir,
             "page_count": 1,
             "register_in_db": True
         })
@@ -533,7 +536,7 @@ def run_pdf_studio_tests():
 
         # 26. Real Text PDF (AI_Important_Notes.pdf) E2E Creation, Auto-Indexing & Module 1 Search Test
         print("\n[26/28] Testing Real Text PDF (AI_Important_Notes.pdf) Registration, Chunks, Embeddings, FAISS & Module 1 Search...")
-        ai_pdf_path = os.path.join(temp_dir, "AI_Important_Notes.pdf")
+        ai_pdf_path = os.path.join(user_test_dir, "AI_Important_Notes.pdf")
         
         # Create text PDF with embedded selectable text operators
         ai_text = (
@@ -593,7 +596,7 @@ def run_pdf_studio_tests():
 
         # 27. Scanned PDF EasyOCR Fallback & Module 1 Search Test
         print("\n[27/28] Testing Scanned PDF EasyOCR Fallback & Module 1 Search...")
-        scanned_pdf_path = os.path.join(temp_dir, "scanned_quantum_notes.pdf")
+        scanned_pdf_path = os.path.join(user_test_dir, "scanned_quantum_notes.pdf")
         
         # Render text onto PIL image canvas (no text stream => scanned PDF)
         scanned_img = Image.new("RGB", (800, 600), color="white")
@@ -689,13 +692,13 @@ def run_pdf_studio_tests():
 
         # 30. Module 3 Integration — Image Comparison PDF Export Test
         print("\n[30/30] Testing Module 3 Integration (Export Image Comparison Results to PDF Studio PDF)...")
-        img_a_path = os.path.join(temp_dir, "sample_comparison_a.png")
-        img_b_path = os.path.join(temp_dir, "sample_comparison_b.png")
+        img_a_path = os.path.join(user_test_dir, "sample_comparison_a.png")
+        img_b_path = os.path.join(user_test_dir, "sample_comparison_b.png")
 
         Image.new("RGB", (400, 300), color="blue").save(img_a_path)
         Image.new("RGB", (400, 300), color="cyan").save(img_b_path)
 
-        comp_pdf_output = os.path.join(temp_dir, "Visual_Comparison_Report.pdf")
+        comp_pdf_output = os.path.join(user_test_dir, "Visual_Comparison_Report.pdf")
         comp_req = {
             "image_paths": [img_a_path, img_b_path],
             "output_path": comp_pdf_output,
@@ -714,7 +717,7 @@ def run_pdf_studio_tests():
 
         # 31. Workspace Dynamic Export Test (/api/pdf/export-workspace)
         print("\n[31/31] Testing POST /api/pdf/export-workspace (Mixed Workspace Pages + Annotations Export)...")
-        ws_export_target = os.path.join(temp_dir, "workspace_compiled_output.pdf")
+        ws_export_target = os.path.join(user_test_dir, "workspace_compiled_output.pdf")
         ws_payload = {
             "output_path": ws_export_target,
             "title": "Compiled Workspace PDF",
@@ -774,6 +777,33 @@ def run_pdf_studio_tests():
 
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+        if os.path.exists(user_test_dir):
+            shutil.rmtree(user_test_dir, ignore_errors=True)
+        try:
+            from app.database import SessionLocal
+            from app.models import File, Chunk, VectorMapping, OrganizationSuggestion, DuplicateGroup, PDFDocument, PDFPage, PDFAnnotation
+            cl_db = SessionLocal()
+            test_recs = cl_db.query(File).filter(File.path.like("%MemoraTestTemp%")).all()
+            if test_recs:
+                t_ids = [f.id for f in test_recs]
+                cl_db.query(VectorMapping).filter(VectorMapping.chunk_id.in_(
+                    cl_db.query(Chunk.id).filter(Chunk.file_id.in_(t_ids))
+                )).delete(synchronize_session=False)
+                cl_db.query(Chunk).filter(Chunk.file_id.in_(t_ids)).delete(synchronize_session=False)
+                cl_db.query(OrganizationSuggestion).filter(OrganizationSuggestion.file_id.in_(t_ids)).delete(synchronize_session=False)
+                cl_db.query(DuplicateGroup).filter(DuplicateGroup.file_a_id.in_(t_ids) | DuplicateGroup.file_b_id.in_(t_ids)).delete(synchronize_session=False)
+                cl_db.query(PDFPage).filter(PDFPage.pdf_document_id.in_(
+                    cl_db.query(PDFDocument.id).filter(PDFDocument.file_id.in_(t_ids))
+                )).delete(synchronize_session=False)
+                cl_db.query(PDFAnnotation).filter(PDFAnnotation.pdf_document_id.in_(
+                    cl_db.query(PDFDocument.id).filter(PDFDocument.file_id.in_(t_ids))
+                )).delete(synchronize_session=False)
+                cl_db.query(PDFDocument).filter(PDFDocument.file_id.in_(t_ids)).delete(synchronize_session=False)
+                cl_db.query(File).filter(File.id.in_(t_ids)).delete(synchronize_session=False)
+                cl_db.commit()
+            cl_db.close()
+        except Exception as cl_err:
+            print(f"Test cleanup warning: {cl_err}")
 
 if __name__ == "__main__":
     run_pdf_studio_tests()

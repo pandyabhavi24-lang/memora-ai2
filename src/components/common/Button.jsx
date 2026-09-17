@@ -5,6 +5,8 @@ export const Button = ({
   variant = 'primary',
   size = 'md',
   icon: Icon,
+  iconClassName = '',
+  loading = false,
   className = '',
   disabled = false,
   onClick,
@@ -25,14 +27,16 @@ export const Button = ({
     danger: 'bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30'
   };
 
+  const IconComponent = Icon;
+
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || loading}
       className={`${baseStyles} ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}
       {...props}
     >
-      {Icon && <Icon className="w-4 h-4 shrink-0" />}
+      {IconComponent && <IconComponent className={`w-4 h-4 shrink-0 ${loading ? 'animate-spin' : ''} ${iconClassName}`} />}
       <span>{children}</span>
     </button>
   );

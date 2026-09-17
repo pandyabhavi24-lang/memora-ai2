@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from ..models import File, DuplicateGroup
 from .embedding_service import embedding_service
+from .scanner import is_valid_user_file
 
 logger = logging.getLogger("memora.duplicate")
 
@@ -13,11 +14,20 @@ class DuplicateService:
         Scans all files in the database to detect:
         1. Exact SHA-256 duplicates
         2. Semantic similarity duplicates
-        Persists results into duplicate_groups table.
+        Persists results into duplicate_groups table and cleans up orphan groups.
         """
-        files = db.query(File).all()
+        files = [f for f in db.query(File).all() if is_valid_user_file(f)]
         if len(files) < 2:
             return []
+
+        valid_file_ids = set(f.id for f in files)
+        all_db_groups = db.query(DuplicateGroup).all()
+
+        # Clean up orphan groups where file_a or file_b no longer exists
+        for dg in all_db_groups:
+            if dg.file_a_id not in valid_file_ids or dg.file_b_id not in valid_file_ids:
+                db.delete(dg)
+        db.commit()
 
         existing_groups = {dg.group_key: dg for dg in db.query(DuplicateGroup).all()}
         recorded_groups: List[DuplicateGroup] = []

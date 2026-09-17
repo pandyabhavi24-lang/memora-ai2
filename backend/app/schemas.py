@@ -156,6 +156,7 @@ class StatisticsResponse(BaseModel):
     chunks: int
     vectors: int
     searches: int
+    total_size_bytes: Optional[int] = 0
     recent_files: List[FileResponse]
     recent_searches: List[SearchHistoryItem]
 

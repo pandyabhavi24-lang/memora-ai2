@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Command, Bell, Sparkles } from 'lucide-react';
+import { Search, Command, Sparkles } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const TopNav = () => {
@@ -53,13 +53,6 @@ export const TopNav = () => {
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Rescan Folders</span>
-        </button>
-
-        <div className="w-px h-5 bg-gray-800" />
-
-        <button className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800/60 transition-colors relative">
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500"></span>
         </button>
       </div>
     </header>

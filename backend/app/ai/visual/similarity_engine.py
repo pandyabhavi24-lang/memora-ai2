@@ -189,14 +189,38 @@ class VisualSimilarityEngine:
         """
         Evaluates visual semantic similarity between two analyzed media records
         using Qwen2.5-VL metadata and Sentence Transformer embeddings.
+        - Primary subject compatibility: Different subjects (e.g. fish vs dog) are rejected even if environment is shared ("water").
+        - Description similarity: Candidate is eligible if semantic description similarity >= 0.50.
         """
+        desc_a = (a_a.ai_description or "").strip()
+        desc_b = (a_b.ai_description or "").strip()
+
         scenes_a = [str(s).lower() for s in (a_a.get_detected_scenes() or []) if s]
         scenes_b = [str(s).lower() for s in (a_b.get_detected_scenes() or []) if s]
-        text_a = f"{a_a.ai_description or ''} {', '.join(a_a.get_detected_objects())} {' '.join(scenes_a)}".strip()
-        text_b = f"{a_b.ai_description or ''} {', '.join(a_b.get_detected_objects())} {' '.join(scenes_b)}".strip()
+        text_a = f"{desc_a} {', '.join(a_a.get_detected_objects())} {' '.join(scenes_a)}".strip()
+        text_b = f"{desc_b} {', '.join(a_b.get_detected_objects())} {' '.join(scenes_b)}".strip()
 
         if not text_a or not text_b:
             return 0.0, False
+
+        # Entity Compatibility Check: Extract primary subjects
+        objs_a = set(str(o.get("name") if isinstance(o, dict) else o).lower().strip() for o in a_a.get_detected_objects() if o)
+        objs_b = set(str(o.get("name") if isinstance(o, dict) else o).lower().strip() for o in a_b.get_detected_objects() if o)
+
+        PRIMARY_SUBJECTS = {"fish", "dog", "cat", "car", "person", "bird", "elephant", "horse", "boat", "building", "flower", "vehicle"}
+        subj_a = objs_a.intersection(PRIMARY_SUBJECTS)
+        subj_b = objs_b.intersection(PRIMARY_SUBJECTS)
+
+        # Incompatible primary subjects (e.g. fish vs dog) must NOT be marked visually similar
+        if subj_a and subj_b and subj_a != subj_b:
+            return 25.0, False
+
+        # Calculate semantic description similarity using Sentence Transformer model
+        desc_sim = 0.0
+        if desc_a and desc_b:
+            vec_desc_a = local_vision_analyzer.embed_text(desc_a)
+            vec_desc_b = local_vision_analyzer.embed_text(desc_b)
+            desc_sim = float(np.dot(vec_desc_a, vec_desc_b))
 
         vec_a = local_vision_analyzer.embed_text(text_a)
         vec_b = local_vision_analyzer.embed_text(text_b)
@@ -204,16 +228,18 @@ class VisualSimilarityEngine:
         cos_sim = float(np.dot(vec_a, vec_b))
         embed_pct = max(0.0, min(100.0, cos_sim * 100.0))
 
-        objs_a = set(str(o.get("name") if isinstance(o, dict) else o).lower().strip() for o in a_a.get_detected_objects() if o)
-        objs_b = set(str(o.get("name") if isinstance(o, dict) else o).lower().strip() for o in a_b.get_detected_objects() if o)
-
         common_objs = objs_a.intersection(objs_b)
         obj_overlap_pct = (len(common_objs) / max(1, min(len(objs_a), len(objs_b)))) * 100.0 if (objs_a and objs_b) else 0.0
 
         scene_match = any(sa in sb or sb in sa for sa in scenes_a for sb in scenes_b if len(sa) > 2 and len(sb) > 2)
 
-        weighted_score = (0.50 * embed_pct) + (0.30 * obj_overlap_pct) + (0.20 * (90.0 if scene_match else 30.0))
-        is_similar = bool((embed_pct >= 62.0 and (scene_match or common_objs)) or weighted_score >= VISUAL_SEMANTIC_THRESHOLD)
+        desc_pct = max(0.0, min(100.0, desc_sim * 100.0))
+        weighted_score = (0.45 * desc_pct) + (0.35 * embed_pct) + (0.20 * obj_overlap_pct)
+
+        # Candidate is eligible for Visual Similarity if semantic description similarity >= 0.50 (50%)
+        is_similar = bool(
+            desc_sim >= 0.50 or (embed_pct >= 62.0 and (scene_match or common_objs)) or weighted_score >= VISUAL_SEMANTIC_THRESHOLD
+        )
 
         return weighted_score, is_similar
 

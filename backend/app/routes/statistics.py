@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from ..database import get_db
 from ..models import Folder, File, Chunk, VectorMapping, SearchHistory
 from ..schemas import StatisticsResponse, FileResponse, SearchHistoryItem
@@ -13,6 +14,7 @@ def get_dashboard_statistics(db: Session = Depends(get_db)):
     chunk_count = db.query(Chunk).count()
     vector_count = db.query(VectorMapping).count()
     search_count = db.query(SearchHistory).count()
+    total_size_bytes = db.query(func.sum(File.size)).scalar() or 0
 
     recent_files_db = db.query(File).order_by(File.modified_at.desc()).limit(5).all()
     recent_searches_db = db.query(SearchHistory).order_by(SearchHistory.created_at.desc()).limit(5).all()
@@ -23,6 +25,8 @@ def get_dashboard_statistics(db: Session = Depends(get_db)):
         chunks=chunk_count,
         vectors=vector_count,
         searches=search_count,
+        total_size_bytes=int(total_size_bytes),
         recent_files=[FileResponse.model_validate(f) for f in recent_files_db],
         recent_searches=[SearchHistoryItem.model_validate(s) for s in recent_searches_db]
     )
+

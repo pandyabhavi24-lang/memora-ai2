@@ -582,12 +582,28 @@ class SearchService:
         # 6. Strict Hard Semantic Gate & Secondary Relevance Ranking
         # Step A: HARD SEMANTIC THRESHOLD GATE & HYBRID SMART TAG MATCHER
         # Candidates must satisfy cosine similarity >= SEMANTIC_SIMILARITY_THRESHOLD or have a Smart Tag/lexical match.
+        # For pictorial images, OCR text alone MUST NOT override visual grounding unless visually present.
         target_tags_check = (filters.smart_tags if filters else None) or (filters.labels if filters else None) or (getattr(filters, 'tags', None) if filters else None)
-        
-        after_threshold_candidates = [
-            c for c in all_candidates
-            if c["semantic_score"] >= SEMANTIC_SIMILARITY_THRESHOLD or c.get("has_smart_tag_match") or c["lexical_score"] >= 0.40 or bool(target_tags_check)
-        ]
+
+        after_threshold_candidates = []
+        for c in all_candidates:
+            # For pictorial images, OCR match alone without visual semantic evidence (< 0.50) is excluded
+            if c.get("category") == "image" and c.get("match_source") == "OCR":
+                v_details = c.get("visual_match_details", {})
+                v_objs = [str(o).lower() for o in (v_details.get("objects") or [])]
+                v_scenes = [str(s).lower() for s in (v_details.get("scenes") or [])]
+                v_desc = (v_details.get("description") or "").lower()
+                
+                # Check if query concept is visually present
+                q_words = [w.lower() for w in re.findall(r"\b[\w#+.-]{2,}\b", raw_query) if len(w) > 1 and w not in ["image", "photo", "show", "find"]]
+                has_visual = any(qw in v_desc or any(qw in o for o in v_objs) or any(qw in s for s in v_scenes) for qw in q_words)
+                
+                if not has_visual and c["semantic_score"] < SEMANTIC_SIMILARITY_THRESHOLD:
+                    continue
+
+            if c["semantic_score"] >= SEMANTIC_SIMILARITY_THRESHOLD or c.get("has_smart_tag_match") or c["lexical_score"] >= 0.40 or bool(target_tags_check):
+                after_threshold_candidates.append(c)
+
         after_threshold_count = len(after_threshold_candidates)
 
         # Step B: Filter by relative semantic drop-off gap among valid candidates

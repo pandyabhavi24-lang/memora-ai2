@@ -121,32 +121,43 @@ class MediaService:
             self.processed_media = 0
 
             for f in media_files:
-                self.current_file_name = f.name
-                ext_low = f.extension.lower()
+                file_name_str = f.name
+                file_id_val = f.id
+                file_path_str = f.path
+                file_size_val = f.size
+                file_ext_str = f.extension
+                ext_low = file_ext_str.lower()
 
-                existing_analysis = db.query(MediaAnalysis).filter(MediaAnalysis.file_id == f.id).first()
+                self.current_file_name = file_name_str
+
+                existing_analysis = db.query(MediaAnalysis).filter(MediaAnalysis.file_id == file_id_val).first()
                 if existing_analysis and existing_analysis.analysis_status == "completed" and not force_reanalyze:
                     self.processed_media += 1
                     continue
 
-                if not os.path.exists(f.path):
+                if not os.path.exists(file_path_str):
                     if existing_analysis:
-                        existing_analysis.analysis_status = "failed"
-                        existing_analysis.error_message = "File does not exist on disk"
+                        try:
+                            existing_analysis.analysis_status = "failed"
+                            existing_analysis.error_message = "File does not exist on disk"
+                            db.commit()
+                        except Exception:
+                            db.rollback()
                     self.processed_media += 1
                     continue
 
                 try:
                     if ext_low in IMAGE_EXTENSIONS:
-                        res = image_analyzer.analyze_image(f.path, filename=f.name, file_size=f.size)
+                        res = image_analyzer.analyze_image(file_path_str, filename=file_name_str, file_size=file_size_val)
                     elif ext_low in VIDEO_EXTENSIONS:
-                        res = video_analyzer.analyze_video(f.path, filename=f.name, file_size=f.size)
+                        res = video_analyzer.analyze_video(file_path_str, filename=file_name_str, file_size=file_size_val)
                     else:
                         continue
 
-                    # Upsert MediaAnalysis record
+                    # Re-query existing_analysis within fresh transaction scope if needed
+                    existing_analysis = db.query(MediaAnalysis).filter(MediaAnalysis.file_id == file_id_val).first()
                     if not existing_analysis:
-                        existing_analysis = MediaAnalysis(file_id=f.id)
+                        existing_analysis = MediaAnalysis(file_id=file_id_val)
                         db.add(existing_analysis)
 
                     existing_analysis.media_type = res.get("media_type", "image")
@@ -179,7 +190,7 @@ class MediaService:
                     
                     if content_type == "text_heavy":
                         existing_analysis.analysis_status = "skipped_text_heavy"
-                        visual_faiss_manager.remove_file(f.id)
+                        visual_faiss_manager.remove_file(file_id_val)
                     else:
                         existing_analysis.analysis_status = res.get("status", "completed")
 
@@ -191,18 +202,18 @@ class MediaService:
                         try:
                             faiss_id = visual_faiss_manager.add_vector(
                                 emb_vec, 
-                                f.id, 
+                                file_id_val, 
                                 media_type=existing_analysis.media_type, 
-                                extension=f.extension
+                                extension=file_ext_str
                             )
-                            existing_emb = db.query(MediaEmbedding).filter(MediaEmbedding.file_id == f.id).first()
+                            existing_emb = db.query(MediaEmbedding).filter(MediaEmbedding.file_id == file_id_val).first()
                             if not existing_emb:
-                                existing_emb = MediaEmbedding(file_id=f.id, visual_faiss_id=faiss_id)
+                                existing_emb = MediaEmbedding(file_id=file_id_val, visual_faiss_id=faiss_id)
                                 db.add(existing_emb)
                             else:
                                 existing_emb.visual_faiss_id = faiss_id
                         except Exception as ve:
-                            logger.warning(f"Could not index visual vector for file {f.id}: {ve}")
+                            logger.warning(f"Could not index visual vector for file {file_id_val}: {ve}")
 
                     # Generate searchable visual metadata for Module 1 Hybrid Semantic Search
                     objs = res.get("detected_objects", [])
@@ -239,9 +250,9 @@ class MediaService:
                     search_tokens = list(set(objs + scenes + [cat] + (["screenshot", "ui"] if is_scr else [])))
                     visual_search_text = f"{' '.join(search_tokens)} {visual_desc}"
 
-                    search_content = db.query(MediaSearchContent).filter(MediaSearchContent.file_id == f.id).first()
+                    search_content = db.query(MediaSearchContent).filter(MediaSearchContent.file_id == file_id_val).first()
                     if not search_content:
-                        search_content = MediaSearchContent(file_id=f.id)
+                        search_content = MediaSearchContent(file_id=file_id_val)
                         db.add(search_content)
 
                     search_content.content_type = "visual"
@@ -254,8 +265,8 @@ class MediaService:
                     db.commit()
 
                 except Exception as file_err:
-                    logger.error(f"Error analyzing media file {f.name}: {file_err}", exc_info=True)
                     db.rollback()
+                    logger.error(f"Error analyzing media file {file_name_str}: {file_err}", exc_info=True)
 
                 self.processed_media += 1
 

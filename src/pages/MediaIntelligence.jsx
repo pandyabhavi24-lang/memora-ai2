@@ -366,9 +366,9 @@ export const MediaIntelligence = () => {
             variant="secondary"
             size="sm"
             icon={RefreshCw}
+            iconClassName={analyzing ? 'animate-spin' : ''}
             disabled={analyzing}
             onClick={() => handleTriggerAnalysis(false)}
-            className={analyzing ? 'animate-spin' : ''}
           >
             {analyzing ? `Analyzing (${status?.processed_media || 0}/${status?.total_media || 0})...` : 'Re-index Visual Library'}
           </Button>

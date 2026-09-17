@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -33,7 +33,8 @@ export const SemanticSearch = () => {
     clearHistoryAll,
     executeSearch,
     recentlyOpenedFiles,
-    recordOpenedFile
+    recordOpenedFile,
+    folders
   } = useApp();
 
   const handleOpenRecentFile = (fileItem) => {
@@ -119,21 +120,21 @@ export const SemanticSearch = () => {
     ...categoryList.filter(c => c.id !== 'all')
   ];
 
+  const dynamicFolderOptions = (folders || []).map(f => ({
+    id: f.id || f.name,
+    label: f.name || f.path
+  }));
+
   const folderOptions = [
     { id: 'all', label: 'All Locations' },
-    { id: 'Documents', label: 'Documents Folder' },
-    { id: 'Downloads', label: 'Downloads Folder' },
-    { id: 'Desktop', label: 'Desktop' },
-    { id: 'Pictures', label: 'Pictures' },
-    { id: 'College', label: 'College' },
-    { id: 'Work', label: 'Work' }
+    ...dynamicFolderOptions
   ];
 
   const samplePrompts = [
-    'Find my internship certificate',
-    'Show my BFS notes',
-    'Find files about machine learning',
-    'Find my project report'
+    'Find recent project documents',
+    'Search for reports and notes',
+    'Find certificates and documents',
+    'Search for image files'
   ];
 
   const hasActiveFilters = 
