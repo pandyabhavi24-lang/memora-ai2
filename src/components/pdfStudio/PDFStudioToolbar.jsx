@@ -4,6 +4,8 @@ import {
   Edit3, 
   Highlighter, 
   Type,
+  Image as ImageIcon,
+  Layers,
   ZoomIn, 
   ZoomOut, 
   Maximize2, 
@@ -22,10 +24,13 @@ import {
 } from 'lucide-react';
 
 export const PDFStudioToolbar = ({
-  viewMode = 'view', // 'view' | 'edit' | 'annotate'
+  viewMode = 'edit', // 'view' | 'edit' | 'annotate'
   onViewModeChange,
+  onAddText,
+  onAddImage,
+  onAddFromMemora,
   zoomLevel = 100,
-  zoomMode = 'custom', // 'custom' | 'fit-width' | 'fit-page'
+  zoomMode = 'fit-page', // 'custom' | 'fit-width' | 'fit-page'
   onZoomIn,
   onZoomOut,
   onResetZoom,
@@ -45,47 +50,37 @@ export const PDFStudioToolbar = ({
   onCloseDocument
 }) => {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 glass-panel px-4 py-2.5 rounded-xl border border-gray-800/80 bg-gray-900/80 backdrop-blur-md select-none">
-      {/* Group 1: View Modes & Editing Tools */}
-      <div className="flex items-center gap-1 bg-gray-950/70 p-1 rounded-lg border border-gray-800/60 shrink-0">
+    <div className="flex flex-wrap items-center justify-between gap-3 glass-panel px-4 py-2 rounded-xl border border-gray-800/80 bg-gray-900/80 backdrop-blur-md select-none">
+      {/* Group 1: Content Creation & Insert Tools */}
+      <div className="flex items-center gap-1.5 bg-gray-950/70 p-1 rounded-lg border border-gray-800/60 shrink-0">
         <button
-          onClick={() => onViewModeChange('view')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
-            viewMode === 'view'
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 shadow-sm'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
-          }`}
-          title="View Mode"
-        >
-          <Eye className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">View</span>
-        </button>
-
-        <button
-          onClick={() => onViewModeChange('edit')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
-            viewMode === 'edit'
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 shadow-sm'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
-          }`}
-          title="Text & Edit Mode"
+          onClick={onAddText}
+          className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 transition-all cursor-pointer shadow-sm"
+          title="Add Word-like Text Box to A4 Document"
         >
           <Type className="w-3.5 h-3.5 text-blue-400" />
-          <span className="font-semibold">Text</span>
+          <span>Add Text</span>
         </button>
 
         <button
-          onClick={() => onViewModeChange('annotate')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
-            viewMode === 'annotate'
-              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/40 shadow-sm'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
-          }`}
-          title="Annotate Mode"
+          onClick={onAddImage}
+          className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 transition-all cursor-pointer shadow-sm"
+          title="Insert Image onto A4 Document"
         >
-          <Highlighter className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Annotate</span>
+          <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Add Image</span>
         </button>
+
+        {onAddFromMemora && (
+          <button
+            onClick={onAddFromMemora}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-gray-400 hover:text-purple-300 hover:bg-purple-600/20 transition-all cursor-pointer"
+            title="Import from Memora Workspace"
+          >
+            <Layers className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden sm:inline">From Memora</span>
+          </button>
+        )}
       </div>
 
       {/* Group 2: Page Navigation & Stepper */}

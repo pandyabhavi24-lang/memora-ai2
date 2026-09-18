@@ -66,12 +66,13 @@ export const PDFStudio = () => {
   const [activeDocument, setActiveDocument] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [selectedPageIndices, setSelectedPageIndices] = useState([0]);
+  const [selectedElementId, setSelectedElementId] = useState(null);
   const [selectedTextId, setSelectedTextId] = useState(null);
 
   // Viewport & Settings State
   const [zoomLevel, setZoomLevel] = useState(100);
-  const [zoomMode, setZoomMode] = useState('custom'); // 'custom' | 'fit-width' | 'fit-page'
-  const [viewMode, setViewMode] = useState('view'); // 'view' | 'edit' | 'annotate'
+  const [zoomMode, setZoomMode] = useState('fit-page'); // 'custom' | 'fit-width' | 'fit-page'
+  const [viewMode, setViewMode] = useState('edit'); // 'view' | 'edit' | 'annotate'
   const [pageSize, setPageSize] = useState('A4');
   const [orientation, setOrientation] = useState('portrait');
   const [exportFileName, setExportFileName] = useState('new_document.pdf');
@@ -83,10 +84,13 @@ export const PDFStudio = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isExtractModalOpen, setIsExtractModalOpen] = useState(false);
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [convertModalInitialTool, setConvertModalInitialTool] = useState('pdf-to-images');
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, pageIndex }
   const [isExporting, setIsExporting] = useState(false);
+
+  const hiddenImageInputRef = React.useRef(null);
 
   // Helper: Inspect PDF and load real page structure into workspace
   const loadPdfDocumentPages = async (filePath, title) => {
@@ -230,83 +234,240 @@ export const PDFStudio = () => {
   };
 
   // --------------------------------------------------------------------------
-  // Text Overlay Handlers
+  // Unified Element Handlers (Text & Resizable Images)
   // --------------------------------------------------------------------------
-  const handleAddTextAtPosition = (pos = { xPct: 20, yPct: 20 }) => {
+  const handleAddTextAtPosition = (pos = { x: 50, y: 80 }) => {
     if (!activeDocument) return;
     const newTextObj = {
       id: 'txt_' + Math.random().toString(36).substring(2, 9),
-      text: 'New Text Box',
-      xPct: pos.xPct ?? 20,
-      yPct: pos.yPct ?? 20,
-      widthPct: 35,
-      fontSize: 16,
-      isBold: false,
-      isItalic: false,
-      isUnderline: false,
-      align: 'left',
+      type: 'text',
+      x: Math.round(pos?.x ?? 50),
+      y: Math.round(pos?.y ?? 80),
+      width: 320,
+      height: 48,
+      text: 'Double-click to edit text',
+      fontSize: 18,
+      fontWeight: 'bold',
+      fontStyle: 'normal',
+      textAlign: 'left',
       color: '#1e293b',
-      opacity: 1
+      lineHeight: 1.3,
+      zIndex: 10
     };
 
     setActiveDocument((prev) => {
       if (!prev) return prev;
       const updatedPages = [...prev.pages];
       const curPage = updatedPages[activePageIndex] || {};
+      const existingElements = curPage.elements || [];
       const existingOverlays = curPage.textOverlays || [];
       updatedPages[activePageIndex] = {
         ...curPage,
-        textOverlays: [...existingOverlays, newTextObj]
+        elements: [...existingElements, newTextObj],
+        textOverlays: [...existingOverlays, {
+          id: newTextObj.id,
+          text: newTextObj.text,
+          xPct: (newTextObj.x / 595) * 100,
+          yPct: (newTextObj.y / 842) * 100,
+          widthPct: (newTextObj.width / 595) * 100,
+          fontSize: newTextObj.fontSize,
+          isBold: true,
+          color: newTextObj.color
+        }]
       };
       return { ...prev, pages: updatedPages };
     });
 
+    setSelectedElementId(newTextObj.id);
     setSelectedTextId(newTextObj.id);
   };
 
-  const handleUpdateText = (textId, updates) => {
+  const handleAddImageAtPosition = (file, pos = null) => {
+    if (!activeDocument || !file) return;
+    const previewUrl = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      const aspect = (img.width / img.height) || 1.33;
+      const targetW = 280;
+      const targetH = Math.round(targetW / aspect);
+      const newImgObj = {
+        id: 'img_' + Math.random().toString(36).substring(2, 9),
+        type: 'image',
+        x: Math.round(pos?.x ?? (595 - targetW) / 2),
+        y: Math.round(pos?.y ?? 120),
+        width: targetW,
+        height: targetH,
+        imagePath: file.path || '',
+        previewUrl,
+        fileName: file.name || 'Inserted Image',
+        aspectRatio: aspect,
+        zIndex: 2
+      };
+
+      setActiveDocument((prev) => {
+        if (!prev) return prev;
+        const updatedPages = [...prev.pages];
+        const curPage = updatedPages[activePageIndex] || {};
+        const existingElements = curPage.elements || [];
+        updatedPages[activePageIndex] = {
+          ...curPage,
+          elements: [...existingElements, newImgObj]
+        };
+        return { ...prev, pages: updatedPages };
+      });
+
+      setSelectedElementId(newImgObj.id);
+      addToast(`Added image: ${file.name}`, 'success');
+    };
+    img.src = previewUrl;
+  };
+
+  const handleAddImageClick = async () => {
+    if (window.electronAPI && window.electronAPI.openFile) {
+      try {
+        const result = await window.electronAPI.openFile([
+          { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff'] }
+        ]);
+        if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+          const filePath = result.filePaths[0];
+          const fileName = filePath.split(/[\\/]/).pop() || 'Inserted Image';
+          const newImgObj = {
+            id: 'img_' + Math.random().toString(36).substring(2, 9),
+            type: 'image',
+            x: 157, // (595 - 280) / 2
+            y: 120,
+            width: 280,
+            height: 200,
+            imagePath: filePath,
+            previewUrl: filePath,
+            fileName,
+            aspectRatio: 1.4,
+            zIndex: 2
+          };
+
+          setActiveDocument((prev) => {
+            if (!prev) return prev;
+            const updatedPages = [...prev.pages];
+            const curPage = updatedPages[activePageIndex] || {};
+            const existingElements = curPage.elements || [];
+            updatedPages[activePageIndex] = {
+              ...curPage,
+              elements: [...existingElements, newImgObj]
+            };
+            return { ...prev, pages: updatedPages };
+          });
+
+          setSelectedElementId(newImgObj.id);
+          addToast(`Added image: ${fileName}`, 'success');
+          return;
+        }
+      } catch (err) {
+        console.error('Electron image open error:', err);
+      }
+    }
+    hiddenImageInputRef.current?.click();
+  };
+
+  const handleHiddenImageSelected = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      handleAddImageAtPosition(file);
+      e.target.value = '';
+    }
+  };
+
+  const handleUpdateElement = (elementId, updates) => {
     if (!activeDocument) return;
     setActiveDocument((prev) => {
       if (!prev) return prev;
       const updatedPages = [...prev.pages];
       const curPage = updatedPages[activePageIndex];
-      if (!curPage || !curPage.textOverlays) return prev;
+      if (!curPage) return prev;
 
-      const updatedOverlays = curPage.textOverlays.map((item) =>
-        item.id === textId ? { ...item, ...updates } : item
+      const curElements = curPage.elements || [];
+      const updatedElements = curElements.map((el) =>
+        el.id === elementId ? { ...el, ...updates } : el
+      );
+
+      const curTextOverlays = curPage.textOverlays || [];
+      const updatedTextOverlays = curTextOverlays.map((t) =>
+        t.id === elementId ? {
+          ...t,
+          ...updates,
+          ...(updates.x ? { xPct: (updates.x / 595) * 100 } : {}),
+          ...(updates.y ? { yPct: (updates.y / 842) * 100 } : {}),
+          ...(updates.width ? { widthPct: (updates.width / 595) * 100 } : {})
+        } : t
       );
 
       updatedPages[activePageIndex] = {
         ...curPage,
-        textOverlays: updatedOverlays
+        elements: updatedElements,
+        textOverlays: updatedTextOverlays
       };
 
       return { ...prev, pages: updatedPages };
     });
   };
 
-  const handleDeleteText = (textId) => {
+  const handleDeleteElement = (elementId) => {
     if (!activeDocument) return;
     setActiveDocument((prev) => {
       if (!prev) return prev;
       const updatedPages = [...prev.pages];
       const curPage = updatedPages[activePageIndex];
-      if (!curPage || !curPage.textOverlays) return prev;
+      if (!curPage) return prev;
 
-      const updatedOverlays = curPage.textOverlays.filter((item) => item.id !== textId);
+      const curElements = curPage.elements || [];
+      const filteredElements = curElements.filter((el) => el.id !== elementId);
+
+      const curTextOverlays = curPage.textOverlays || [];
+      const filteredTextOverlays = curTextOverlays.filter((t) => t.id !== elementId);
 
       updatedPages[activePageIndex] = {
         ...curPage,
-        textOverlays: updatedOverlays
+        elements: filteredElements,
+        textOverlays: filteredTextOverlays
       };
 
       return { ...prev, pages: updatedPages };
     });
 
-    if (selectedTextId === textId) {
-      setSelectedTextId(null);
-    }
+    if (selectedElementId === elementId) setSelectedElementId(null);
+    if (selectedTextId === elementId) setSelectedTextId(null);
   };
+
+  const handleDuplicateElement = (elementId) => {
+    if (!activeDocument) return;
+    const curPage = activeDocument.pages[activePageIndex];
+    if (!curPage) return;
+    const elem = (curPage.elements || []).find((e) => e.id === elementId);
+    if (!elem) return;
+
+    const dup = {
+      ...elem,
+      id: (elem.type === 'image' ? 'img_' : 'txt_') + Math.random().toString(36).substring(2, 9),
+      x: Math.min(595 - (elem.width || 100), (elem.x || 50) + 20),
+      y: Math.min(842 - (elem.height || 50), (elem.y || 50) + 20)
+    };
+
+    setActiveDocument((prev) => {
+      if (!prev) return prev;
+      const updatedPages = [...prev.pages];
+      const page = updatedPages[activePageIndex];
+      updatedPages[activePageIndex] = {
+        ...page,
+        elements: [...(page.elements || []), dup]
+      };
+      return { ...prev, pages: updatedPages };
+    });
+
+    setSelectedElementId(dup.id);
+  };
+
+  // Legacy aliases
+  const handleUpdateText = (id, upd) => handleUpdateElement(id, upd);
+  const handleDeleteText = (id) => handleDeleteElement(id);
 
   // --------------------------------------------------------------------------
   // Document Creation Handlers
@@ -319,8 +480,9 @@ export const PDFStudio = () => {
       id: Math.random().toString(36).substring(2, 9),
       type: 'blank',
       rotation: 0,
-      title: '',
+      title: `Page ${i + 1}`,
       content: '',
+      elements: [],
       textOverlays: []
     }));
 
@@ -330,20 +492,38 @@ export const PDFStudio = () => {
     });
     setActivePageIndex(0);
     setSelectedPageIndices([0]);
+    setSelectedElementId(null);
     setSelectedTextId(null);
     setExportFileName('new_document.pdf');
     setZoomLevel(100);
-    setZoomMode('custom');
+    setZoomMode('fit-page');
+    setViewMode('edit');
   };
 
   const handleCreateFromImages = (imagePagesArray) => {
-    const pages = imagePagesArray.map((img) => ({
+    const pages = imagePagesArray.map((img, idx) => ({
       id: img.id,
       type: 'image',
       name: img.name,
       previewUrl: img.previewUrl,
+      imagePath: img.file?.path || '',
       rotation: img.rotation || 0,
-      title: img.name,
+      title: img.name || `Page ${idx + 1}`,
+      elements: [
+        {
+          id: 'img_' + img.id,
+          type: 'image',
+          x: 36,
+          y: 36,
+          width: 595 - 72,
+          height: 842 - 72,
+          previewUrl: img.previewUrl,
+          imagePath: img.file?.path || '',
+          fileName: img.name,
+          aspectRatio: 1.0,
+          zIndex: 1
+        }
+      ],
       textOverlays: []
     }));
 
@@ -353,10 +533,41 @@ export const PDFStudio = () => {
     });
     setActivePageIndex(0);
     setSelectedPageIndices([0]);
+    setSelectedElementId(null);
     setSelectedTextId(null);
     setExportFileName('compiled_images.pdf');
     setZoomLevel(100);
-    setZoomMode('custom');
+    setZoomMode('fit-page');
+    setViewMode('edit');
+  };
+
+  const handleCreateGeneratedPDF = async (docConfig) => {
+    try {
+      const res = await apiService.generatePDF(docConfig);
+      if (res && res.output_path) {
+        addToast(
+          `ReportLab Document Generated!\n• File: ${res.file_name}\n• Pages: ${res.page_count}\n• Output: ${res.output_path}`,
+          'success'
+        );
+        try {
+          const loadedDoc = await loadPdfDocumentPages(res.output_path, res.file_name);
+          setActiveDocument(loadedDoc);
+          setActivePageIndex(0);
+          setSelectedPageIndices([0]);
+          setSelectedTextId(null);
+          setExportFileName(res.file_name.replace(/\.pdf$/i, '') + '_edited.pdf');
+          setZoomLevel(100);
+          setZoomMode('custom');
+        } catch (loadErr) {
+          console.warn('Could not auto-load newly generated PDF into workspace:', loadErr);
+        }
+      }
+      setIsNewPdfModalOpen(false);
+    } catch (err) {
+      console.error('ReportLab document generation error:', err);
+      addToast(`Document Generation Failed: ${err.message || 'Unknown error occurred'}`, 'error');
+      throw err;
+    }
   };
 
   const handleOpenPDF = async () => {
@@ -813,12 +1024,30 @@ export const PDFStudio = () => {
           pageCount={activeDocument?.pages?.length || 0}
           onNewPDF={() => setIsNewPdfModalOpen(true)}
           onOpenPDF={handleOpenPDF}
+          onAddText={() => handleAddTextAtPosition()}
+          onAddImage={handleAddImageClick}
           onAddFromMemora={() => setIsMemoraPickerOpen(true)}
-          onOpenConvert={() => setIsConvertModalOpen(true)}
+          onOpenAlternate={() => {
+            setConvertModalInitialTool('alternate-pages');
+            setIsConvertModalOpen(true);
+          }}
+          onOpenConvert={() => {
+            setConvertModalInitialTool('pdf-to-images');
+            setIsConvertModalOpen(true);
+          }}
           onSaveDraft={handleSaveDraft}
           onOpenPreview={() => setIsPreviewModalOpen(true)}
           onExport={() => setIsExportModalOpen(true)}
           isExporting={isExporting}
+        />
+
+        {/* Hidden File Input for Native/Web Image Picking */}
+        <input
+          type="file"
+          ref={hiddenImageInputRef}
+          accept="image/*"
+          className="hidden"
+          onChange={handleHiddenImageSelected}
         />
 
         {/* Conditional Render: Empty State vs. Active Workspace */}
@@ -835,7 +1064,10 @@ export const PDFStudio = () => {
               viewMode={viewMode}
               onViewModeChange={(mode) => {
                 setViewMode(mode);
-                if (mode !== 'edit') setSelectedTextId(null);
+                if (mode !== 'edit') {
+                  setSelectedElementId(null);
+                  setSelectedTextId(null);
+                }
               }}
               zoomLevel={zoomLevel}
               zoomMode={zoomMode}
@@ -857,10 +1089,12 @@ export const PDFStudio = () => {
               totalPages={activeDocument.pages.length}
               onPrevPage={() => {
                 setActivePageIndex((p) => Math.max(0, p - 1));
+                setSelectedElementId(null);
                 setSelectedTextId(null);
               }}
               onNextPage={() => {
                 setActivePageIndex((p) => Math.min(activeDocument.pages.length - 1, p + 1));
+                setSelectedElementId(null);
                 setSelectedTextId(null);
               }}
               onAddPage={handleAddPage}
@@ -870,6 +1104,8 @@ export const PDFStudio = () => {
               onRotateRight={() => handleRotateRight(activePageIndex)}
               onMoveUp={() => handleMovePageUp(activePageIndex)}
               onMoveDown={() => handleMovePageDown(activePageIndex)}
+              onAddText={() => handleAddTextAtPosition()}
+              onAddImage={handleAddImageClick}
               onCloseDocument={handleCloseDocument}
             />
 
@@ -906,9 +1142,15 @@ export const PDFStudio = () => {
                 viewMode={viewMode}
                 pageSize={pageSize}
                 orientation={orientation}
+                selectedElementId={selectedElementId}
+                onSelectElement={setSelectedElementId}
                 selectedTextId={selectedTextId}
                 onSelectText={setSelectedTextId}
                 onAddTextAtPosition={handleAddTextAtPosition}
+                onAddImageAtPosition={handleAddImageAtPosition}
+                onUpdateElement={handleUpdateElement}
+                onDeleteElement={handleDeleteElement}
+                onDuplicateElement={handleDuplicateElement}
                 onUpdateText={handleUpdateText}
                 onDeleteText={handleDeleteText}
               />
@@ -934,7 +1176,10 @@ export const PDFStudio = () => {
                 onExportFileNameChange={setExportFileName}
                 indexWithMemora={indexWithMemora}
                 onToggleIndexWithMemora={() => setIndexWithMemora((v) => !v)}
-                onOpenConvert={() => setIsConvertModalOpen(true)}
+                onOpenConvert={() => {
+                  setConvertModalInitialTool('pdf-to-images');
+                  setIsConvertModalOpen(true);
+                }}
                 onExport={() => setIsExportModalOpen(true)}
                 isExporting={isExporting}
               />
@@ -948,6 +1193,7 @@ export const PDFStudio = () => {
           onClose={() => setIsNewPdfModalOpen(false)}
           onCreateBlank={handleCreateBlankPDF}
           onCreateFromImages={handleCreateFromImages}
+          onCreateGeneratedDoc={handleCreateGeneratedPDF}
           onOpenMemoraPicker={() => setIsMemoraPickerOpen(true)}
         />
 
@@ -962,6 +1208,7 @@ export const PDFStudio = () => {
         {/* Conversion Tools Modal */}
         <ConvertModal
           isOpen={isConvertModalOpen}
+          initialTool={convertModalInitialTool}
           onClose={() => setIsConvertModalOpen(false)}
           activeDocument={activeDocument}
           selectedPageIndices={selectedPageIndices}

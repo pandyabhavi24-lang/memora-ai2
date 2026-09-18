@@ -268,6 +268,27 @@ class ApiService {
     });
   }
 
+  async alternatePDFs(data) {
+    return await this._fetch('/api/pdf/alternate', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async previewAlternatePDFs(data) {
+    return await this._fetch('/api/pdf/alternate/preview', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async generatePDF(data) {
+    return await this._fetch('/api/pdf/generate', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
   async splitPDF(data) {
     return await this._fetch('/api/pdf/split', {
       method: 'POST',
