@@ -70,14 +70,11 @@ class ImageAnalyzer:
 
             # 3. Dense Text & Visual Vector: Generated ONLY for genuine pictorial images
             embedding_vec = None
+            searchable_text = ""
             if content_type == "pictorial" and vision_data.get("status") != "failed":
                 searchable_text = vision_data.get("searchable_text", "")
-                if searchable_text:
-                    embedding_vec = local_vision_analyzer.embed_text(searchable_text)
-                else:
-                    embedding_vec = visual_embedding_service.embed_image(file_path)
+                embedding_vec = visual_embedding_service.embed_image(file_path)
             else:
-                searchable_text = ""
                 logger.info(f"[LOCAL VISION] Skipping vector generation for text-heavy or failed image: {filename}")
 
             return {

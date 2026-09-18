@@ -40,7 +40,7 @@ def run_module3_test_suite():
 
     # Image B: Lower Quality / Blurred version of Image A
     img_b_path = os.path.join(test_dir, "nature_lq_blurred.jpg")
-    img_b = cv2.GaussianBlur(img_a, (21, 21), 0)
+    img_b = cv2.GaussianBlur(img_a.copy(), (21, 21), 0)
     cv2.imwrite(img_b_path, img_b)
 
     # Image C: Screenshot (UI window with toolbar & high edge density)

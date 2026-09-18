@@ -167,11 +167,26 @@ class ApiService {
         chunks: 0,
         vectors: 0,
         searches: 0,
+        total_size_bytes: 0,
         recent_files: [],
         recent_searches: []
       };
     }
   }
+
+  async getHealth() {
+    try {
+      return await this._fetch('/health');
+    } catch (err) {
+      return {
+        status: 'unavailable',
+        database: false,
+        faiss: false,
+        embedding_model: false
+      };
+    }
+  }
+
 
   async getFileContent(fileId) {
     return await this._fetch(`/api/files/${fileId}/content`);

@@ -806,6 +806,7 @@ class PdfService:
         """
         Registers an output PDF in Memora's core `files` table, extracts text (including EasyOCR for scanned PDFs),
         and indexes chunks & embeddings into existing FAISS index and vector_mappings table.
+        Skips registration if the file is in a temporary directory or test output path.
         """
         import hashlib
         from datetime import datetime
@@ -815,9 +816,14 @@ class PdfService:
         from .embedding_service import embedding_service
         from ..ai.faiss_manager import faiss_manager
         from .indexing_service import IndexingService
+        from .scanner import is_temp_or_test_path
 
         abs_path = os.path.abspath(file_path)
         if not os.path.exists(abs_path):
+            return None
+
+        if is_temp_or_test_path(abs_path):
+            logger.info(f"Skipping DB registration for temporary/test file '{abs_path}'")
             return None
 
         size = os.path.getsize(abs_path)

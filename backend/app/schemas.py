@@ -1,5 +1,6 @@
 from typing import List, Optional, Literal, Dict, Any
 from datetime import datetime
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, field_validator, Field
 
 # Folder Schemas
@@ -156,6 +157,7 @@ class StatisticsResponse(BaseModel):
     chunks: int
     vectors: int
     searches: int
+    total_size_bytes: Optional[int] = 0
     recent_files: List[FileResponse]
     recent_searches: List[SearchHistoryItem]
 

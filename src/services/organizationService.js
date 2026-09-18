@@ -3,7 +3,6 @@
  * 
  * Production REST client connecting React Module 2 UI to FastAPI Backend (/api/organization).
  */
-import { INITIAL_SUGGESTIONS } from '../data/organizationMockData';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -35,12 +34,12 @@ class OrganizationService {
         body: JSON.stringify({ folder_id: folderId })
       });
     } catch (err) {
-      console.warn('Backend server offline or unreached during analyze. Returning demo stats fallback.');
+      console.warn('Backend server offline or unreached during analyze.');
       return {
-        files_analyzed: 24,
-        suggestions_generated: 18,
-        high_confidence: 14,
-        duplicate_groups: 3
+        files_analyzed: 0,
+        suggestions_generated: 0,
+        high_confidence: 0,
+        duplicate_groups: 0
       };
     }
   }
@@ -49,17 +48,7 @@ class OrganizationService {
     try {
       return await this._fetch('/api/organization/categories');
     } catch (err) {
-      return [
-        { id: 1, name: 'Documents' },
-        { id: 2, name: 'Education' },
-        { id: 3, name: 'Projects' },
-        { id: 4, name: 'Work' },
-        { id: 5, name: 'Certificates' },
-        { id: 6, name: 'Finance' },
-        { id: 7, name: 'Personal' },
-        { id: 8, name: 'Images' },
-        { id: 9, name: 'Other' }
-      ];
+      return [];
     }
   }
 
@@ -124,11 +113,24 @@ class OrganizationService {
   }
 
   async getDuplicates() {
-    return await this._fetch('/api/organization/duplicates');
+    try {
+      return await this._fetch('/api/organization/duplicates');
+    } catch (err) {
+      console.warn('Failed to fetch duplicates from backend:', err);
+      return [];
+    }
   }
 
   async getOverview() {
-    return await this._fetch('/api/organization/overview');
+    try {
+      return await this._fetch('/api/organization/overview');
+    } catch (err) {
+      return {
+        existingFolders: [],
+        aiCategories: [],
+        totalFiles: 0
+      };
+    }
   }
 
   async getOperations() {
@@ -151,9 +153,9 @@ class OrganizationService {
     } catch (err) {
       console.warn('Failed to get collective folder suggestion from backend:', err);
       return {
-        suggested_folder_name: 'Java OOP Study',
-        reason: 'Based on common content, Smart Tags, and semantic similarity of selected files.',
-        common_smart_tags: ['Java', 'OOP', 'Programming', 'Study Material']
+        suggested_folder_name: 'Organized Collection',
+        reason: 'Based on common content and smart tags of selected files.',
+        common_smart_tags: []
       };
     }
   }

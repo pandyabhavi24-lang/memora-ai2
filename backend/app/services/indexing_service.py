@@ -93,6 +93,8 @@ class IndexingService:
             chunks_total = 0
             vectors_total = 0
 
+            from .scanner import is_temp_or_test_path
+
             for idx, item_meta in enumerate(all_found_scans):
                 if self._is_cancelled:
                     logger.info("Scan cancelled by user.")
@@ -100,8 +102,12 @@ class IndexingService:
                     self.state["current_file"] = "Scan cancelled"
                     return
 
-                self.state["current_file"] = item_meta["name"]
                 file_path = item_meta["path"]
+                if is_temp_or_test_path(file_path):
+                    processed += 1
+                    continue
+
+                self.state["current_file"] = item_meta["name"]
                 folder_id_val = item_meta["folder_id"]
 
                 try:

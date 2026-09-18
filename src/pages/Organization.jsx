@@ -8,7 +8,6 @@ import { OrganizationPreviewModal } from '../components/organization/Organizatio
 import { DuplicatesSection } from '../components/organization/DuplicatesSection';
 import { CategoryOverview } from '../components/organization/CategoryOverview';
 import { organizationService } from '../services/organizationService';
-import { INITIAL_SUGGESTIONS } from '../data/organizationMockData';
 import { FolderSearch, Sparkles } from 'lucide-react';
 
 // Simple Error Boundary Fallback for Organization Page
@@ -56,7 +55,7 @@ export const Organization = () => {
   // Analysis state: 'idle' | 'scanning' | 'complete' | 'error'
   const [analysisStatus, setAnalysisStatus] = useState('idle');
   const [currentStep, setCurrentStep] = useState(1);
-  const [suggestions, setSuggestions] = useState(INITIAL_SUGGESTIONS || []);
+  const [suggestions, setSuggestions] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [summaryStats, setSummaryStats] = useState({
     files_analyzed: 0,
