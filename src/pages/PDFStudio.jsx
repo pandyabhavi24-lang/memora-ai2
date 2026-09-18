@@ -13,6 +13,11 @@ import { ConvertModal } from '../components/pdfStudio/ConvertModal';
 import { ExportModal } from '../components/pdfStudio/ExportModal';
 import { PDFPreviewModal } from '../components/pdfStudio/PDFPreviewModal';
 import { PDFPageContextMenu } from '../components/pdfStudio/PDFPageContextMenu';
+import { PDFDraftsModal } from '../components/pdfStudio/PDFDraftsModal';
+import { SendEmailModal } from '../components/pdfStudio/SendEmailModal';
+import { SendWhatsAppModal } from '../components/pdfStudio/SendWhatsAppModal';
+import { SaveShareMenuModal } from '../components/pdfStudio/SaveShareMenuModal';
+import { CameraCaptureModal } from '../components/pdfStudio/CameraCaptureModal';
 import { FileText } from 'lucide-react';
 
 import { apiService } from '../services/apiService';
@@ -87,6 +92,12 @@ export const PDFStudio = () => {
   const [convertModalInitialTool, setConvertModalInitialTool] = useState('pdf-to-images');
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isDraftsModalOpen, setIsDraftsModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+  const [isSaveShareMenuOpen, setIsSaveShareMenuOpen] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [exportedPdfPath, setExportedPdfPath] = useState(null);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, pageIndex }
   const [isExporting, setIsExporting] = useState(false);
 
@@ -131,29 +142,17 @@ export const PDFStudio = () => {
   const handleSaveDraft = async () => {
     if (!activeDocument) return;
     try {
-      if (activeDocument.path) {
-        const docRec = await apiService.registerPDFDocument({
-          file_path: activeDocument.path,
-          title: activeDocument.title
-        });
-        
-        // Flatten text overlays & annotations
-        const allAnnos = activeDocument.pages.flatMap((page, pIdx) => {
-          return (page.textOverlays || []).map((t) => ({
-            page_index: pIdx,
-            annotation_type: 'text',
-            content_text: t.text,
-            x: t.xPct || 0,
-            y: t.yPct || 0,
-            font_size: t.fontSize || 14,
-            color: t.color || '#000000'
-          }));
-        });
+      const draftId = activeDocument.id || ('doc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+      const draftName = activeDocument.title || activeDocument.name || 'Untitled PDF';
+      const pageCount = activeDocument.pages?.length || 1;
 
-        if (allAnnos.length > 0 && docRec.id) {
-          await apiService.savePDFAnnotations(docRec.id, allAnnos);
-        }
-      }
+      // Save to SQLite DB via PDFDraft API
+      await apiService.savePDFDraft({
+        id: draftId,
+        name: draftName,
+        document_json: JSON.stringify(activeDocument),
+        page_count: pageCount
+      });
 
       localStorage.setItem('memora_pdf_studio_draft', JSON.stringify({
         activeDocument,
@@ -162,11 +161,59 @@ export const PDFStudio = () => {
         savedAt: new Date().toISOString()
       }));
 
-      addToast(`Workspace draft saved for '${activeDocument.title}'.`, 'success');
+      addToast(`Workspace draft saved for '${draftName}'.`, 'success');
     } catch (err) {
       console.error('Failed to save workspace draft:', err);
       addToast(`Workspace draft saved locally. (${err.message || 'Database sync notice'})`, 'info');
     }
+  };
+
+  const handleOpenDraft = (draftModel) => {
+    if (!draftModel) return;
+    setActiveDocument(draftModel);
+    setActivePageIndex(0);
+    setSelectedPageIndices([0]);
+    setSelectedElementId(null);
+    setSelectedTextId(null);
+    setExportFileName((draftModel.title || draftModel.name || 'Untitled') + '.pdf');
+    setZoomLevel(100);
+    setZoomMode('fit-page');
+    setViewMode('edit');
+    addToast(`Restored draft: '${draftModel.title || draftModel.name || 'Draft'}'`, 'success');
+  };
+
+  const handleCaptureFromCamera = (imageDataUrl) => {
+    if (!activeDocument || !imageDataUrl) return;
+    const targetW = 320;
+    const targetH = 240;
+    const newImgObj = {
+      id: 'img_' + Math.random().toString(36).substring(2, 9),
+      type: 'image',
+      x: Math.round((595 - targetW) / 2),
+      y: Math.round((842 - targetH) / 2),
+      width: targetW,
+      height: targetH,
+      imagePath: imageDataUrl,
+      previewUrl: imageDataUrl,
+      fileName: `Camera_Capture_${Date.now()}.png`,
+      aspectRatio: targetW / targetH,
+      zIndex: 5
+    };
+
+    setActiveDocument((prev) => {
+      if (!prev) return prev;
+      const updatedPages = [...prev.pages];
+      const curPage = updatedPages[activePageIndex] || {};
+      const existingElements = curPage.elements || [];
+      updatedPages[activePageIndex] = {
+        ...curPage,
+        elements: [...existingElements, newImgObj]
+      };
+      return { ...prev, pages: updatedPages };
+    });
+
+    setSelectedElementId(newImgObj.id);
+    addToast('Camera image added to current page!', 'success');
   };
 
   // Real PDF Export Execution
@@ -220,6 +267,8 @@ export const PDFStudio = () => {
         });
 
         setIsExportModalOpen(false);
+        setExportedPdfPath(res.output_path);
+        setIsSaveShareMenuOpen(true);
         addToast(
           `Export Successful!\n• Output PDF: ${res.file_name}\n• Page Count: ${res.page_count}\n• Size: ${(res.file_size_bytes / 1024).toFixed(1)} KB\n• Memora Indexing: ${res.indexed ? 'SUCCESS' : 'Local Only'}`,
           'success'
@@ -476,61 +525,157 @@ export const PDFStudio = () => {
     setPageSize(size || 'A4');
     setOrientation(orient || 'portrait');
 
-    const blankPages = Array.from({ length: pageCount || 1 }).map((_, i) => ({
-      id: Math.random().toString(36).substring(2, 9),
+    const newDocId = 'doc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const count = Math.max(1, Math.min(50, pageCount || 1));
+
+    const blankPages = Array.from({ length: count }).map((_, i) => ({
+      id: 'page_' + (i + 1) + '_' + Math.random().toString(36).substring(2, 7),
       type: 'blank',
       rotation: 0,
       title: `Page ${i + 1}`,
+      width: 595.27,
+      height: 841.89,
       content: '',
       elements: [],
       textOverlays: []
     }));
 
+    // Reset document state to brand new
     setActiveDocument({
-      title: 'New PDF Document',
+      id: newDocId,
+      name: 'Untitled PDF',
+      title: 'Untitled PDF',
+      status: 'unsaved',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       pages: blankPages
     });
+
     setActivePageIndex(0);
     setSelectedPageIndices([0]);
     setSelectedElementId(null);
     setSelectedTextId(null);
-    setExportFileName('new_document.pdf');
+    setExportFileName('Untitled_PDF.pdf');
     setZoomLevel(100);
     setZoomMode('fit-page');
     setViewMode('edit');
+    addToast('New PDF document created with 1 blank A4 page.', 'success');
   };
 
-  const handleCreateFromImages = (imagePagesArray) => {
-    const pages = imagePagesArray.map((img, idx) => ({
-      id: img.id,
-      type: 'image',
-      name: img.name,
-      previewUrl: img.previewUrl,
-      imagePath: img.file?.path || '',
-      rotation: img.rotation || 0,
-      title: img.name || `Page ${idx + 1}`,
-      elements: [
-        {
-          id: 'img_' + img.id,
+  const handleCreateFromImages = (imagePagesArray, layoutChoice = 'one_per_page') => {
+    if (!imagePagesArray || imagePagesArray.length === 0) return;
+
+    const newDocId = 'doc_img_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    let pages = [];
+
+    if (layoutChoice === 'one_per_page') {
+      // 5 images -> 5 pages, each page containing 1 full-bleed/centered image element
+      pages = imagePagesArray.map((img, idx) => ({
+        id: 'page_' + (idx + 1) + '_' + Math.random().toString(36).substring(2, 7),
+        type: 'image',
+        name: img.name,
+        rotation: img.rotation || 0,
+        title: `Page ${idx + 1}`,
+        width: 595.27,
+        height: 841.89,
+        elements: [
+          {
+            id: 'img_' + Math.random().toString(36).substring(2, 9),
+            type: 'image',
+            x: 36,
+            y: 36,
+            width: 595.27 - 72,
+            height: 841.89 - 72,
+            previewUrl: img.previewUrl,
+            imagePath: img.file?.path || img.previewUrl || '',
+            fileName: img.name,
+            aspectRatio: 1.0,
+            zIndex: 1
+          }
+        ],
+        textOverlays: []
+      }));
+    } else if (layoutChoice === 'all_on_page') {
+      // All images on single page
+      const elements = imagePagesArray.map((img, idx) => {
+        const offset = idx * 25;
+        return {
+          id: 'img_' + Math.random().toString(36).substring(2, 9),
           type: 'image',
-          x: 36,
-          y: 36,
-          width: 595 - 72,
-          height: 842 - 72,
+          x: 40 + offset,
+          y: 40 + offset,
+          width: 280,
+          height: 200,
           previewUrl: img.previewUrl,
-          imagePath: img.file?.path || '',
+          imagePath: img.file?.path || img.previewUrl || '',
           fileName: img.name,
-          aspectRatio: 1.0,
-          zIndex: 1
+          aspectRatio: 1.4,
+          zIndex: idx + 1
+        };
+      });
+
+      pages = [
+        {
+          id: 'page_1_' + Math.random().toString(36).substring(2, 7),
+          type: 'image',
+          title: 'Page 1',
+          width: 595.27,
+          height: 841.89,
+          elements,
+          textOverlays: []
         }
-      ],
-      textOverlays: []
-    }));
+      ];
+    } else if (layoutChoice === 'grid') {
+      // 2x3 Grid layout on single page
+      const cols = 2;
+      const cellW = 240;
+      const cellH = 220;
+      const startX = 40;
+      const startY = 40;
+      const gapX = 35;
+      const gapY = 35;
+
+      const elements = imagePagesArray.map((img, idx) => {
+        const r = Math.floor(idx / cols);
+        const c = idx % cols;
+        return {
+          id: 'img_' + Math.random().toString(36).substring(2, 9),
+          type: 'image',
+          x: startX + c * (cellW + gapX),
+          y: startY + r * (cellH + gapY),
+          width: cellW,
+          height: cellH,
+          previewUrl: img.previewUrl,
+          imagePath: img.file?.path || img.previewUrl || '',
+          fileName: img.name,
+          aspectRatio: cellW / cellH,
+          zIndex: idx + 1
+        };
+      });
+
+      pages = [
+        {
+          id: 'page_1_' + Math.random().toString(36).substring(2, 7),
+          type: 'image',
+          title: 'Page 1',
+          width: 595.27,
+          height: 841.89,
+          elements,
+          textOverlays: []
+        }
+      ];
+    }
 
     setActiveDocument({
-      title: 'Compiled Image Document.pdf',
+      id: newDocId,
+      name: 'Compiled Images PDF',
+      title: 'Compiled Images PDF',
+      status: 'unsaved',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       pages
     });
+
     setActivePageIndex(0);
     setSelectedPageIndices([0]);
     setSelectedElementId(null);
@@ -539,6 +684,7 @@ export const PDFStudio = () => {
     setZoomLevel(100);
     setZoomMode('fit-page');
     setViewMode('edit');
+    addToast(`Created document from ${imagePagesArray.length} image(s) [${layoutChoice}]`, 'success');
   };
 
   const handleCreateGeneratedPDF = async (docConfig) => {
@@ -1020,10 +1166,11 @@ export const PDFStudio = () => {
         {/* Page Header */}
         <PDFStudioHeader
           hasDocument={!!activeDocument}
-          documentTitle={activeDocument?.title}
+          documentTitle={activeDocument?.title || activeDocument?.name}
           pageCount={activeDocument?.pages?.length || 0}
           onNewPDF={() => setIsNewPdfModalOpen(true)}
           onOpenPDF={handleOpenPDF}
+          onOpenDrafts={() => setIsDraftsModalOpen(true)}
           onAddText={() => handleAddTextAtPosition()}
           onAddImage={handleAddImageClick}
           onAddFromMemora={() => setIsMemoraPickerOpen(true)}
@@ -1055,6 +1202,7 @@ export const PDFStudio = () => {
           <PDFStudioEmptyState
             onCreateNew={() => setIsNewPdfModalOpen(true)}
             onOpenPDF={handleOpenPDF}
+            onOpenDrafts={() => setIsDraftsModalOpen(true)}
             onAddFromMemora={() => setIsMemoraPickerOpen(true)}
           />
         ) : (
@@ -1106,6 +1254,7 @@ export const PDFStudio = () => {
               onMoveDown={() => handleMovePageDown(activePageIndex)}
               onAddText={() => handleAddTextAtPosition()}
               onAddImage={handleAddImageClick}
+              onAddFromCamera={() => setIsCameraModalOpen(true)}
               onCloseDocument={handleCloseDocument}
             />
 
@@ -1270,6 +1419,49 @@ export const PDFStudio = () => {
             onExtract={() => setIsExtractModalOpen(true)}
           />
         )}
+
+        {/* Drafts Manager Modal */}
+        <PDFDraftsModal
+          isOpen={isDraftsModalOpen}
+          onClose={() => setIsDraftsModalOpen(false)}
+          onOpenDraft={handleOpenDraft}
+        />
+
+        {/* Send via Email Modal */}
+        <SendEmailModal
+          isOpen={isEmailModalOpen}
+          onClose={() => setIsEmailModalOpen(false)}
+          pdfPath={exportedPdfPath}
+          pdfTitle={activeDocument?.title || activeDocument?.name}
+          addToast={addToast}
+        />
+
+        {/* Send via WhatsApp Modal */}
+        <SendWhatsAppModal
+          isOpen={isWhatsAppModalOpen}
+          onClose={() => setIsWhatsAppModalOpen(false)}
+          pdfPath={exportedPdfPath}
+          pdfTitle={activeDocument?.title || activeDocument?.name}
+          addToast={addToast}
+        />
+
+        {/* Save & Share Menu Modal */}
+        <SaveShareMenuModal
+          isOpen={isSaveShareMenuOpen}
+          onClose={() => setIsSaveShareMenuOpen(false)}
+          pdfPath={exportedPdfPath}
+          pdfTitle={activeDocument?.title || activeDocument?.name}
+          onSavePDF={() => addToast(`PDF saved locally to: ${exportedPdfPath}`, 'success')}
+          onOpenEmail={() => setIsEmailModalOpen(true)}
+          onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)}
+        />
+
+        {/* Camera Capture Modal */}
+        <CameraCaptureModal
+          isOpen={isCameraModalOpen}
+          onClose={() => setIsCameraModalOpen(false)}
+          onCaptureImage={handleCaptureFromCamera}
+        />
       </div>
     </PDFStudioErrorBoundary>
   );

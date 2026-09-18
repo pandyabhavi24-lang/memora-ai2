@@ -5,6 +5,7 @@ import {
   Highlighter, 
   Type,
   Image as ImageIcon,
+  Camera,
   Layers,
   ZoomIn, 
   ZoomOut, 
@@ -28,6 +29,7 @@ export const PDFStudioToolbar = ({
   onViewModeChange,
   onAddText,
   onAddImage,
+  onAddFromCamera,
   onAddFromMemora,
   zoomLevel = 100,
   zoomMode = 'fit-page', // 'custom' | 'fit-width' | 'fit-page'
@@ -70,6 +72,17 @@ export const PDFStudioToolbar = ({
           <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
           <span>Add Image</span>
         </button>
+
+        {onAddFromCamera && (
+          <button
+            onClick={onAddFromCamera}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-gray-400 hover:text-cyan-300 hover:bg-cyan-600/20 transition-all cursor-pointer"
+            title="Capture Photo from Camera"
+          >
+            <Camera className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Camera</span>
+          </button>
+        )}
 
         {onAddFromMemora && (
           <button

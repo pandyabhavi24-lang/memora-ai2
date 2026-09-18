@@ -1810,6 +1810,60 @@ class PdfService:
                     pass
         return ImageFont.load_default()
 
+    def resolve_and_validate_image(self, img_source: str, elem_id: str = "image") -> tuple:
+        """
+        Resolves image source (file path, file:// URL, or base64 data URL) into a verified physical file.
+        Validates image with Pillow. Raises ValueError if unresolvable or corrupted.
+        Returns (resolved_file_path, is_temporary_flag).
+        """
+        import base64
+        import tempfile
+        from PIL import Image
+
+        if not img_source or not isinstance(img_source, str):
+            raise ValueError(f"Image element '{elem_id}' has missing or empty image source reference.")
+
+        clean_source = img_source.strip()
+
+        # Handle file:// URLs
+        if clean_source.startswith("file:///"):
+            clean_source = clean_source[8:]
+        elif clean_source.startswith("file://"):
+            clean_source = clean_source[7:]
+
+        # Handle base64 Data URLs
+        if clean_source.startswith("data:image/"):
+            try:
+                header, base64_data = clean_source.split(",", 1)
+                img_bytes = base64.b64decode(base64_data)
+                t_fd, temp_img_path = tempfile.mkstemp(suffix="_base64.png")
+                os.close(t_fd)
+                with open(temp_img_path, "wb") as f:
+                    f.write(img_bytes)
+
+                with Image.open(temp_img_path) as pil_img:
+                    pil_img.verify()
+                return (temp_img_path, True)
+            except Exception as b64_err:
+                raise ValueError(f"Failed to decode or validate base64 image payload for element '{elem_id}': {b64_err}")
+
+        # Handle unresolved blob: URLs
+        if clean_source.startswith("blob:"):
+            raise ValueError(f"Image element '{elem_id}' contains an unresolved browser blob URL '{clean_source}'. Original file path or base64 data must be provided.")
+
+        # Validate local disk file existence
+        abs_path = os.path.abspath(clean_source)
+        if not os.path.exists(abs_path):
+            raise FileNotFoundError(f"Image element '{elem_id}' file not found at original path: '{clean_source}'")
+
+        try:
+            with Image.open(abs_path) as pil_img:
+                pil_img.verify()
+        except Exception as pil_err:
+            raise ValueError(f"Image element '{elem_id}' at '{abs_path}' is corrupted or unreadable: {pil_err}")
+
+        return (abs_path, False)
+
     def export_workspace_pdf(
         self,
         output_path: str,
@@ -1938,36 +1992,35 @@ class PdfService:
                     pdf_y = max(0.0, min(page_h - 10.0, page_h - y - h))
 
                     if e_type == "image":
-                        img_path = elem.get("imagePath") or elem.get("image_path") or elem.get("previewUrl")
-                        if img_path:
-                            real_img_path = img_path
-                            if real_img_path.startswith("file:///"):
-                                real_img_path = real_img_path[8:]
-                            if real_img_path.startswith("blob:"):
-                                real_img_path = None
+                        img_source = elem.get("source") or elem.get("imagePath") or elem.get("image_path") or elem.get("previewUrl")
+                        elem_id = str(elem.get("id", "image"))
+                        
+                        resolved_path, is_temp = self.resolve_and_validate_image(img_source, elem_id=elem_id)
+                        if is_temp:
+                            temp_files_to_clean.append(resolved_path)
 
-                            if real_img_path and os.path.exists(real_img_path):
-                                try:
-                                    with Image.open(real_img_path) as pil_img:
-                                        if pil_img.mode in ("CMYK", "P"):
-                                            pil_rgb = pil_img.convert("RGB")
-                                            t_img_fd, temp_normalized_img = tempfile.mkstemp(suffix="_rgb.png")
-                                            os.close(t_img_fd)
-                                            temp_files_to_clean.append(temp_normalized_img)
-                                            pil_rgb.save(temp_normalized_img, "PNG")
-                                            real_img_path = temp_normalized_img
+                        try:
+                            with Image.open(resolved_path) as pil_img:
+                                if pil_img.mode in ("CMYK", "P", "RGBA"):
+                                    pil_rgb = pil_img.convert("RGB")
+                                    t_img_fd, temp_normalized_img = tempfile.mkstemp(suffix="_rgb.png")
+                                    os.close(t_img_fd)
+                                    temp_files_to_clean.append(temp_normalized_img)
+                                    pil_rgb.save(temp_normalized_img, "PNG")
+                                    resolved_path = temp_normalized_img
 
-                                        rl_canvas.drawImage(
-                                            real_img_path,
-                                            pdf_x,
-                                            pdf_y,
-                                            width=w,
-                                            height=h,
-                                            mask='auto',
-                                            preserveAspectRatio=False
-                                        )
-                                except Exception as img_err:
-                                    logger.warning(f"Error drawing image element '{real_img_path}' in ReportLab: {img_err}")
+                                rl_canvas.drawImage(
+                                    resolved_path,
+                                    pdf_x,
+                                    pdf_y,
+                                    width=w,
+                                    height=h,
+                                    mask='auto',
+                                    preserveAspectRatio=False
+                                )
+                        except Exception as img_err:
+                            logger.error(f"Failed to render image element '{elem_id}' at '{resolved_path}' in ReportLab: {img_err}")
+                            raise ValueError(f"Failed to embed image '{elem.get('fileName', 'image')}' into PDF: {img_err}")
 
                     elif e_type == "text":
                         text_val = str(elem.get("text", "")).strip()
@@ -2450,8 +2503,64 @@ class PdfService:
             register_in_db=register_in_db
         )
 
+    # ==========================================
+    # PDF STUDIO DRAFTS PERSISTENCE
+    # ==========================================
+
+    def save_draft(self, db, draft_id: Optional[str], name: str, document_json: str, page_count: int = 1):
+        import uuid
+        import json
+        from ..models import PDFDraft
+
+        if not draft_id or draft_id == "null":
+            draft_id = f"draft_{uuid.uuid4().hex[:10]}"
+
+        try:
+            _ = json.loads(document_json)
+        except Exception as je:
+            raise ValueError(f"Invalid document model JSON for draft: {je}")
+
+        draft = db.query(PDFDraft).filter(PDFDraft.id == draft_id).first()
+        if draft:
+            draft.name = name or draft.name
+            draft.document_json = document_json
+            draft.page_count = page_count
+        else:
+            draft = PDFDraft(
+                id=draft_id,
+                name=name or "Untitled PDF",
+                document_json=document_json,
+                page_count=page_count
+            )
+            db.add(draft)
+
+        db.commit()
+        db.refresh(draft)
+        return draft
+
+    def list_drafts(self, db):
+        from ..models import PDFDraft
+        return db.query(PDFDraft).order_by(PDFDraft.updated_at.desc()).all()
+
+    def get_draft(self, db, draft_id: str):
+        from ..models import PDFDraft
+        draft = db.query(PDFDraft).filter(PDFDraft.id == draft_id).first()
+        if not draft:
+            raise FileNotFoundError(f"PDF Draft '{draft_id}' not found.")
+        return draft
+
+    def delete_draft(self, db, draft_id: str):
+        from ..models import PDFDraft
+        draft = db.query(PDFDraft).filter(PDFDraft.id == draft_id).first()
+        if not draft:
+            raise FileNotFoundError(f"PDF Draft '{draft_id}' not found.")
+        db.delete(draft)
+        db.commit()
+        return {"status": "success", "message": f"Draft '{draft_id}' deleted."}
+
 
 pdf_service = PdfService()
+
 
 
 

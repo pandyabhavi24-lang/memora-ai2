@@ -14,6 +14,7 @@ import { SearchResults } from './pages/SearchResults';
 import { Organization } from './pages/Organization';
 import { MediaIntelligence } from './pages/MediaIntelligence';
 import { PDFStudio } from './pages/PDFStudio';
+import { FileExpiry } from './pages/FileExpiry';
 import { Settings } from './pages/Settings';
 
 export default function App() {
@@ -73,6 +74,14 @@ export default function App() {
             element={
               <MainLayout>
                 <PDFStudio />
+              </MainLayout>
+            }
+          />
+          <Route
+            path="/expiry"
+            element={
+              <MainLayout>
+                <FileExpiry />
               </MainLayout>
             }
           />

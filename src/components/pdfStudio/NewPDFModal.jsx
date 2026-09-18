@@ -52,6 +52,7 @@ export const NewPDFModal = ({
 
   // Images PDF Form State
   const [selectedImages, setSelectedImages] = useState([]);
+  const [layoutChoice, setLayoutChoice] = useState('one_per_page'); // 'one_per_page' | 'all_on_page' | 'grid'
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
@@ -203,7 +204,7 @@ export const NewPDFModal = ({
 
   const handleConfirmCreateFromImages = () => {
     if (selectedImages.length === 0) return;
-    onCreateFromImages(selectedImages);
+    onCreateFromImages(selectedImages, layoutChoice);
     onClose();
   };
 
@@ -696,6 +697,46 @@ export const NewPDFModal = ({
         {/* =================================================================== */}
         {activeTab === 'images' && (
           <div className="space-y-4">
+            {/* Layout Choice Options */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-gray-300">Image Compilation Layout</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLayoutChoice('one_per_page')}
+                  className={`p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-all ${
+                    layoutChoice === 'one_per_page'
+                      ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold shadow-sm'
+                      : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  One image per page
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutChoice('all_on_page')}
+                  className={`p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-all ${
+                    layoutChoice === 'all_on_page'
+                      ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold shadow-sm'
+                      : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  All on single page
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutChoice('grid')}
+                  className={`p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-all ${
+                    layoutChoice === 'grid'
+                      ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold shadow-sm'
+                      : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  2x3 Grid layout
+                </button>
+              </div>
+            </div>
+
             {/* Error Banner */}
             {errorMessage && (
               <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">

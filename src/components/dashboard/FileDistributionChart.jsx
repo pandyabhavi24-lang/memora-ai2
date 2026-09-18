@@ -66,7 +66,7 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
   const activeSegment = hoveredIdx !== null ? segments[hoveredIdx] : null;
 
   return (
-    <div className="glass-panel p-3.5 sm:p-4 rounded-2xl border border-slate-800 flex flex-col justify-between h-full shadow-lg shadow-black/20">
+    <div className="glass-panel p-3 rounded-2xl border border-slate-800 flex flex-col justify-between h-full shadow-lg shadow-black/20">
       {/* Header Bar */}
       <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
         <div className="flex items-center gap-2">

@@ -99,12 +99,12 @@ export const WorkflowPipeline = ({
   ];
 
   return (
-    <div className="glass-panel p-3.5 sm:p-4 rounded-2xl border-slate-800/80 shadow-lg shadow-black/30">
+    <div className="glass-panel p-2.5 sm:p-3 rounded-2xl border-slate-800/80 shadow-md shadow-black/30">
       {/* Header Bar */}
-      <div className="flex items-center justify-between mb-3 px-0.5">
+      <div className="flex items-center justify-between mb-2 px-0.5">
         <div className="flex items-center gap-2">
           <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-          <span className="text-xs font-extrabold uppercase tracking-wider text-slate-200">
+          <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-slate-200">
             Memora AI Engine Workflow
           </span>
         </div>
@@ -128,7 +128,7 @@ export const WorkflowPipeline = ({
                 onMouseLeave={() => setActiveTooltip(null)}
                 onFocus={() => setActiveTooltip(step.id)}
                 onBlur={() => setActiveTooltip(null)}
-                className={`w-full p-2.5 sm:p-3 rounded-xl border border-slate-800 ${step.accentBg} ${step.borderColor} transition-all duration-200 text-left group cursor-pointer flex flex-col justify-between min-h-[68px] relative overflow-hidden shadow-sm hover:shadow-md`}
+                className={`w-full p-2 sm:p-2.5 rounded-xl border border-slate-800 ${step.accentBg} ${step.borderColor} transition-all duration-200 text-left group cursor-pointer flex flex-col justify-between min-h-[56px] relative overflow-hidden shadow-sm hover:shadow-md`}
                 aria-label={`${step.label}: ${step.fullName}`}
               >
                 {/* Step Top Color Accent Line */}

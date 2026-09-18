@@ -656,6 +656,25 @@ class PDFDocumentCreateSchema(BaseModel):
     file_id: Optional[int] = None
 
 
+class PDFDraftCreateSchema(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = "Untitled PDF"
+    document_json: str
+    page_count: Optional[int] = 1
+
+
+class PDFDraftResponse(BaseModel):
+    id: str
+    name: str
+    document_json: str
+    page_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class PDFMemoraFilesQuerySchema(BaseModel):
     file_type: Optional[str] = "all"  # pdf, image, scanned, all
     folder_id: Optional[int] = None
@@ -677,6 +696,75 @@ class PDFExportImageComparisonRequest(BaseModel):
     notes: Optional[str] = None
     folder_id: Optional[int] = None
     register_in_db: Optional[bool] = True
+
+
+# ==============================================================================
+# MODULE 5 SCHEMAS - FILE EXPIRY & RENEWAL REMINDERS
+# ==============================================================================
+
+class ExpiryRecordResponse(BaseModel):
+    id: int
+    file_id: int
+    file_name: str
+    file_path: str
+    file_extension: str
+    document_type: str
+    date_type: str
+    extracted_date: datetime
+    issue_date: Optional[datetime] = None
+    original_text: Optional[str] = None
+    confidence: float
+    extraction_method: str
+    reason: Optional[str] = None
+    status: str
+    user_confirmed: bool
+    reminder_enabled: bool
+    reminder_days_before: int
+    last_notified_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ExpirySummaryResponse(BaseModel):
+    total_tracked: int
+    upcoming: int
+    due_soon: int
+    expired: int
+    needs_review: int
+    files_scanned: Optional[int] = None
+    expiries_detected: Optional[int] = None
+    ollama_available: Optional[bool] = False
+    ollama_model: Optional[str] = None
+
+
+class ExpiryUpdateRequest(BaseModel):
+    document_type: Optional[str] = None
+    date_type: Optional[str] = None
+    extracted_date: Optional[str] = None
+    reminder_enabled: Optional[bool] = None
+    reminder_days_before: Optional[int] = None
+    user_confirmed: Optional[bool] = None
+    reason: Optional[str] = None
+
+
+class OllamaStatusResponse(BaseModel):
+    available: bool
+    model: str = ""
+    base_url: str = ""
+
+
+class ExpiryConfirmRequest(BaseModel):
+    confirmed: bool = True
+
+
+class ExpiryScanResponse(BaseModel):
+    files_scanned: int
+    expiries_detected: int
+    summary: ExpirySummaryResponse
+
 
 
 

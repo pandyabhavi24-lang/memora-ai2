@@ -22,6 +22,7 @@ export const PDFStudioHeader = ({
   hasUnsavedChanges = false,
   onNewPDF,
   onOpenPDF,
+  onOpenDrafts,
   onAddImage,
   onAddText,
   onAddFromMemora,
@@ -92,6 +93,20 @@ export const PDFStudioHeader = ({
             Open PDF
           </span>
         </button>
+
+        {/* Drafts List Button */}
+        {onOpenDrafts && (
+          <button
+            onClick={onOpenDrafts}
+            title="Open Saved Workspace Drafts"
+            className="group relative flex items-center h-9 px-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 border border-gray-700/60 font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
+          >
+            <Save className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-out">
+              Drafts
+            </span>
+          </button>
+        )}
 
         {/* Add from Memora Button */}
         <button
