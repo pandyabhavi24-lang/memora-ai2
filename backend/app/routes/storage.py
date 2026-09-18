@@ -111,7 +111,8 @@ def create_optimization_candidate(
             file_id=req.file_id,
             mode=req.mode,
             lossy_quality=req.lossy_quality,
-            bmp_target_format=req.bmp_target_format
+            bmp_target_format=req.bmp_target_format,
+            max_dimension=req.max_dimension
         )
         return OptimizeCandidateResponse(**data)
     except StorageServiceError as e:

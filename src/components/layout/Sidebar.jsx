@@ -13,7 +13,8 @@ import {
   BarChart3,
   Calendar,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  HardDrive
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -56,6 +57,7 @@ export const Sidebar = () => {
     { label: 'Organization', path: '/organize', icon: FolderTree },
     { label: 'Media Intelligence', path: '/media', icon: Sparkles },
     { label: 'PDF Studio', path: '/pdf-studio', icon: FileText },
+    { label: 'Storage Optimization', path: '/storage-optimization', icon: HardDrive },
     { label: 'Analytics', path: '#', icon: BarChart3, disabled: true, badge: 'Coming soon' },
     { label: 'Events', path: '#', icon: Calendar, disabled: true, badge: 'Coming soon' },
     { label: 'Settings', path: '/settings', icon: Settings },

@@ -27,6 +27,8 @@ class ImageOptimizationResult:
     is_lossless: bool
     quality: Optional[int]
     is_format_conversion: bool
+    candidate_width: Optional[int] = None
+    candidate_height: Optional[int] = None
 
 
 class ImageOptimizer:
@@ -40,7 +42,7 @@ class ImageOptimizer:
     
     Safety Rules:
     - Never overwrites or deletes the source file.
-    - Preserves dimensions and color profiles.
+    - Preserves dimensions and color profiles unless proportional max_dimension is specified.
     - Validates candidate integrity by fully decoding the resulting file.
     - Deletes incomplete or failed candidate files on error.
     """
@@ -53,7 +55,8 @@ class ImageOptimizer:
         candidate_path: str,
         mode: str = "lossless",
         lossy_quality: int = 82,
-        bmp_target_format: str = "png"
+        bmp_target_format: str = "png",
+        max_dimension: Optional[int] = None
     ) -> ImageOptimizationResult:
         """
         Generates and validates an optimized candidate image from source_path.
@@ -64,6 +67,8 @@ class ImageOptimizer:
             mode: 'lossless' (default) or 'lossy'.
             lossy_quality: Integer quality (65-90, default 82) used when mode='lossy'.
             bmp_target_format: Target format for BMP conversion (default 'png').
+            max_dimension: Optional maximum dimension (width or height) in pixels.
+                           If larger, the image is scaled down proportionally with LANCZOS.
 
         Returns:
             ImageOptimizationResult containing candidate metadata and sizes.
@@ -108,30 +113,50 @@ class ImageOptimizer:
                     )
 
                 width, height = img.size
-                img_mode = img.mode
                 info = dict(img.info)
+
+                # Calculate target dimensions with optional max_dimension (proportional Lanczos downsampling)
+                target_w, target_h = width, height
+                is_resized = False
+                if max_dimension is not None and max_dimension > 0:
+                    max_side = max(width, height)
+                    if max_side > max_dimension:
+                        scale = max_dimension / float(max_side)
+                        target_w = max(1, round(width * scale))
+                        target_h = max(1, round(height * scale))
+                        is_resized = True
+
+                work_img = img
+                if is_resized:
+                    resample_filter = getattr(getattr(Image, 'Resampling', None), 'LANCZOS', getattr(Image, 'LANCZOS', 1))
+                    if work_img.mode == "P" and "transparency" in info:
+                        work_img = work_img.convert("RGBA")
+                    work_img = work_img.resize((target_w, target_h), resample=resample_filter)
 
                 # 3. Dispatch to format-specific optimizer
                 if src_format in ("JPEG", "JPG"):
                     result_meta = self._optimize_jpeg(
-                        img=img,
+                        img=work_img,
                         candidate_path=candidate_abs,
                         mode=mode,
                         lossy_quality=lossy_quality,
-                        info=info
+                        info=info,
+                        is_resized=is_resized
                     )
                 elif src_format == "PNG":
                     result_meta = self._optimize_png(
-                        img=img,
+                        img=work_img,
                         candidate_path=candidate_abs,
-                        info=info
+                        info=info,
+                        is_resized=is_resized
                     )
                 elif src_format == "BMP":
                     result_meta = self._convert_bmp(
-                        img=img,
+                        img=work_img,
                         candidate_path=candidate_abs,
                         target_format=bmp_target_format,
-                        info=info
+                        info=info,
+                        is_resized=is_resized
                     )
                 else:
                     raise ImageOptimizationError(f"Unhandled format: {src_format}")
@@ -140,7 +165,7 @@ class ImageOptimizer:
             self._validate_candidate(
                 candidate_path=candidate_abs,
                 expected_format=result_meta["candidate_format"],
-                expected_size=(width, height)
+                expected_size=(target_w, target_h)
             )
 
             candidate_size = os.path.getsize(candidate_abs)
@@ -157,7 +182,9 @@ class ImageOptimizer:
                 strategy_used=result_meta["strategy_used"],
                 is_lossless=result_meta["is_lossless"],
                 quality=result_meta.get("quality"),
-                is_format_conversion=result_meta["is_format_conversion"]
+                is_format_conversion=result_meta["is_format_conversion"],
+                candidate_width=target_w,
+                candidate_height=target_h
             )
 
         except (ImageOptimizationError, UnidentifiedImageError) as err:
@@ -174,7 +201,8 @@ class ImageOptimizer:
         candidate_path: str,
         mode: str,
         lossy_quality: int,
-        info: dict
+        info: dict,
+        is_resized: bool = False
     ) -> dict:
         """Executes lossless or lossy JPEG optimization."""
         # JPEG cannot safely save RGBA/transparency without dropping alpha
@@ -204,15 +232,24 @@ class ImageOptimizer:
             is_lossless = False
             quality_out = bounded_q
             strategy = f"jpeg_lossy_q{bounded_q}"
+            if is_resized:
+                strategy += f"_max_dim_{img.size[0]}x{img.size[1]}"
         else:
-            # Lossless mode: optimize Huffman tables without re-quantizing if possible
-            if hasattr(img, "quantization") and img.quantization:
-                save_kwargs["quality"] = "keep"
-            else:
+            if is_resized:
+                # Downsampling occurred: use high-quality encoding (95) with Huffman optimization
                 save_kwargs["quality"] = 95
-            is_lossless = True
-            quality_out = None
-            strategy = "jpeg_lossless_huffman_optimization"
+                is_lossless = False
+                quality_out = 95
+                strategy = f"jpeg_dimension_reduction_{img.size[0]}x{img.size[1]}"
+            else:
+                # Pure Lossless mode: optimize Huffman tables without re-quantizing if possible
+                if hasattr(img, "quantization") and img.quantization:
+                    save_kwargs["quality"] = "keep"
+                else:
+                    save_kwargs["quality"] = 95
+                is_lossless = True
+                quality_out = None
+                strategy = "jpeg_lossless_huffman_optimization"
 
         # Do not include EXIF/XMP by default (strips redundant camera/GPS metadata)
         img.save(candidate_path, **save_kwargs)
@@ -229,7 +266,8 @@ class ImageOptimizer:
         self,
         img: Image.Image,
         candidate_path: str,
-        info: dict
+        info: dict,
+        is_resized: bool = False
     ) -> dict:
         """Executes lossless PNG optimization using max compression & adaptive filtering."""
         save_kwargs = {
@@ -243,15 +281,17 @@ class ImageOptimizer:
             save_kwargs["icc_profile"] = info["icc_profile"]
 
         # Preserve transparency metadata if palette-based with transparency
-        if "transparency" in info:
+        if "transparency" in info and img.mode != "RGBA":
             save_kwargs["transparency"] = info["transparency"]
 
         img.save(candidate_path, **save_kwargs)
 
+        strategy = f"png_deflate_dimension_reduction_{img.size[0]}x{img.size[1]}" if is_resized else "png_lossless_deflate_optimization"
+
         return {
             "candidate_format": "PNG",
-            "strategy_used": "png_lossless_deflate_optimization",
-            "is_lossless": True,
+            "strategy_used": strategy,
+            "is_lossless": not is_resized,
             "quality": None,
             "is_format_conversion": False
         }
@@ -261,7 +301,8 @@ class ImageOptimizer:
         img: Image.Image,
         candidate_path: str,
         target_format: str,
-        info: dict
+        info: dict,
+        is_resized: bool = False
     ) -> dict:
         """Converts uncompressed BMP to lossless PNG format."""
         target_fmt_upper = (target_format or "png").upper()
@@ -275,15 +316,17 @@ class ImageOptimizer:
         }
 
         # Preserve palette transparency if present
-        if "transparency" in info:
+        if "transparency" in info and img.mode != "RGBA":
             save_kwargs["transparency"] = info["transparency"]
 
         img.save(candidate_path, **save_kwargs)
 
+        strategy = f"bmp_to_png_dimension_reduction_{img.size[0]}x{img.size[1]}" if is_resized else "bmp_to_png_conversion"
+
         return {
             "candidate_format": "PNG",
-            "strategy_used": "bmp_to_png_conversion",
-            "is_lossless": True,
+            "strategy_used": strategy,
+            "is_lossless": not is_resized,
             "quality": None,
             "is_format_conversion": True
         }

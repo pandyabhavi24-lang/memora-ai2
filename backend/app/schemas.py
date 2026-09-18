@@ -636,6 +636,7 @@ class OptimizeCandidateRequest(BaseModel):
     mode: Literal["lossless", "lossy"] = "lossless"
     lossy_quality: Optional[int] = Field(82, ge=50, le=100)
     bmp_target_format: Optional[Literal["png", "webp"]] = "png"
+    max_dimension: Optional[int] = Field(None, ge=128, le=16384, description="Optional maximum dimension (width or height) in pixels")
 
 
 class OptimizeCandidateResponse(BaseModel):
@@ -652,6 +653,8 @@ class OptimizeCandidateResponse(BaseModel):
     candidate_token: Optional[str] = None
     strategy_used: Optional[str] = None
     execution_time_ms: Optional[float] = None
+    original_dimensions: Optional[str] = None
+    candidate_dimensions: Optional[str] = None
     reason: Optional[str] = None
 
 
@@ -664,10 +667,18 @@ class OptimizeApplyRequest(BaseModel):
 class OptimizeApplyResponse(BaseModel):
     status: str
     file_id: int
+    new_file_id: Optional[int] = None
+    original_path: Optional[str] = None
     final_path: Optional[str] = None
+    original_size: Optional[int] = None
+    optimized_size: Optional[int] = None
     final_size_bytes: Optional[int] = None
     bytes_saved: Optional[int] = None
+    percentage_saved: Optional[float] = None
+    is_format_conversion: Optional[bool] = False
+    new_format: Optional[str] = None
     message: str
+
 
 
 class ZipArchiveRequest(BaseModel):

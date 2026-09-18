@@ -275,7 +275,8 @@ class StorageService:
         file_id: int,
         mode: str = "lossless",
         lossy_quality: int = 82,
-        bmp_target_format: str = "png"
+        bmp_target_format: str = "png",
+        max_dimension: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Generates and registers an optimization candidate in the source file's directory.
@@ -344,6 +345,8 @@ class StorageService:
         candidate_path = os.path.join(source_dir, f".{base_name}.cand_{token}.tmp")
 
         start_time = time.perf_counter()
+        original_dims = None
+        candidate_dims = None
 
         try:
             if ext in (".jpg", ".jpeg", ".png", ".bmp"):
@@ -352,12 +355,15 @@ class StorageService:
                     candidate_path=candidate_path,
                     mode=mode,
                     lossy_quality=lossy_quality,
-                    bmp_target_format=bmp_target_format
+                    bmp_target_format=bmp_target_format,
+                    max_dimension=max_dimension
                 )
                 candidate_size = img_res.candidate_size
                 strategy_used = img_res.strategy_used
                 is_lossless = img_res.is_lossless
                 is_format_conv = img_res.is_format_conversion
+                original_dims = f"{img_res.width}x{img_res.height}"
+                candidate_dims = f"{img_res.candidate_width}x{img_res.candidate_height}" if (img_res.candidate_width and img_res.candidate_height) else original_dims
 
             elif ext == ".pdf":
                 pdf_res = pdf_optimizer.optimize_pdf(
@@ -368,6 +374,8 @@ class StorageService:
                 strategy_used = pdf_res.strategy_used
                 is_lossless = pdf_res.is_lossless
                 is_format_conv = False
+                original_dims = None
+                candidate_dims = None
             else:
                 raise StorageServiceError(f"Unsupported format router for: {ext}")
 
@@ -391,7 +399,10 @@ class StorageService:
                     "bytes_saved": bytes_saved,
                     "bytes_saved_formatted": format_bytes(bytes_saved),
                     "percentage_saved": pct_saved,
+                    "is_lossless": is_lossless,
                     "strategy_used": strategy_used,
+                    "original_dimensions": original_dims,
+                    "candidate_dimensions": candidate_dims,
                     "reason": "Candidate produced insufficient savings (< 20 KB and < 3%). Original kept."
                 }
 
@@ -424,7 +435,9 @@ class StorageService:
                 "is_lossless": is_lossless,
                 "candidate_token": token,
                 "strategy_used": strategy_used,
-                "execution_time_ms": execution_time
+                "execution_time_ms": execution_time,
+                "original_dimensions": original_dims,
+                "candidate_dimensions": candidate_dims
             }
 
         except (ImageOptimizationError, PdfOptimizationError) as opt_err:
@@ -493,6 +506,30 @@ class StorageService:
         source_dir = os.path.dirname(source_path)
         base_name = os.path.basename(source_path)
 
+        # Validate candidate is strictly smaller than original
+        if record.candidate_size >= record.original_size:
+            self._safe_remove(candidate_path)
+            self._candidate_registry.pop(candidate_token, None)
+            raise StorageServiceError("Candidate file is not smaller than original file.")
+
+        # =====================================================================
+        # Branch 1: Non-Destructive "Create New Copy" (replace_original=False)
+        # =====================================================================
+        if not replace_original:
+            return self._apply_create_copy(
+                db=db,
+                record=record,
+                file_rec=file_rec,
+                source_path=source_path,
+                candidate_path=candidate_path,
+                source_dir=source_dir,
+                base_name=base_name,
+                candidate_token=candidate_token
+            )
+
+        # =====================================================================
+        # Branch 2: Staged Replacement (replace_original=True)
+        # =====================================================================
         # ---------------------------------------------------------------------
         # Case 1: In-Place Replacement (JPEG, PNG, PDF)
         # ---------------------------------------------------------------------
@@ -536,12 +573,20 @@ class StorageService:
                 self._candidate_registry.pop(candidate_token, None)
 
                 bytes_saved = record.original_size - new_size
+                pct_saved = round((bytes_saved / record.original_size) * 100, 2) if record.original_size > 0 else 0.0
                 return {
                     "status": "success",
                     "file_id": file_id,
+                    "new_file_id": None,
+                    "original_path": source_path,
                     "final_path": source_path,
+                    "original_size": record.original_size,
+                    "optimized_size": new_size,
                     "final_size_bytes": new_size,
                     "bytes_saved": bytes_saved,
+                    "percentage_saved": pct_saved,
+                    "is_format_conversion": False,
+                    "new_format": None,
                     "message": f"Successfully optimized '{base_name}' ({format_bytes(bytes_saved)} saved)."
                 }
 
@@ -608,12 +653,20 @@ class StorageService:
                 self._candidate_registry.pop(candidate_token, None)
 
                 bytes_saved = record.original_size - new_size
+                pct_saved = round((bytes_saved / record.original_size) * 100, 2) if record.original_size > 0 else 0.0
                 return {
                     "status": "success",
                     "file_id": file_id,
+                    "new_file_id": None,
+                    "original_path": source_path,
                     "final_path": new_path,
+                    "original_size": record.original_size,
+                    "optimized_size": new_size,
                     "final_size_bytes": new_size,
                     "bytes_saved": bytes_saved,
+                    "percentage_saved": pct_saved,
+                    "is_format_conversion": True,
+                    "new_format": "PNG",
                     "message": f"Successfully converted '{base_name}' to '{new_name}' ({format_bytes(bytes_saved)} saved)."
                 }
 
@@ -623,6 +676,113 @@ class StorageService:
                 self._safe_remove(candidate_path)
                 db.rollback()
                 raise StorageServiceError(f"Format conversion failed; original BMP preserved: {conv_err}")
+
+    def _apply_create_copy(
+        self,
+        db: Session,
+        record: CandidateRecord,
+        file_rec: File,
+        source_path: str,
+        candidate_path: str,
+        source_dir: str,
+        base_name: str,
+        candidate_token: str
+    ) -> Dict[str, Any]:
+        """
+        Applies an optimization candidate non-destructively by creating a new copy.
+        The original physical file and its database record remain completely untouched.
+        """
+        stem, ext = os.path.splitext(base_name)
+        target_ext = ".png" if record.is_format_conversion else ext
+
+        # Generate non-colliding destination filename:
+        # <stem>_optimized.<ext> -> <stem>_optimized (1).<ext> -> <stem>_optimized (2).<ext>...
+        counter = 0
+        while True:
+            if counter == 0:
+                cand_name = f"{stem}_optimized{target_ext}"
+            else:
+                cand_name = f"{stem}_optimized ({counter}){target_ext}"
+
+            cand_path = os.path.join(source_dir, cand_name)
+
+            # Check both filesystem and DB path uniqueness
+            path_exists = os.path.exists(cand_path)
+            db_exists = db.query(File).filter(File.path == cand_path).first() is not None
+
+            if not path_exists and not db_exists:
+                dest_name = cand_name
+                dest_path = cand_path
+                break
+
+            counter += 1
+
+        try:
+            # Atomic same-directory move from candidate temporary path to destination
+            os.replace(candidate_path, dest_path)
+
+            # Validate newly created file
+            if not os.path.exists(dest_path) or os.path.getsize(dest_path) != record.candidate_size:
+                raise RuntimeError("Created copy verification failed.")
+
+            new_size = os.path.getsize(dest_path)
+            new_mtime = datetime.fromtimestamp(os.stat(dest_path).st_mtime)
+            new_hash = calculate_sha256(dest_path)
+
+            # Determine MIME type
+            mime_map = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".bmp": "image/bmp",
+                ".pdf": "application/pdf"
+            }
+            new_mime = mime_map.get(target_ext.lower(), file_rec.mime_type or "application/octet-stream")
+
+            # Register as a brand new File in database
+            new_file_rec = File(
+                folder_id=file_rec.folder_id,
+                path=dest_path,
+                name=dest_name,
+                extension=target_ext.lower(),
+                size=new_size,
+                modified_at=new_mtime,
+                file_hash=new_hash,
+                mime_type=new_mime,
+                extraction_status="pending"
+            )
+            db.add(new_file_rec)
+            db.commit()
+            db.refresh(new_file_rec)
+
+            self._candidate_registry.pop(candidate_token, None)
+
+            bytes_saved = record.original_size - new_size
+            pct_saved = round((bytes_saved / record.original_size) * 100, 2) if record.original_size > 0 else 0.0
+
+            return {
+                "status": "success",
+                "file_id": file_rec.id,
+                "new_file_id": new_file_rec.id,
+                "original_path": source_path,
+                "final_path": dest_path,
+                "original_size": record.original_size,
+                "optimized_size": new_size,
+                "final_size_bytes": new_size,
+                "bytes_saved": bytes_saved,
+                "percentage_saved": pct_saved,
+                "is_format_conversion": record.is_format_conversion,
+                "new_format": target_ext.lstrip(".").upper() if record.is_format_conversion else None,
+                "message": f"Successfully created optimized copy '{dest_name}' ({format_bytes(bytes_saved)} saved). Original preserved."
+            }
+
+        except Exception as copy_err:
+            logger.error(f"Failed to create new optimized copy for '{source_path}': {copy_err}", exc_info=True)
+            db.rollback()
+            self._safe_remove(dest_path)
+            self._safe_remove(candidate_path)
+            self._candidate_registry.pop(candidate_token, None)
+            raise StorageServiceError(f"Failed to create optimized copy; original preserved: {copy_err}")
 
     # =========================================================================
     # 5. MULTI-FILE ZIP ARCHIVING
