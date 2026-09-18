@@ -132,6 +132,16 @@ ipcMain.handle('dialog:openFile', async (event, filters) => {
   return result;
 });
 
+ipcMain.handle('dialog:showSaveDialog', async (event, options) => {
+  if (!mainWindow) return { canceled: true, filePath: '' };
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: options?.title || 'Save Archive',
+    defaultPath: options?.defaultPath || 'memora_archive.zip',
+    filters: options?.filters || [{ name: 'ZIP Archives', extensions: ['zip'] }]
+  });
+  return result;
+});
+
 ipcMain.handle('shell:openPath', async (event, filePath) => {
   if (!filePath) return false;
   const result = await shell.openPath(filePath);

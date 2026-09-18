@@ -11,7 +11,8 @@ import {
   ShieldCheck, 
   Cpu,
   Sparkles,
-  FileText
+  FileText,
+  HardDrive
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -22,6 +23,7 @@ export const Sidebar = () => {
     { label: 'Organize', path: '/organize', icon: FolderTree },
     { label: 'Media Intelligence', path: '/media', icon: Sparkles },
     { label: 'PDF Studio', path: '/pdf-studio', icon: FileText },
+    { label: 'Storage Optimization', path: '/storage-optimization', icon: HardDrive },
     { label: 'Scanned Folders', path: '/folders', icon: FolderSearch },
     { label: 'Settings', path: '/settings', icon: Settings },
   ];

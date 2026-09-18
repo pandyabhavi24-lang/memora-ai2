@@ -1,6 +1,6 @@
-from typing import List, Optional
+from typing import List, Optional, Literal, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 
 # Folder Schemas
 class FolderBase(BaseModel):
@@ -584,6 +584,105 @@ class PDFExportImageComparisonRequest(BaseModel):
     notes: Optional[str] = None
     folder_id: Optional[int] = None
     register_in_db: Optional[bool] = True
+
+
+# ==========================================
+# MODULE 5 SCHEMAS - STORAGE & OPTIMIZATION
+# ==========================================
+
+class StorageCategoryBreakdown(BaseModel):
+    category: str
+    bytes: int
+    formatted: str
+    count: int
+    percentage: float
+
+
+class StorageSummaryResponse(BaseModel):
+    total_files: int
+    total_size_bytes: int
+    total_size_formatted: str
+    category_breakdown: List[StorageCategoryBreakdown]
+    optimizable_candidates_count: int
+
+
+class LargeFileItem(BaseModel):
+    id: int
+    name: str
+    path: str
+    size_bytes: int
+    size_formatted: str
+    extension: str
+    modified_at: datetime
+    category: str
+    is_optimizable: bool
+    optimization_type: Optional[str] = None
+
+
+class LargeFilesQuery(BaseModel):
+    limit: Optional[int] = Field(50, ge=1, le=500)
+    min_size_mb: Optional[float] = Field(5.0, ge=0.0)
+
+
+class LargeFilesResponse(BaseModel):
+    items: List[LargeFileItem]
+    total_count: int
+
+
+class OptimizeCandidateRequest(BaseModel):
+    file_id: int = Field(..., gt=0)
+    mode: Literal["lossless", "lossy"] = "lossless"
+    lossy_quality: Optional[int] = Field(82, ge=50, le=100)
+    bmp_target_format: Optional[Literal["png", "webp"]] = "png"
+
+
+class OptimizeCandidateResponse(BaseModel):
+    status: str
+    file_id: int
+    original_size: Optional[int] = None
+    original_size_formatted: Optional[str] = None
+    candidate_size: Optional[int] = None
+    candidate_size_formatted: Optional[str] = None
+    bytes_saved: Optional[int] = None
+    bytes_saved_formatted: Optional[str] = None
+    percentage_saved: Optional[float] = None
+    is_lossless: Optional[bool] = True
+    candidate_token: Optional[str] = None
+    strategy_used: Optional[str] = None
+    execution_time_ms: Optional[float] = None
+    reason: Optional[str] = None
+
+
+class OptimizeApplyRequest(BaseModel):
+    file_id: int = Field(..., gt=0)
+    candidate_token: str = Field(..., min_length=1, pattern=r"^[a-zA-Z0-9_\-]+$")
+    replace_original: bool = True
+
+
+class OptimizeApplyResponse(BaseModel):
+    status: str
+    file_id: int
+    final_path: Optional[str] = None
+    final_size_bytes: Optional[int] = None
+    bytes_saved: Optional[int] = None
+    message: str
+
+
+class ZipArchiveRequest(BaseModel):
+    file_ids: List[int] = Field(..., min_length=1)
+    destination_path: str = Field(..., min_length=1)
+    compression_level: int = Field(9, ge=0, le=9)
+    overwrite: bool = False
+
+
+class ZipArchiveResponse(BaseModel):
+    status: str
+    destination_path: str
+    files_archived: int
+    total_original_bytes: int
+    archive_size_bytes: int
+    percentage_saved: float
+    execution_time_ms: float
 
 
 

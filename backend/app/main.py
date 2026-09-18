@@ -7,7 +7,7 @@ from .database import engine, SessionLocal, Base, init_db_schema
 from .ai.faiss_manager import faiss_manager
 from .services.embedding_service import embedding_service
 from .services.organization_service import organization_service
-from .routes import health, folders, files, scan, search, statistics, organization, media, pdf
+from .routes import health, folders, files, scan, search, statistics, organization, media, pdf, storage
 
 # Configure logging
 logging.basicConfig(
@@ -73,6 +73,7 @@ app.include_router(statistics.router)
 app.include_router(organization.router)
 app.include_router(media.router)
 app.include_router(pdf.router)
+app.include_router(storage.router)
 
 from .schemas import SearchRequest, SearchResponse
 from .services.search_service import search_service
