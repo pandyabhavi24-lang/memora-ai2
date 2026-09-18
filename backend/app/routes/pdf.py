@@ -11,6 +11,10 @@ from ..schemas import (
     PDFCreateBlankRequest,
     PDFManipulateRequest,
     PDFMergeRequest,
+    PDFAlternateRequest,
+    PDFAlternatePreviewRequest,
+    PDFAlternatePreviewResponse,
+    PDFGenerateDocumentRequest,
     PDFSplitRequest,
     PDFImagesToPDFRequest,
     PDFOperationResponse,
@@ -53,6 +57,7 @@ def pdf_studio_health():
             status=health_info["status"],
             pypdf_available=health_info["pypdf_available"],
             pil_available=health_info["pil_available"],
+            reportlab_available=health_info.get("reportlab_available", True),
             version="1.0.0"
         )
     except Exception as e:
@@ -212,6 +217,93 @@ def merge_pdf_documents(req: PDFMergeRequest, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error occurred during PDF merging operation."
+        )
+
+
+@router.post("/alternate", response_model=PDFOperationResponse)
+def alternate_pdf_pages(req: PDFAlternateRequest, db: Session = Depends(get_db)):
+    """
+    Interleaves pages from two PDF documents in alternating sequence (A->B->A->B or B->A->B->A).
+    Preserves all remaining pages if document lengths differ.
+    """
+    try:
+        res = pdf_service.alternate_pages(
+            pdf1_path=req.pdf1_path,
+            pdf2_path=req.pdf2_path,
+            output_path=req.output_path,
+            start_with=req.start_with or "pdf1",
+            db=db,
+            folder_id=req.folder_id,
+            register_in_db=req.register_in_db if req.register_in_db is not None else True
+        )
+        return PDFOperationResponse(**res)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to alternate PDF pages: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error occurred during PDF alternating operation."
+        )
+
+
+@router.post("/alternate/preview", response_model=PDFAlternatePreviewResponse)
+def preview_alternate_pdf_pages(req: PDFAlternatePreviewRequest):
+    """
+    Generates preview mapping of interleaved page sequence before executing alternate export.
+    """
+    try:
+        res = pdf_service.preview_alternate_pages(
+            pdf1_path=req.pdf1_path,
+            pdf2_path=req.pdf2_path,
+            start_with=req.start_with or "pdf1"
+        )
+        return PDFAlternatePreviewResponse(**res)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to generate alternate pages preview: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error occurred generating alternate pages preview."
+        )
+
+
+@router.post("/generate", response_model=PDFOperationResponse)
+def generate_pdf_document(req: PDFGenerateDocumentRequest, db: Session = Depends(get_db)):
+    """
+    Generates a structured, professional PDF document using ReportLab (Text, Images, Image+Text, Headings).
+    """
+    try:
+        sections_dict = [s.model_dump() for s in req.sections] if req.sections else []
+        res = pdf_service.generate_document_with_reportlab(
+            output_path=req.output_path,
+            title=req.title or "Document",
+            author=req.author or "Memora AI",
+            subject=req.subject,
+            page_size=req.page_size or "A4",
+            orientation=req.orientation or "portrait",
+            margin_points=req.margin_points if req.margin_points is not None else 36.0,
+            include_page_numbers=req.include_page_numbers if req.include_page_numbers is not None else True,
+            sections=sections_dict,
+            db=db,
+            folder_id=req.folder_id,
+            register_in_db=req.register_in_db if req.register_in_db is not None else True
+        )
+        return PDFOperationResponse(**res)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to generate ReportLab PDF document: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error occurred generating PDF document with ReportLab."
         )
 
 

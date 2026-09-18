@@ -314,6 +314,7 @@ class PDFHealthResponse(BaseModel):
     status: str
     pypdf_available: bool
     pil_available: bool
+    reportlab_available: bool = True
     version: str = "1.0.0"
 
 
@@ -387,6 +388,65 @@ class PDFMergeRequest(BaseModel):
     register_in_db: Optional[bool] = True
 
 
+class PDFAlternateRequest(BaseModel):
+    pdf1_path: str
+    pdf2_path: str
+    start_with: Optional[str] = "pdf1"  # "pdf1" or "pdf2"
+    output_path: str
+    folder_id: Optional[int] = None
+    register_in_db: Optional[bool] = True
+
+
+class PDFAlternatePreviewRequest(BaseModel):
+    pdf1_path: str
+    pdf2_path: str
+    start_with: Optional[str] = "pdf1"  # "pdf1" or "pdf2"
+
+
+class PDFAlternatePageOrder(BaseModel):
+    output_page: int
+    source: str
+    source_page: int
+    source_path: str
+    label: str
+
+
+class PDFAlternatePreviewResponse(BaseModel):
+    status: str
+    total_pages: int
+    pdf1_page_count: int
+    pdf2_page_count: int
+    start_with: str
+    page_order: List[PDFAlternatePageOrder]
+
+
+class PDFGenerateSection(BaseModel):
+    type: str = "paragraph"  # 'title', 'heading', 'paragraph', 'image', 'image_and_text', 'page_break', 'spacer'
+    title: Optional[str] = None
+    text: Optional[str] = None
+    image_path: Optional[str] = None
+    image_caption: Optional[str] = None
+    image_width: Optional[float] = None
+    image_height: Optional[float] = None
+    layout: Optional[str] = "stacked"  # 'stacked', 'side_by_side'
+    font_size: Optional[float] = None
+    alignment: Optional[str] = "left"  # 'left', 'center', 'right', 'justify'
+
+
+class PDFGenerateDocumentRequest(BaseModel):
+    output_path: str
+    title: Optional[str] = "Document"
+    author: Optional[str] = "Memora AI"
+    subject: Optional[str] = None
+    page_size: Optional[str] = "A4"  # A4, Letter, Legal
+    orientation: Optional[str] = "portrait"  # portrait, landscape
+    margin_points: Optional[float] = 36.0
+    include_page_numbers: Optional[bool] = True
+    sections: List[PDFGenerateSection] = []
+    folder_id: Optional[int] = None
+    register_in_db: Optional[bool] = True
+
+
 class PDFSplitRequest(BaseModel):
     source_path: str
     output_dir: str
@@ -448,6 +508,35 @@ class PDFOperationResponse(BaseModel):
     message: str
 
 
+class PDFWorkspaceElementSchema(BaseModel):
+    id: Optional[str] = None
+    type: str = "text"  # 'text', 'image'
+    x: float = 0.0  # points from left
+    y: float = 0.0  # points from top
+    width: float = 200.0  # width in points
+    height: float = 50.0  # height in points
+    # Text properties
+    text: Optional[str] = None
+    fontSize: Optional[float] = 14.0
+    font_size: Optional[float] = None
+    fontWeight: Optional[str] = "normal"  # 'bold' | 'normal'
+    font_weight: Optional[str] = None
+    fontStyle: Optional[str] = "normal"  # 'italic' | 'normal'
+    font_style: Optional[str] = None
+    textAlign: Optional[str] = "left"  # 'left' | 'center' | 'right' | 'justify'
+    text_align: Optional[str] = None
+    color: Optional[str] = "#1e293b"
+    lineHeight: Optional[float] = 1.3
+    # Image properties
+    imagePath: Optional[str] = None
+    image_path: Optional[str] = None
+    previewUrl: Optional[str] = None
+    aspectRatio: Optional[float] = 1.0
+    zIndex: Optional[int] = 1
+    z_index: Optional[int] = None
+    opacity: Optional[float] = 1.0
+
+
 class PDFWorkspacePageSchema(BaseModel):
     id: Optional[str] = None
     type: str = "blank"  # blank, image, pdf_page
@@ -458,6 +547,7 @@ class PDFWorkspacePageSchema(BaseModel):
     path: Optional[str] = None
     rotation: Optional[int] = 0
     title: Optional[str] = None
+    elements: Optional[List[PDFWorkspaceElementSchema]] = []
     textOverlays: Optional[List[dict]] = []
     text_overlays: Optional[List[dict]] = []
     annotations: Optional[List[dict]] = []
@@ -468,6 +558,8 @@ class PDFWorkspaceExportRequest(BaseModel):
     pages: List[PDFWorkspacePageSchema]
     page_size: Optional[str] = "A4"
     orientation: Optional[str] = "portrait"
+    include_page_numbers: Optional[bool] = False
+    title: Optional[str] = "Memora Document"
     register_in_db: Optional[bool] = True
     folder_id: Optional[int] = None
 

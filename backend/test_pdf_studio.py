@@ -771,8 +771,320 @@ def run_pdf_studio_tests():
         assert res_ws_exp.json()["verified"] is True
         print("  SUCCESS: Dynamic Workspace exported and verified physically on disk!")
 
+        # =====================================================================
+        # SPECIFICATION TESTS: ITEMS A THROUGH N
+        # =====================================================================
         print("\n==================================================")
-        print("ALL 31 PDF STUDIO MEMORA INTEGRATION TESTS PASSED!")
+        print("EXECUTING SPECIFICATION TESTS: SCENARIOS A THROUGH N")
+        print("==================================================")
+
+        # Helper images for ReportLab tests
+        rl_img1 = os.path.join(temp_dir, "rl_photo1.png")
+        rl_img2 = os.path.join(temp_dir, "rl_photo2.png")
+        rl_img3 = os.path.join(temp_dir, "rl_photo3.png")
+        Image.new("RGB", (600, 400), color="#2563eb").save(rl_img1)
+        Image.new("RGB", (400, 400), color="#16a34a").save(rl_img2)
+        Image.new("RGB", (800, 500), color="#d97706").save(rl_img3)
+
+        # [A] text -> PDF (ReportLab)
+        print("\n[A] Testing Text -> PDF with ReportLab (/api/pdf/generate)...")
+        pdf_a_out = os.path.join(temp_dir, "spec_test_a_text.pdf")
+        req_a = {
+            "title": "ReportLab Typography Specification Document",
+            "author": "Memora Testing Suite",
+            "page_size": "A4",
+            "orientation": "portrait",
+            "margin_pt": 36.0,
+            "include_page_numbers": True,
+            "output_path": pdf_a_out,
+            "sections": [
+                {"type": "heading", "level": 1, "text": "Executive Technical Briefing"},
+                {"type": "heading", "level": 2, "text": "1. Architectural Overview"},
+                {"type": "paragraph", "text": "ReportLab powers advanced client-side server PDF generation with full Platypus layout automation, proportional text wrapping, and precise typographic metrics."},
+                {"type": "heading", "level": 2, "text": "2. Security and Compliance"},
+                {"type": "paragraph", "text": "All operations execute 100% locally with zero cloud dependencies, ensuring complete data sovereignty and strict compliance."}
+            ]
+        }
+        res_a = client.post("/api/pdf/generate", json=req_a)
+        assert res_a.status_code == 200, f"Error: {res_a.text}"
+        assert os.path.exists(pdf_a_out)
+        r_a = pypdf.PdfReader(pdf_a_out)
+        assert len(r_a.pages) >= 1
+        print(f"  [A] PASS: Generated text PDF verified on disk ({len(r_a.pages)} page(s), {os.path.getsize(pdf_a_out)} bytes).")
+
+        # [B] image -> PDF (ReportLab)
+        print("\n[B] Testing Image -> PDF with ReportLab (/api/pdf/generate)...")
+        pdf_b_out = os.path.join(temp_dir, "spec_test_b_image.pdf")
+        req_b = {
+            "title": "Visual Artifact Report",
+            "output_path": pdf_b_out,
+            "sections": [
+                {"type": "image", "image_path": rl_img1, "caption": "Figure 1.1: System Architecture Diagram"}
+            ]
+        }
+        res_b = client.post("/api/pdf/generate", json=req_b)
+        assert res_b.status_code == 200, f"Error: {res_b.text}"
+        assert os.path.exists(pdf_b_out)
+        r_b = pypdf.PdfReader(pdf_b_out)
+        assert len(r_b.pages) == 1
+        print(f"  [B] PASS: Generated single-image PDF verified on disk ({len(r_b.pages)} page(s)).")
+
+        # [C] image + text -> PDF (ReportLab)
+        print("\n[C] Testing Image + Text -> PDF with ReportLab (/api/pdf/generate)...")
+        pdf_c_out = os.path.join(temp_dir, "spec_test_c_mixed.pdf")
+        req_c = {
+            "title": "Mixed Layout Document",
+            "output_path": pdf_c_out,
+            "sections": [
+                {"type": "heading", "level": 1, "text": "Multi-Modal Layout Showcase"},
+                {
+                    "type": "image_text",
+                    "image_path": rl_img2,
+                    "text": "This paragraph sits beside the accompanying diagram. ReportLab aligns the layout neatly inside a Platypus table.",
+                    "layout": "side_by_side"
+                },
+                {
+                    "type": "image_text",
+                    "image_path": rl_img3,
+                    "text": "Below is a stacked layout where the descriptive text is placed directly under the primary illustration.",
+                    "layout": "stacked"
+                }
+            ]
+        }
+        res_c = client.post("/api/pdf/generate", json=req_c)
+        assert res_c.status_code == 200, f"Error: {res_c.text}"
+        assert os.path.exists(pdf_c_out)
+        r_c = pypdf.PdfReader(pdf_c_out)
+        assert len(r_c.pages) >= 1
+        print(f"  [C] PASS: Generated image+text layout PDF verified ({len(r_c.pages)} page(s)).")
+
+        # [D] multiple images -> multi-page PDF (ReportLab)
+        print("\n[D] Testing Multiple Images -> Multi-page PDF (/api/pdf/generate)...")
+        pdf_d_out = os.path.join(temp_dir, "spec_test_d_multi_images.pdf")
+        req_d = {
+            "title": "Image Portfolio Gallery",
+            "output_path": pdf_d_out,
+            "sections": [
+                {"type": "heading", "level": 1, "text": "Multi-Page Image Collection"},
+                {"type": "image", "image_path": rl_img1, "caption": "Page 1 Gallery Photo"},
+                {"type": "page_break"},
+                {"type": "image", "image_path": rl_img2, "caption": "Page 2 Gallery Photo"},
+                {"type": "page_break"},
+                {"type": "image", "image_path": rl_img3, "caption": "Page 3 Gallery Photo"}
+            ]
+        }
+        res_d = client.post("/api/pdf/generate", json=req_d)
+        assert res_d.status_code == 200, f"Error: {res_d.text}"
+        assert os.path.exists(pdf_d_out)
+        r_d = pypdf.PdfReader(pdf_d_out)
+        assert len(r_d.pages) == 3
+        print(f"  [D] PASS: Generated multi-image multi-page PDF ({len(r_d.pages)} pages).")
+
+        # Helper test PDFs for manipulation and alternate operations
+        # Create PDF 1 with 5 distinct pages
+        pdf1_5p = os.path.join(temp_dir, "doc1_5pages.pdf")
+        client.post("/api/pdf/create-blank", json={"file_name": "doc1_5pages.pdf", "output_dir": temp_dir, "page_count": 5, "page_size": "A4"})
+        # Create PDF 2 with 3 distinct pages
+        pdf2_3p = os.path.join(temp_dir, "doc2_3pages.pdf")
+        client.post("/api/pdf/create-blank", json={"file_name": "doc2_3pages.pdf", "output_dir": temp_dir, "page_count": 3, "page_size": "A4"})
+        # Create PDF 3 with 2 distinct pages
+        pdf3_2p = os.path.join(temp_dir, "doc3_2pages.pdf")
+        client.post("/api/pdf/create-blank", json={"file_name": "doc3_2pages.pdf", "output_dir": temp_dir, "page_count": 2, "page_size": "A4"})
+        # Create PDF 4 with 4 distinct pages
+        pdf4_4p = os.path.join(temp_dir, "doc4_4pages.pdf")
+        client.post("/api/pdf/create-blank", json={"file_name": "doc4_4pages.pdf", "output_dir": temp_dir, "page_count": 4, "page_size": "A4"})
+
+        # [E] normal PDF merge
+        print("\n[E] Testing Normal PDF Merge (/api/pdf/merge)...")
+        pdf_e_out = os.path.join(temp_dir, "spec_test_e_merge.pdf")
+        req_e = {
+            "source_paths": [pdf3_2p, pdf2_3p],
+            "output_path": pdf_e_out
+        }
+        res_e = client.post("/api/pdf/merge", json=req_e)
+        assert res_e.status_code == 200
+        assert os.path.exists(pdf_e_out)
+        r_e = pypdf.PdfReader(pdf_e_out)
+        assert len(r_e.pages) == 5  # 2 + 3 = 5
+        print(f"  [E] PASS: Merged 2-page and 3-page PDFs into 5-page PDF.")
+
+        # [F] PDF page reorder
+        print("\n[F] Testing PDF Page Reorder (/api/pdf/reorder)...")
+        pdf_f_out = os.path.join(temp_dir, "spec_test_f_reorder.pdf")
+        shutil.copyfile(pdf4_4p, pdf_f_out)
+        req_f = {
+            "source_path": pdf_f_out,
+            "new_page_order": [3, 2, 1, 0]
+        }
+        res_f = client.post("/api/pdf/reorder", json=req_f)
+        assert res_f.status_code == 200
+        r_f = pypdf.PdfReader(pdf_f_out)
+        assert len(r_f.pages) == 4
+        print(f"  [F] PASS: Reordered 4-page PDF with order [3, 2, 1, 0].")
+
+        # [G] PDF page deletion
+        print("\n[G] Testing PDF Page Deletion (/api/pdf/manipulate)...")
+        pdf_g_out = os.path.join(temp_dir, "spec_test_g_deletion.pdf")
+        shutil.copyfile(pdf2_3p, pdf_g_out)  # 3 pages
+        req_g = {
+            "source_path": pdf_g_out,
+            "actions": [
+                {"action": "delete", "page_index": 1}
+            ]
+        }
+        res_g = client.post("/api/pdf/manipulate", json=req_g)
+        assert res_g.status_code == 200
+        r_g = pypdf.PdfReader(pdf_g_out)
+        assert len(r_g.pages) == 2  # 3 - 1 = 2
+        print(f"  [G] PASS: Deleted page 1; 3-page PDF safely reduced to 2 pages.")
+
+        # [H] PDF split
+        print("\n[H] Testing PDF Split (/api/pdf/split)...")
+        pdf_h_split_dir = os.path.join(temp_dir, "spec_test_h_split_dir")
+        req_h = {
+            "source_path": pdf4_4p,
+            "output_dir": pdf_h_split_dir,
+            "split_mode": "every_page",
+            "naming_prefix": "page_part"
+        }
+        res_h = client.post("/api/pdf/split", json=req_h)
+        assert res_h.status_code == 200
+        assert res_h.json()["total_generated_files"] == 4
+        for single_part in res_h.json()["generated_files"]:
+            assert os.path.exists(single_part)
+            r_part = pypdf.PdfReader(single_part)
+            assert len(r_part.pages) == 1
+        print(f"  [H] PASS: Split 4-page PDF into 4 individual verified PDFs.")
+
+        # [I] alternate pages with equal page counts
+        print("\n[I] Testing Alternate Pages with Equal Page Counts (/api/pdf/alternate)...")
+        pdf_i_out = os.path.join(temp_dir, "spec_test_i_alternate_equal.pdf")
+        # PDF A has 2 pages (A1, A2), PDF B has 2 pages (B1, B2)
+        pdf_i_a = os.path.join(temp_dir, "doc_i_a.pdf")
+        pdf_i_b = os.path.join(temp_dir, "doc_i_b.pdf")
+        client.post("/api/pdf/create-blank", json={"file_name": "doc_i_a.pdf", "output_dir": temp_dir, "page_count": 2})
+        client.post("/api/pdf/create-blank", json={"file_name": "doc_i_b.pdf", "output_dir": temp_dir, "page_count": 2})
+
+        req_i = {
+            "pdf1_path": pdf_i_a,
+            "pdf2_path": pdf_i_b,
+            "output_path": pdf_i_out,
+            "start_with": "pdf1"
+        }
+        res_i = client.post("/api/pdf/alternate", json=req_i)
+        assert res_i.status_code == 200, f"Error in alternate equal: {res_i.text}"
+        assert os.path.exists(pdf_i_out)
+        r_i = pypdf.PdfReader(pdf_i_out)
+        assert len(r_i.pages) == 4  # A1, B1, A2, B2
+        assert res_i.json()["page_count"] == 4
+        print(f"  [I] PASS: Interleaved equal 2p + 2p PDFs into 4-page output.")
+
+        # [J] alternate pages where PDF 1 is longer
+        print("\n[J] Testing Alternate Pages Where PDF 1 is Longer (PDF1: 5 pages, PDF2: 3 pages)...")
+        pdf_j_out = os.path.join(temp_dir, "spec_test_j_pdf1_longer.pdf")
+        req_j = {
+            "pdf1_path": pdf1_5p,  # 5 pages
+            "pdf2_path": pdf2_3p,  # 3 pages
+            "output_path": pdf_j_out,
+            "start_with": "pdf1"
+        }
+        res_j = client.post("/api/pdf/alternate", json=req_j)
+        assert res_j.status_code == 200, f"Error in alternate PDF1 longer: {res_j.text}"
+        assert os.path.exists(pdf_j_out)
+        r_j = pypdf.PdfReader(pdf_j_out)
+        # Sequence: A1, B1, A2, B2, A3, B3, A4, A5 => 8 pages total
+        assert len(r_j.pages) == 8
+        assert res_j.json()["page_count"] == 8
+        print(f"  [J] PASS: Interleaved unequal 5p + 3p with zero dropped pages (Result: {len(r_j.pages)} pages).")
+
+        # [K] alternate pages where PDF 2 is longer
+        print("\n[K] Testing Alternate Pages Where PDF 2 is Longer (PDF1: 2 pages, PDF2: 4 pages)...")
+        pdf_k_out = os.path.join(temp_dir, "spec_test_k_pdf2_longer.pdf")
+        req_k = {
+            "pdf1_path": pdf3_2p,  # 2 pages
+            "pdf2_path": pdf4_4p,  # 4 pages
+            "output_path": pdf_k_out,
+            "start_with": "pdf1"
+        }
+        res_k = client.post("/api/pdf/alternate", json=req_k)
+        assert res_k.status_code == 200, f"Error in alternate PDF2 longer: {res_k.text}"
+        assert os.path.exists(pdf_k_out)
+        r_k = pypdf.PdfReader(pdf_k_out)
+        # Sequence: A1, B1, A2, B2, B3, B4 => 6 pages total
+        assert len(r_k.pages) == 6
+        assert res_k.json()["page_count"] == 6
+        print(f"  [K] PASS: Interleaved unequal 2p + 4p with zero dropped pages (Result: {len(r_k.pages)} pages).")
+
+        # [L] alternate mode starting with PDF 1
+        print("\n[L] Testing Alternate Mode Starting with PDF 1 (Preview & Result Sequence)...")
+        # Preview endpoint test
+        preview_req_l = {
+            "pdf1_path": pdf3_2p,  # 2 pages
+            "pdf2_path": pdf2_3p,  # 3 pages
+            "start_with": "pdf1"
+        }
+        res_prev_l = client.post("/api/pdf/alternate/preview", json=preview_req_l)
+        assert res_prev_l.status_code == 200, f"Error in preview L: {res_prev_l.text}"
+        order_l = res_prev_l.json()["page_order"]
+        assert len(order_l) == 5
+        assert order_l[0]["source"] == "PDF 1" and order_l[0]["source_page"] == 1
+        assert order_l[1]["source"] == "PDF 2" and order_l[1]["source_page"] == 1
+        assert order_l[2]["source"] == "PDF 1" and order_l[2]["source_page"] == 2
+        assert order_l[3]["source"] == "PDF 2" and order_l[3]["source_page"] == 2
+        assert order_l[4]["source"] == "PDF 2" and order_l[4]["source_page"] == 3
+        print(f"  [L] PASS: Live preview validated for start_with='pdf1' (Sequence: {[p['label'] for p in order_l]}).")
+
+        # [M] alternate mode starting with PDF 2
+        print("\n[M] Testing Alternate Mode Starting with PDF 2 (Preview & Result Sequence)...")
+        preview_req_m = {
+            "pdf1_path": pdf3_2p,  # 2 pages
+            "pdf2_path": pdf2_3p,  # 3 pages
+            "start_with": "pdf2"
+        }
+        res_prev_m = client.post("/api/pdf/alternate/preview", json=preview_req_m)
+        assert res_prev_m.status_code == 200, f"Error in preview M: {res_prev_m.text}"
+        order_m = res_prev_m.json()["page_order"]
+        assert len(order_m) == 5
+        assert order_m[0]["source"] == "PDF 2" and order_m[0]["source_page"] == 1
+        assert order_m[1]["source"] == "PDF 1" and order_m[1]["source_page"] == 1
+        assert order_m[2]["source"] == "PDF 2" and order_m[2]["source_page"] == 2
+        assert order_m[3]["source"] == "PDF 1" and order_m[3]["source_page"] == 2
+        assert order_m[4]["source"] == "PDF 2" and order_m[4]["source_page"] == 3
+        print(f"  [M] PASS: Live preview validated for start_with='pdf2' (Sequence: {[p['label'] for p in order_m]}).")
+
+        pdf_m_out = os.path.join(temp_dir, "spec_test_m_start_pdf2.pdf")
+        res_m = client.post("/api/pdf/alternate", json={
+            "pdf1_path": pdf3_2p,
+            "pdf2_path": pdf2_3p,
+            "output_path": pdf_m_out,
+            "start_with": "pdf2"
+        })
+        assert res_m.status_code == 200, f"Error in alternate M: {res_m.text}"
+        assert os.path.exists(pdf_m_out)
+        r_m = pypdf.PdfReader(pdf_m_out)
+        assert len(r_m.pages) == 5
+        print(f"  [M] PASS: Alternate PDF generated starting with PDF 2 ({len(r_m.pages)} pages).")
+
+        # [N] actual output file exists after export
+        print("\n[N] Testing Physical Output File Existence & Non-Faking Guarantee...")
+        all_test_outputs = [
+            pdf_a_out, pdf_b_out, pdf_c_out, pdf_d_out, pdf_e_out,
+            pdf_f_out, pdf_g_out, pdf_i_out, pdf_j_out, pdf_k_out, pdf_m_out
+        ]
+        for out_file in all_test_outputs:
+            assert os.path.exists(out_file), f"Output file does not exist: {out_file}"
+            assert os.path.getsize(out_file) > 100, f"Output file is suspiciously small or empty: {out_file}"
+            # Verify valid PDF header
+            with open(out_file, "rb") as fh:
+                head = fh.read(5)
+                assert head == b"%PDF-", f"File {out_file} is not a valid PDF binary"
+            # Verify readable by pypdf
+            reader = pypdf.PdfReader(out_file)
+            assert len(reader.pages) > 0
+        print(f"  [N] PASS: All {len(all_test_outputs)} generated output files physically verified on disk with valid PDF magic bytes.")
+
+        print("\n==================================================")
+        print("ALL TESTS (1-31 & SPEC A-N) COMPLETED SUCCESSFULLY!")
         print("==================================================")
 
     finally:
