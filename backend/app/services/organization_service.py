@@ -145,9 +145,15 @@ class OrganizationService:
 
             category_obj = categories.get(cat_name)
             if not category_obj:
-                category_obj = categories.get("Education") if ("Java" in cat_name or "Study" in cat_name) else categories.get("Other")
+                std_cat_name = classification_service.determine_standard_category(
+                    filename=f.name,
+                    extension=f.extension,
+                    smart_tags=smart_tags,
+                    extracted_text=f.extracted_text or ""
+                )
+                category_obj = categories.get(std_cat_name)
                 if not category_obj and categories:
-                    category_obj = list(categories.values())[0]
+                    category_obj = categories.get("Other") or list(categories.values())[0]
 
             if has_existing:
                 sug = existing_suggestions[f.id]
@@ -663,16 +669,19 @@ class OrganizationService:
         total_files = len(all_files)
 
         for f in all_files:
-            if f.id in file_cat_map:
+            cat_name = None
+            if f.id in file_cat_map and file_cat_map[f.id] != "Other":
                 cat_name = file_cat_map[f.id]
-            else:
-                ext = (f.extension or "").lower()
-                if ext in ['.pdf', '.docx', '.doc', '.txt', '.rtf', '.md', '.pptx', '.xlsx']:
-                    cat_name = "Documents"
-                elif ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.svg', '.gif']:
-                    cat_name = "Images"
-                else:
-                    cat_name = "Other"
+
+            if not cat_name:
+                smart_tags = f.get_smart_tags()
+                cat_name = classification_service.determine_standard_category(
+                    filename=f.name,
+                    extension=f.extension,
+                    smart_tags=smart_tags,
+                    extracted_text=f.extracted_text or ""
+                )
+
             counts[cat_name] = counts.get(cat_name, 0) + 1
 
         ai_categories_list = []

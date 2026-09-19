@@ -84,5 +84,10 @@ def trigger_folder_scan(folder_id: int, background_tasks: BackgroundTasks, db: S
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found")
 
+    current_status = indexing_service.get_status()
+    if current_status["status"] == "scanning":
+        return {"message": "Scan already in progress", "status": current_status}
+
     background_tasks.add_task(indexing_service.run_folder_indexing, folder_id)
     return {"message": f"Scan triggered for folder '{folder.name}'"}
+

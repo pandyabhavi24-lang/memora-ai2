@@ -109,6 +109,23 @@ def calculate_sha256(file_path: str, block_size: int = 65536) -> str:
         return ""
 
 
+def normalize_path(path: str) -> str:
+    """
+    Standardizes a file path consistently:
+    1. Expands absolute normalized path.
+    2. On Windows, normalizes drive letter to upper case (e.g. 'c:\...' -> 'C:\...').
+    """
+    if not path:
+        return ""
+    try:
+        norm = os.path.normpath(os.path.abspath(str(path)))
+        if len(norm) >= 2 and norm[1] == ":":
+            norm = norm[0].upper() + norm[1:]
+        return norm
+    except Exception:
+        return str(path)
+
+
 def scan_directory(folder_path: str) -> List[Dict[str, Any]]:
     """
     Recursively scans folder_path for files matching supported extensions.
@@ -127,7 +144,7 @@ def scan_directory(folder_path: str) -> List[Dict[str, Any]]:
         for file in files:
             ext = os.path.splitext(file)[1].lower()
             if ext in SUPPORTED_EXTENSIONS:
-                full_path = os.path.abspath(os.path.join(root, file))
+                full_path = normalize_path(os.path.join(root, file))
 
                 if is_temp_or_test_path(full_path):
                     continue
@@ -152,4 +169,5 @@ def scan_directory(folder_path: str) -> List[Dict[str, Any]]:
                     logger.error(f"Error reading file stat for '{full_path}': {e}")
 
     return found_files
+
 

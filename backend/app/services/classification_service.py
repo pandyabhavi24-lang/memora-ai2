@@ -256,6 +256,56 @@ class ClassificationService:
 
         return final_tags if final_tags else ["General"]
 
+    def determine_standard_category(
+        self,
+        filename: str,
+        extension: str,
+        smart_tags: List[str],
+        extracted_text: str = ""
+    ) -> str:
+        """
+        Maps a file to one of the standard system categories:
+        'Documents', 'Education', 'Projects', 'Work', 'Certificates', 'Finance', 'Personal', 'Images', 'Other'.
+        Grounded in smart_tags, extracted text, filename, and file extension.
+        """
+        ext_clean = (extension or "").lower().replace(".", "")
+        tags_str = " ".join(smart_tags).lower()
+        combined_text = f"{filename} {tags_str} {extracted_text}".lower()
+
+        # 1. Domain-specific keyword checks
+        if any(k in combined_text for k in ["certificate", "licence", "license", "driving licence", "driving license", "visa", "passport", "diploma", "accredited"]):
+            return "Certificates"
+
+        if any(k in combined_text for k in ["invoice", "receipt", "billing", "tax", "payment", "financial", "audit", "salary"]):
+            return "Finance"
+
+        if any(k in combined_text for k in ["resume", "curriculum vitae", "offer letter", "job application", "career"]):
+            return "Work"
+
+        if any(k in combined_text for k in ["identity card", "id card", "aadhaar", "insurance policy", "personal id"]):
+            return "Personal"
+
+        if any(k in combined_text for k in ["study material", "syllabus", "lecture", "assignment", "tutorial", "university", "exam notes", "course"]):
+            return "Education"
+
+        if any(k in combined_text for k in ["project report", "software architecture", "specification", "presentation", "slides"]):
+            return "Projects"
+
+        # 2. Extension-based categorization
+        if ext_clean in ["jpg", "jpeg", "png", "webp", "bmp", "tiff", "tif", "gif", "svg"] or "Images" in smart_tags or "Images" in tags_str:
+            return "Images"
+
+        if ext_clean in ["pptx", "ppt"]:
+            return "Projects"
+
+        if ext_clean in ["py", "java", "c", "cpp", "hpp", "js", "ts", "jsx", "tsx", "html", "css", "cs", "kt", "rs", "go", "sh", "sql"]:
+            return "Projects"
+
+        if ext_clean in ["pdf", "docx", "doc", "txt", "md", "rtf", "csv", "xlsx", "xls", "json", "xml", "log", "cfg", "ini", "env"]:
+            return "Documents"
+
+        return "Other"
+
     def classify_file(
         self,
         filename: str,
@@ -269,13 +319,8 @@ class ClassificationService:
         smart_tags = self.generate_smart_tags(filename, extension, extracted_text)
         clean_text = self._clean_text_for_analysis(extracted_text)
 
-        # Content-driven category name synthesized from primary smart tags
-        if len(smart_tags) >= 2:
-            primary_category = f"{smart_tags[0]} {smart_tags[1]}"
-        elif smart_tags:
-            primary_category = smart_tags[0]
-        else:
-            primary_category = "General Documents"
+        # Standard category matching seeded database categories
+        category_name = self.determine_standard_category(filename, extension, smart_tags, clean_text)
 
         # Calculate authentic confidence based on text richness and vector match
         text_len = len(clean_text)
@@ -295,7 +340,8 @@ class ClassificationService:
         else:
             reason = f"Identified {tags_preview} based on file metadata and context."
 
-        return primary_category, confidence, level, reason, smart_tags
+        return category_name, confidence, level, reason, smart_tags
 
 
 classification_service = ClassificationService()
+
