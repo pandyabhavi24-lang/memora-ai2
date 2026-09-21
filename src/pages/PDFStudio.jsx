@@ -14,9 +14,6 @@ import { ExportModal } from '../components/pdfStudio/ExportModal';
 import { PDFPreviewModal } from '../components/pdfStudio/PDFPreviewModal';
 import { PDFPageContextMenu } from '../components/pdfStudio/PDFPageContextMenu';
 import { PDFDraftsModal } from '../components/pdfStudio/PDFDraftsModal';
-import { SendEmailModal } from '../components/pdfStudio/SendEmailModal';
-import { SendWhatsAppModal } from '../components/pdfStudio/SendWhatsAppModal';
-import { SaveShareMenuModal } from '../components/pdfStudio/SaveShareMenuModal';
 import { CameraCaptureModal } from '../components/pdfStudio/CameraCaptureModal';
 import { FileText } from 'lucide-react';
 
@@ -64,11 +61,36 @@ class PDFStudioErrorBoundary extends React.Component {
   }
 }
 
+const createInitialDocument = () => {
+  const newDocId = 'doc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+  return {
+    id: newDocId,
+    name: 'Untitled PDF',
+    title: 'Untitled PDF',
+    status: 'new',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    pages: [
+      {
+        id: 'page_1_' + Math.random().toString(36).substring(2, 7),
+        type: 'blank',
+        rotation: 0,
+        title: 'Page 1',
+        width: 595.28,
+        height: 841.89,
+        content: '',
+        elements: [],
+        textOverlays: []
+      }
+    ]
+  };
+};
+
 export const PDFStudio = () => {
   const { addToast } = useApp();
 
-  // Document Workspace State (null when in Empty State)
-  const [activeDocument, setActiveDocument] = useState(null);
+  // Document Workspace State (Initialized to safe blank A4 document)
+  const [activeDocument, setActiveDocument] = useState(createInitialDocument);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [selectedPageIndices, setSelectedPageIndices] = useState([0]);
   const [selectedElementId, setSelectedElementId] = useState(null);
@@ -80,7 +102,7 @@ export const PDFStudio = () => {
   const [viewMode, setViewMode] = useState('edit'); // 'view' | 'edit' | 'annotate'
   const [pageSize, setPageSize] = useState('A4');
   const [orientation, setOrientation] = useState('portrait');
-  const [exportFileName, setExportFileName] = useState('new_document.pdf');
+  const [exportFileName, setExportFileName] = useState('untitled_document.pdf');
   const [indexWithMemora, setIndexWithMemora] = useState(true);
 
   // Modal & Popup States
@@ -93,9 +115,6 @@ export const PDFStudio = () => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isDraftsModalOpen, setIsDraftsModalOpen] = useState(false);
-  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
-  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
-  const [isSaveShareMenuOpen, setIsSaveShareMenuOpen] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [exportedPdfPath, setExportedPdfPath] = useState(null);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, pageIndex }
@@ -333,10 +352,9 @@ export const PDFStudio = () => {
 
   const handleAddImageAtPosition = (file, pos = null) => {
     if (!activeDocument || !file) return;
-    const previewUrl = URL.createObjectURL(file);
-    const img = new window.Image();
-    img.onload = () => {
-      const aspect = (img.width / img.height) || 1.33;
+
+    const processImageObj = (imgSrc, naturalW, naturalH) => {
+      const aspect = (naturalW / (naturalH || 1)) || 1.33;
       const targetW = 280;
       const targetH = Math.round(targetW / aspect);
       const newImgObj = {
@@ -346,8 +364,9 @@ export const PDFStudio = () => {
         y: Math.round(pos?.y ?? 120),
         width: targetW,
         height: targetH,
-        imagePath: file.path || '',
-        previewUrl,
+        imagePath: file.path || imgSrc,
+        previewUrl: imgSrc,
+        source: file.path || imgSrc,
         fileName: file.name || 'Inserted Image',
         aspectRatio: aspect,
         zIndex: 2
@@ -366,9 +385,25 @@ export const PDFStudio = () => {
       });
 
       setSelectedElementId(newImgObj.id);
-      addToast(`Added image: ${file.name}`, 'success');
+      addToast(`Added image: ${file.name || 'Image'}`, 'success');
     };
-    img.src = previewUrl;
+
+    if (file.path) {
+      const img = new window.Image();
+      img.onload = () => processImageObj(file.path, img.width, img.height);
+      img.onerror = () => processImageObj(file.path, 400, 300);
+      img.src = file.path;
+    } else {
+      const reader = new FileReader();
+      reader.onload = (re) => {
+        const dataUrl = re.target.result;
+        const img = new window.Image();
+        img.onload = () => processImageObj(dataUrl, img.width, img.height);
+        img.onerror = () => processImageObj(dataUrl, 400, 300);
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleAddImageClick = async () => {
@@ -521,9 +556,15 @@ export const PDFStudio = () => {
   // --------------------------------------------------------------------------
   // Document Creation Handlers
   // --------------------------------------------------------------------------
-  const handleCreateBlankPDF = ({ pageSize: size, orientation: orient, pageCount }) => {
-    setPageSize(size || 'A4');
-    setOrientation(orient || 'portrait');
+  const handleCreateBlankPDF = ({ pageSize: size, orientation: orient, pageCount } = {}) => {
+    const selectedSize = size || 'A4';
+    const selectedOrient = orient || 'portrait';
+    setPageSize(selectedSize);
+    setOrientation(selectedOrient);
+
+    const isLandscape = selectedOrient === 'landscape';
+    const w = isLandscape ? 841.89 : 595.28;
+    const h = isLandscape ? 595.28 : 841.89;
 
     const newDocId = 'doc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     const count = Math.max(1, Math.min(50, pageCount || 1));
@@ -533,8 +574,8 @@ export const PDFStudio = () => {
       type: 'blank',
       rotation: 0,
       title: `Page ${i + 1}`,
-      width: 595.27,
-      height: 841.89,
+      width: w,
+      height: h,
       content: '',
       elements: [],
       textOverlays: []
@@ -545,7 +586,7 @@ export const PDFStudio = () => {
       id: newDocId,
       name: 'Untitled PDF',
       title: 'Untitled PDF',
-      status: 'unsaved',
+      status: 'new',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       pages: blankPages
@@ -555,7 +596,7 @@ export const PDFStudio = () => {
     setSelectedPageIndices([0]);
     setSelectedElementId(null);
     setSelectedTextId(null);
-    setExportFileName('Untitled_PDF.pdf');
+    setExportFileName('untitled_document.pdf');
     setZoomLevel(100);
     setZoomMode('fit-page');
     setViewMode('edit');
@@ -570,35 +611,42 @@ export const PDFStudio = () => {
 
     if (layoutChoice === 'one_per_page') {
       // 5 images -> 5 pages, each page containing 1 full-bleed/centered image element
-      pages = imagePagesArray.map((img, idx) => ({
-        id: 'page_' + (idx + 1) + '_' + Math.random().toString(36).substring(2, 7),
-        type: 'image',
-        name: img.name,
-        rotation: img.rotation || 0,
-        title: `Page ${idx + 1}`,
-        width: 595.27,
-        height: 841.89,
-        elements: [
-          {
-            id: 'img_' + Math.random().toString(36).substring(2, 9),
-            type: 'image',
-            x: 36,
-            y: 36,
-            width: 595.27 - 72,
-            height: 841.89 - 72,
-            previewUrl: img.previewUrl,
-            imagePath: img.file?.path || img.previewUrl || '',
-            fileName: img.name,
-            aspectRatio: 1.0,
-            zIndex: 1
-          }
-        ],
-        textOverlays: []
-      }));
+      pages = imagePagesArray.map((img, idx) => {
+        const imgSrc = img.path || img.dataUrl || img.previewUrl || '';
+        return {
+          id: 'page_' + (idx + 1) + '_' + Math.random().toString(36).substring(2, 7),
+          type: 'image',
+          name: img.name || `Page ${idx + 1}`,
+          rotation: img.rotation || 0,
+          title: `Page ${idx + 1}`,
+          width: 595.28,
+          height: 841.89,
+          previewUrl: imgSrc,
+          imagePath: imgSrc,
+          elements: [
+            {
+              id: 'img_' + Math.random().toString(36).substring(2, 9),
+              type: 'image',
+              x: 36,
+              y: 36,
+              width: 595.28 - 72,
+              height: 841.89 - 72,
+              previewUrl: imgSrc,
+              imagePath: imgSrc,
+              source: imgSrc,
+              fileName: img.name || `Image ${idx + 1}`,
+              aspectRatio: 1.0,
+              zIndex: 1
+            }
+          ],
+          textOverlays: []
+        };
+      });
     } else if (layoutChoice === 'all_on_page') {
       // All images on single page
       const elements = imagePagesArray.map((img, idx) => {
         const offset = idx * 25;
+        const imgSrc = img.path || img.dataUrl || img.previewUrl || '';
         return {
           id: 'img_' + Math.random().toString(36).substring(2, 9),
           type: 'image',
@@ -606,9 +654,10 @@ export const PDFStudio = () => {
           y: 40 + offset,
           width: 280,
           height: 200,
-          previewUrl: img.previewUrl,
-          imagePath: img.file?.path || img.previewUrl || '',
-          fileName: img.name,
+          previewUrl: imgSrc,
+          imagePath: imgSrc,
+          source: imgSrc,
+          fileName: img.name || `Image ${idx + 1}`,
           aspectRatio: 1.4,
           zIndex: idx + 1
         };
@@ -619,7 +668,7 @@ export const PDFStudio = () => {
           id: 'page_1_' + Math.random().toString(36).substring(2, 7),
           type: 'image',
           title: 'Page 1',
-          width: 595.27,
+          width: 595.28,
           height: 841.89,
           elements,
           textOverlays: []
@@ -638,6 +687,7 @@ export const PDFStudio = () => {
       const elements = imagePagesArray.map((img, idx) => {
         const r = Math.floor(idx / cols);
         const c = idx % cols;
+        const imgSrc = img.path || img.dataUrl || img.previewUrl || '';
         return {
           id: 'img_' + Math.random().toString(36).substring(2, 9),
           type: 'image',
@@ -645,9 +695,10 @@ export const PDFStudio = () => {
           y: startY + r * (cellH + gapY),
           width: cellW,
           height: cellH,
-          previewUrl: img.previewUrl,
-          imagePath: img.file?.path || img.previewUrl || '',
-          fileName: img.name,
+          previewUrl: imgSrc,
+          imagePath: imgSrc,
+          source: imgSrc,
+          fileName: img.name || `Image ${idx + 1}`,
           aspectRatio: cellW / cellH,
           zIndex: idx + 1
         };
@@ -658,7 +709,7 @@ export const PDFStudio = () => {
           id: 'page_1_' + Math.random().toString(36).substring(2, 7),
           type: 'image',
           title: 'Page 1',
-          width: 595.27,
+          width: 595.28,
           height: 841.89,
           elements,
           textOverlays: []
@@ -757,24 +808,216 @@ export const PDFStudio = () => {
     }
   };
 
+  const handleAlignElement = (elementId, alignment) => {
+    if (!activeDocument) return;
+    const curPage = activeDocument.pages[activePageIndex];
+    if (!curPage) return;
+    const elem = (curPage.elements || []).find((e) => e.id === elementId);
+    if (!elem) return;
+
+    const pageWidth = curPage.width || 595.28;
+    const pageHeight = curPage.height || 841.89;
+    const margin = 36; // 0.5 inch margin
+
+    let updates = {};
+    if (alignment === 'left') {
+      updates.x = margin;
+    } else if (alignment === 'center') {
+      updates.x = Math.max(0, Math.round((pageWidth - (elem.width || 200)) / 2));
+    } else if (alignment === 'right') {
+      updates.x = Math.max(0, Math.round(pageWidth - margin - (elem.width || 200)));
+    } else if (alignment === 'top') {
+      updates.y = margin;
+    } else if (alignment === 'middle') {
+      updates.y = Math.max(0, Math.round((pageHeight - (elem.height || 200)) / 2));
+    } else if (alignment === 'bottom') {
+      updates.y = Math.max(0, Math.round(pageHeight - margin - (elem.height || 200)));
+    } else if (alignment === 'fit-width') {
+      updates.x = margin;
+      updates.width = pageWidth - (margin * 2);
+      if (elem.aspectRatio) {
+        updates.height = Math.round(updates.width / elem.aspectRatio);
+      }
+    } else if (alignment === 'fit-page') {
+      updates.x = margin;
+      updates.y = margin;
+      updates.width = pageWidth - (margin * 2);
+      updates.height = pageHeight - (margin * 2);
+    }
+
+    handleUpdateElement(elementId, updates);
+  };
+
+  const handleAddSubtitleBelowImage = (imageElem) => {
+    if (!activeDocument || !imageElem) return;
+    const startY = (imageElem.y || 40) + (imageElem.height || 300) + 16;
+    const startX = imageElem.x || 40;
+    const elemWidth = imageElem.width || 515;
+
+    const subtitleId = 'txt_sub_' + Math.random().toString(36).substring(2, 9);
+    const descId = 'txt_desc_' + Math.random().toString(36).substring(2, 9);
+
+    const subtitleElem = {
+      id: subtitleId,
+      type: 'text',
+      content: 'Subtitle Title',
+      x: startX,
+      y: Math.min(800, startY),
+      width: Math.min(elemWidth, 400),
+      height: 30,
+      fontSize: 18,
+      fontFamily: 'Helvetica',
+      isBold: true,
+      color: '#1e293b',
+      align: 'left',
+      zIndex: (imageElem.zIndex || 1) + 1
+    };
+
+    const descElem = {
+      id: descId,
+      type: 'text',
+      content: 'Enter detailed description or caption here...',
+      x: startX,
+      y: Math.min(820, startY + 36),
+      width: Math.min(elemWidth, 500),
+      height: 40,
+      fontSize: 12,
+      fontFamily: 'Helvetica',
+      isBold: false,
+      color: '#475569',
+      align: 'left',
+      zIndex: (imageElem.zIndex || 1) + 2
+    };
+
+    setActiveDocument((prev) => {
+      if (!prev) return prev;
+      const updatedPages = [...prev.pages];
+      const page = updatedPages[activePageIndex];
+      updatedPages[activePageIndex] = {
+        ...page,
+        elements: [...(page.elements || []), subtitleElem, descElem]
+      };
+      return { ...prev, pages: updatedPages };
+    });
+
+    setSelectedElementId(subtitleId);
+    setSelectedTextId(subtitleId);
+    addToast('Added subtitle and description text below image', 'success');
+  };
+
+  const handleApplyPageLayout = (layoutType) => {
+    if (!activeDocument) return;
+    const curPage = activeDocument.pages[activePageIndex];
+    if (!curPage) return;
+    const imageElements = (curPage.elements || []).filter(e => e.type === 'image');
+    if (imageElements.length === 0) {
+      addToast('No images on this page to rearrange.', 'info');
+      return;
+    }
+
+    const pageWidth = curPage.width || 595.28;
+    const pageHeight = curPage.height || 841.89;
+    const margin = 36;
+    const usableW = pageWidth - margin * 2;
+    const usableH = pageHeight - margin * 2;
+
+    let updatedElements = [...(curPage.elements || [])];
+
+    if (layoutType === 'grid2x2') {
+      const cols = 2;
+      const gap = 20;
+      const cellW = (usableW - gap) / 2;
+      const cellH = (usableH - gap) / 2;
+
+      imageElements.forEach((img, idx) => {
+        const r = Math.floor(idx / cols);
+        const c = idx % cols;
+        const newX = Math.round(margin + c * (cellW + gap));
+        const newY = Math.round(margin + r * (cellH + gap));
+        
+        updatedElements = updatedElements.map(el => 
+          el.id === img.id ? { ...el, x: newX, y: newY, width: Math.round(cellW), height: Math.round(cellH) } : el
+        );
+      });
+      addToast('Applied 2x2 grid layout to images', 'success');
+    } else if (layoutType === 'equal_spacing_v') {
+      const count = imageElements.length;
+      const totalImgH = imageElements.reduce((acc, el) => acc + (el.height || 150), 0);
+      const gap = count > 1 ? Math.max(10, Math.floor((usableH - totalImgH) / (count - 1))) : 20;
+      let currentY = margin;
+
+      imageElements.forEach((img) => {
+        updatedElements = updatedElements.map(el =>
+          el.id === img.id ? { ...el, x: margin, y: currentY } : el
+        );
+        currentY += (img.height || 150) + gap;
+      });
+      addToast('Applied vertical equal spacing to images', 'success');
+    } else if (layoutType === 'equal_spacing_h') {
+      const count = imageElements.length;
+      const totalImgW = imageElements.reduce((acc, el) => acc + (el.width || 200), 0);
+      const gap = count > 1 ? Math.max(10, Math.floor((usableW - totalImgW) / (count - 1))) : 20;
+      let currentX = margin;
+
+      imageElements.forEach((img) => {
+        updatedElements = updatedElements.map(el =>
+          el.id === img.id ? { ...el, x: currentX, y: margin } : el
+        );
+        currentX += (img.width || 200) + gap;
+      });
+      addToast('Applied horizontal equal spacing to images', 'success');
+    }
+
+    setActiveDocument(prev => {
+      if (!prev) return prev;
+      const updatedPages = [...prev.pages];
+      updatedPages[activePageIndex] = {
+        ...curPage,
+        elements: updatedElements
+      };
+      return { ...prev, pages: updatedPages };
+    });
+  };
+
   const handleSelectFromMemora = async (file) => {
-    const ext = (file.extension || file.fileExtension || file.name?.split('.').pop() || 'pdf').toLowerCase();
+    const ext = (file.extension || file.fileExtension || file.name?.split('.').pop() || 'pdf').toLowerCase().replace(/^\./, '');
     let docObj;
     
     if (ext === 'pdf' && file.path) {
       docObj = await loadPdfDocumentPages(file.path, file.name);
     } else {
+      const isImg = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff', 'gif'].includes(ext);
+      const imgSrc = file.previewUrl || file.path;
       docObj = {
         title: file.name || 'Memora Document',
+        name: file.name || 'Memora Document',
         path: file.path,
         pages: [
           {
             id: 'memora_' + Math.random().toString(36).substring(2, 9),
-            type: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'].includes(ext) ? 'image' : 'blank',
+            type: isImg ? 'image' : 'blank',
             imagePath: file.path,
-            previewUrl: file.previewUrl || file.path,
+            previewUrl: imgSrc,
             rotation: 0,
             title: file.name,
+            width: 595.28,
+            height: 841.89,
+            elements: isImg ? [
+              {
+                id: 'img_' + Math.random().toString(36).substring(2, 9),
+                type: 'image',
+                x: 36,
+                y: 36,
+                width: 595.28 - 72,
+                height: 841.89 - 72,
+                previewUrl: imgSrc,
+                imagePath: file.path,
+                source: file.path,
+                fileName: file.name,
+                aspectRatio: 1.0,
+                zIndex: 1
+              }
+            ] : [],
             textOverlays: [],
             annotations: []
           }
@@ -786,6 +1029,7 @@ export const PDFStudio = () => {
     setActivePageIndex(0);
     setSelectedPageIndices([0]);
     setSelectedTextId(null);
+    setSelectedElementId(null);
     setExportFileName((file.name || 'memora_doc').replace(/\.pdf$/i, '') + '_edited.pdf');
     setZoomLevel(100);
     setZoomMode('custom');
@@ -801,7 +1045,7 @@ export const PDFStudio = () => {
       const item = selectedList[idx];
       const f = item.file || item;
       const fileName = f.name || f.filename || f.file_name || `Imported Document ${idx + 1}`;
-      const ext = (f.extension || f.fileExtension || fileName.split('.').pop() || 'pdf').toLowerCase();
+      const ext = (f.extension || f.fileExtension || fileName.split('.').pop() || 'pdf').toLowerCase().replace(/^\./, '');
       const filePath = f.path;
 
       if (ext === 'pdf' && filePath) {
@@ -814,8 +1058,9 @@ export const PDFStudio = () => {
             sourcePageIndex: p.page_index,
             rotation: p.rotation || 0,
             title: `${fileName} (Page ${pIdx + 1})`,
-            width: p.width,
-            height: p.height,
+            width: p.width || 595.28,
+            height: p.height || 841.89,
+            elements: [],
             textOverlays: [],
             annotations: []
           }));
@@ -829,6 +1074,9 @@ export const PDFStudio = () => {
               path: filePath,
               rotation: 0,
               title: fileName,
+              width: 595.28,
+              height: 841.89,
+              elements: [],
               textOverlays: [],
               annotations: []
             });
@@ -841,21 +1089,43 @@ export const PDFStudio = () => {
             path: filePath,
             rotation: 0,
             title: fileName,
+            width: 595.28,
+            height: 841.89,
+            elements: [],
             textOverlays: [],
             annotations: []
           });
         }
       } else {
-        const isImage = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'].includes(ext);
+        const isImage = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff', 'gif'].includes(ext);
+        const previewUrl = f.previewUrl || f.thumbnailUrl || filePath || null;
         importedPages.push({
           id: 'memora_' + Math.random().toString(36).substring(2, 9),
           type: isImage ? 'image' : 'blank',
           name: fileName,
           imagePath: filePath,
-          previewUrl: f.previewUrl || f.thumbnailUrl || filePath || null,
+          previewUrl: previewUrl,
           path: filePath,
           rotation: 0,
           title: fileName,
+          width: 595.28,
+          height: 841.89,
+          elements: isImage ? [
+            {
+              id: 'img_' + Math.random().toString(36).substring(2, 9),
+              type: 'image',
+              x: 36,
+              y: 36,
+              width: 595.28 - 72,
+              height: 841.89 - 72,
+              previewUrl: previewUrl,
+              imagePath: filePath,
+              source: filePath,
+              fileName: fileName,
+              aspectRatio: 1.0,
+              zIndex: 1
+            }
+          ] : [],
           textOverlays: [],
           annotations: []
         });
@@ -882,16 +1152,22 @@ export const PDFStudio = () => {
     }
 
     setSelectedTextId(null);
+    setSelectedElementId(null);
     addToast(`Added ${importedPages.length} page(s) from selected Memora file(s)`, 'success');
   };
 
   const handleCloseDocument = () => {
-    setActiveDocument(null);
+    const blankDoc = createInitialDocument();
+    setActiveDocument(blankDoc);
     setActivePageIndex(0);
     setSelectedPageIndices([0]);
+    setSelectedElementId(null);
     setSelectedTextId(null);
+    setExportFileName('untitled_document.pdf');
     setZoomLevel(100);
-    setZoomMode('custom');
+    setZoomMode('fit-page');
+    setViewMode('edit');
+    addToast('Reset workspace to blank document.', 'info');
   };
 
   // --------------------------------------------------------------------------
@@ -1157,8 +1433,13 @@ export const PDFStudio = () => {
   };
 
   const activePage = activeDocument?.pages?.[activePageIndex];
+  const selectedElementObj =
+    activePage?.elements?.find((el) => el.id === (selectedElementId || selectedTextId)) ||
+    null;
   const selectedTextObj =
-    activePage?.textOverlays?.find((t) => t.id === selectedTextId) || null;
+    activePage?.elements?.find((el) => el.id === (selectedElementId || selectedTextId) && el.type === 'text') ||
+    activePage?.textOverlays?.find((t) => t.id === (selectedElementId || selectedTextId)) ||
+    null;
 
   return (
     <PDFStudioErrorBoundary>
@@ -1310,6 +1591,7 @@ export const PDFStudio = () => {
                 onTitleChange={(title) => setActiveDocument((d) => (d ? { ...d, title } : d))}
                 pageCount={activeDocument.pages.length}
                 activePageIndex={activePageIndex}
+                activePage={activePage}
                 activePageRotation={activeDocument.pages[activePageIndex]?.rotation || 0}
                 pageSize={pageSize}
                 onPageSizeChange={setPageSize}
@@ -1317,8 +1599,15 @@ export const PDFStudio = () => {
                 onOrientationChange={setOrientation}
                 onRotateLeft={() => handleRotateLeft(activePageIndex)}
                 onRotateRight={() => handleRotateRight(activePageIndex)}
+                selectedElementObj={selectedElementObj}
                 selectedTextObj={selectedTextObj}
                 onAddText={() => handleAddTextAtPosition()}
+                onUpdateElement={handleUpdateElement}
+                onDeleteElement={handleDeleteElement}
+                onDuplicateElement={handleDuplicateElement}
+                onAlignElement={handleAlignElement}
+                onAddSubtitleBelowImage={handleAddSubtitleBelowImage}
+                onApplyPageLayout={handleApplyPageLayout}
                 onUpdateText={handleUpdateText}
                 onDeleteText={handleDeleteText}
                 exportFileName={exportFileName}
@@ -1425,35 +1714,6 @@ export const PDFStudio = () => {
           isOpen={isDraftsModalOpen}
           onClose={() => setIsDraftsModalOpen(false)}
           onOpenDraft={handleOpenDraft}
-        />
-
-        {/* Send via Email Modal */}
-        <SendEmailModal
-          isOpen={isEmailModalOpen}
-          onClose={() => setIsEmailModalOpen(false)}
-          pdfPath={exportedPdfPath}
-          pdfTitle={activeDocument?.title || activeDocument?.name}
-          addToast={addToast}
-        />
-
-        {/* Send via WhatsApp Modal */}
-        <SendWhatsAppModal
-          isOpen={isWhatsAppModalOpen}
-          onClose={() => setIsWhatsAppModalOpen(false)}
-          pdfPath={exportedPdfPath}
-          pdfTitle={activeDocument?.title || activeDocument?.name}
-          addToast={addToast}
-        />
-
-        {/* Save & Share Menu Modal */}
-        <SaveShareMenuModal
-          isOpen={isSaveShareMenuOpen}
-          onClose={() => setIsSaveShareMenuOpen(false)}
-          pdfPath={exportedPdfPath}
-          pdfTitle={activeDocument?.title || activeDocument?.name}
-          onSavePDF={() => addToast(`PDF saved locally to: ${exportedPdfPath}`, 'success')}
-          onOpenEmail={() => setIsEmailModalOpen(true)}
-          onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)}
         />
 
         {/* Camera Capture Modal */}

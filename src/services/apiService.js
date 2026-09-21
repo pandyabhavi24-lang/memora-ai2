@@ -392,15 +392,9 @@ class ApiService {
     });
   }
 
-  // WhatsApp Business Cloud API
-  async getWhatsAppStatus() {
-    return await this._fetch('/api/pdf/whatsapp/status');
-  }
-
-  async sendPDFWhatsApp(data) {
-    return await this._fetch('/api/pdf/whatsapp/send', {
-      method: 'POST',
-      body: JSON.stringify(data)
+  async disconnectEmail() {
+    return await this._fetch('/api/pdf/email/disconnect', {
+      method: 'POST'
     });
   }
 
@@ -408,15 +402,15 @@ class ApiService {
     const queryParams = new URLSearchParams();
     if (params.file_type) queryParams.append('file_type', params.file_type);
     if (params.query) queryParams.append('query', params.query);
-    if (params.folder_id) queryParams.append('folder_id', params.folder_id);
+    if (params.limit) queryParams.append('limit', params.limit);
+    if (params.offset) queryParams.append('offset', params.offset);
     const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return await this._fetch(`/api/pdf/memora/files${qs}`);
+    return await this._fetch(`/api/pdf/memora-files${qs}`);
   }
 
   async searchMemoraFilesForPDFStudio(query, top_k = 20, file_type = null) {
-    return await this._fetch('/api/pdf/memora/search', {
-      method: 'POST',
-      body: JSON.stringify({ query, top_k, filters: file_type ? { file_type } : null })
+    return await this._fetch('/api/pdf/memora-files', {
+      method: 'GET'
     });
   }
 
