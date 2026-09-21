@@ -80,37 +80,68 @@ export const NewPDFModal = ({
   // Image Selection & Drag-and-Drop Handlers
   // --------------------------------------------------------------------------
   const validateAndAddImages = (files) => {
-    setErrorMessage('');
-    setIsLoadingFiles(true);
-    const validImageObjects = [];
     let invalidCount = 0;
 
-    Array.from(files).forEach((file) => {
+    const promises = Array.from(files).map((file) => {
       const ext = '.' + file.name.split('.').pop().toLowerCase();
       const isTypeValid = SUPPORTED_IMAGE_TYPES.includes(file.type) || SUPPORTED_EXTENSIONS.includes(ext);
 
-      if (isTypeValid) {
-        validImageObjects.push({
-          id: Math.random().toString(36).substring(2, 9),
-          file,
-          name: file.name,
-          size: file.size,
-          previewUrl: URL.createObjectURL(file),
-          rotation: 0
-        });
-      } else {
+      if (!isTypeValid) {
         invalidCount++;
+        return Promise.resolve(null);
       }
+
+      return new Promise((resolve) => {
+        if (file.path) {
+          resolve({
+            id: Math.random().toString(36).substring(2, 9),
+            file,
+            name: file.name,
+            size: file.size,
+            path: file.path,
+            previewUrl: file.path,
+            dataUrl: file.path,
+            rotation: 0
+          });
+        } else {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            resolve({
+              id: Math.random().toString(36).substring(2, 9),
+              file,
+              name: file.name,
+              size: file.size,
+              path: '',
+              previewUrl: e.target.result,
+              dataUrl: e.target.result,
+              rotation: 0
+            });
+          };
+          reader.onerror = () => {
+            resolve({
+              id: Math.random().toString(36).substring(2, 9),
+              file,
+              name: file.name,
+              size: file.size,
+              previewUrl: URL.createObjectURL(file),
+              rotation: 0
+            });
+          };
+          reader.readAsDataURL(file);
+        }
+      });
     });
 
-    if (invalidCount > 0) {
-      setErrorMessage(`${invalidCount} file(s) skipped. Supported image formats: JPG, PNG, WEBP, BMP, TIFF.`);
-    }
-
-    if (validImageObjects.length > 0) {
-      setSelectedImages((prev) => [...prev, ...validImageObjects]);
-    }
-    setIsLoadingFiles(false);
+    Promise.all(promises).then((results) => {
+      const validImageObjects = results.filter(Boolean);
+      if (invalidCount > 0) {
+        setErrorMessage(`${invalidCount} file(s) skipped. Supported image formats: JPG, PNG, WEBP, BMP, TIFF.`);
+      }
+      if (validImageObjects.length > 0) {
+        setSelectedImages((prev) => [...prev, ...validImageObjects]);
+      }
+      setIsLoadingFiles(false);
+    });
   };
 
   const handleFileInputChange = (e) => {
