@@ -126,12 +126,27 @@ export const Settings = () => {
         <div className="glass-panel p-6 rounded-2xl border-gray-800/80 space-y-6">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Local Processing Guarantee</span>
+            <span>Security & Privacy</span>
           </h3>
 
           <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300 leading-relaxed">
-            <strong>100% Offline Processing Architecture:</strong> All document text extractions, OpenCV image processing, EasyOCR calculations, Sentence Transformer embeddings, and FAISS similarity lookup take place strictly on your local CPU/GPU hardware. No data is ever transmitted to remote cloud APIs.
+            <strong>100% Offline Processing:</strong> All text extraction, OCR, embeddings, and FAISS
+            similarity search run strictly on your local hardware. No data is transmitted to any cloud service.
           </div>
+
+          <p className="text-xs text-gray-400">
+            Full security controls — Application Lock, PIN management, excluded folders, audit log,
+            data management, and backup/restore — are available in the dedicated Security & Privacy page.
+          </p>
+
+          <a
+            href="/security"
+            onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.location.pathname = '/security'; }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-600/25 transition-colors"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Open Security & Privacy
+          </a>
         </div>
       )}
 

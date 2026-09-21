@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models import Folder, File, Chunk, VectorMapping
 from .scanner import scan_directory
+from .security_service import security_service
 from .extractor import text_extractor
 from .chunker import chunk_text
 from .embedding_service import embedding_service
@@ -75,9 +76,20 @@ class IndexingService:
                 self.state["progress_percentage"] = 100
                 return
 
+            # Load excluded paths from DB before scanning
+            excluded_paths = security_service.get_excluded_paths(db)
+
+            security_service.audit(
+                db, "scan_started", "success",
+                details={
+                    "folder_id": folder_id,
+                    "excluded_count": len(excluded_paths),
+                }
+            )
+
             all_found_scans = []
             for folder in folders:
-                found = scan_directory(folder.path)
+                found = scan_directory(folder.path, excluded_paths=excluded_paths)
                 for item in found:
                     item["folder_id"] = folder.id
                 all_found_scans.extend(found)
@@ -220,12 +232,25 @@ class IndexingService:
             self.state["progress_percentage"] = 100
             self.state["current_file"] = "Finished"
             logger.info(f"Indexing complete. Processed: {processed}, Failed: {failed}, Chunks: {chunks_total}, Vectors: {vectors_total}")
+            security_service.audit(
+                db, "scan_completed", "success",
+                details={
+                    "files_processed": processed,
+                    "files_failed": failed,
+                    "chunks_created": chunks_total,
+                    "vectors_created": vectors_total,
+                }
+            )
 
         except Exception as e:
             logger.error(f"Indexing pipeline failed: {e}", exc_info=True)
             db.rollback()
             self.state["status"] = "failed"
             self.state["error_message"] = str(e)
+            try:
+                security_service.audit(db, "scan_failed", "failure", error=str(e)[:256])
+            except Exception:
+                pass
         finally:
             db.close()
 

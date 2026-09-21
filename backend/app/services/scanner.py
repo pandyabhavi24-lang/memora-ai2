@@ -27,9 +27,15 @@ def calculate_sha256(file_path: str, block_size: int = 65536) -> str:
         return ""
 
 
-def scan_directory(folder_path: str) -> List[Dict[str, Any]]:
+def scan_directory(folder_path: str, excluded_paths: set = None) -> List[Dict[str, Any]]:
     """
     Recursively scans folder_path for files matching supported extensions.
+    Skips any subdirectory (or root) whose resolved path is inside an excluded folder.
+
+    Args:
+        folder_path: The root directory to scan.
+        excluded_paths: Optional set of canonical (realpath) paths to skip.
+
     Returns list of dicts with file metadata.
     """
     found_files = []
@@ -37,7 +43,40 @@ def scan_directory(folder_path: str) -> List[Dict[str, Any]]:
         logger.error(f"Directory path does not exist or is not a directory: '{folder_path}'")
         return found_files
 
-    for root, _, files in os.walk(folder_path):
+    excluded_real = set()
+    if excluded_paths:
+        for ep in excluded_paths:
+            try:
+                excluded_real.add(os.path.realpath(os.path.abspath(ep)))
+            except Exception:
+                pass
+
+    def _is_excluded(path: str) -> bool:
+        """Returns True if resolved path is inside any excluded folder."""
+        if not excluded_real:
+            return False
+        try:
+            real = os.path.realpath(os.path.abspath(path))
+            for exc in excluded_real:
+                try:
+                    if os.path.commonpath([real, exc]) == exc:
+                        return True
+                except ValueError:
+                    pass
+        except Exception:
+            pass
+        return False
+
+    for root, dirs, files in os.walk(folder_path):
+        # Skip excluded directories (in-place mutation stops os.walk from descending)
+        if _is_excluded(root):
+            logger.info(f"Skipping excluded directory: '{root}'")
+            dirs.clear()
+            continue
+
+        # Prune sub-dirs that are excluded before descending
+        dirs[:] = [d for d in dirs if not _is_excluded(os.path.join(root, d))]
+
         for file in files:
             ext = os.path.splitext(file)[1].lower()
             if ext in SUPPORTED_EXTENSIONS:
@@ -62,3 +101,4 @@ def scan_directory(folder_path: str) -> List[Dict[str, Any]]:
                     logger.error(f"Error reading file stat for '{full_path}': {e}")
 
     return found_files
+

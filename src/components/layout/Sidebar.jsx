@@ -19,6 +19,7 @@ export const Sidebar = () => {
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Organize', path: '/organize', icon: FolderTree },
     { label: 'Scanned Folders', path: '/folders', icon: FolderSearch },
+    { label: 'Security & Privacy', path: '/security', icon: ShieldCheck },
     { label: 'Settings', path: '/settings', icon: Settings },
   ];
 

@@ -6,6 +6,7 @@ from ..database import get_db
 from ..models import Folder, File
 from ..schemas import FolderCreate, FolderResponse
 from ..services.indexing_service import indexing_service
+from ..services.security_service import security_service
 
 router = APIRouter(prefix="/api/folders", tags=["Folders"])
 
@@ -29,7 +30,8 @@ def list_folders(db: Session = Depends(get_db)):
 
 @router.post("", response_model=FolderResponse)
 def add_folder(folder_in: FolderCreate, db: Session = Depends(get_db)):
-    abs_path = os.path.abspath(folder_in.path)
+    # Use realpath to resolve symlinks/junctions before storing
+    abs_path = os.path.realpath(os.path.abspath(folder_in.path))
     if not os.path.exists(abs_path):
         raise HTTPException(status_code=400, detail=f"Folder path does not exist on disk: {abs_path}")
 
@@ -57,6 +59,12 @@ def add_folder(folder_in: FolderCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_folder)
 
+    security_service.audit(
+        db, "folder_added", "success",
+        resource=os.path.basename(abs_path),
+        details={"path": abs_path}
+    )
+
     return FolderResponse(
         id=new_folder.id,
         path=new_folder.path,
@@ -74,8 +82,16 @@ def remove_folder(folder_id: int, db: Session = Depends(get_db)):
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found")
 
+    folder_name = folder.name
+    folder_path = folder.path
     db.delete(folder)
     db.commit()
+
+    security_service.audit(
+        db, "folder_removed", "success",
+        resource=folder_name,
+        details={"path": folder_path}
+    )
     return {"message": f"Folder {folder_id} deleted successfully"}
 
 @router.post("/{folder_id}/scan")
