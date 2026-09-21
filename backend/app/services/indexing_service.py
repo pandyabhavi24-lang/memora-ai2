@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models import Folder, File, Chunk, VectorMapping
 from .scanner import scan_directory, normalize_path
+from .security_service import security_service
 from .extractor import text_extractor
 from .chunker import chunk_text
 from .embedding_service import embedding_service
@@ -69,20 +70,67 @@ class IndexingService:
             return
 
         try:
-            self._is_cancelled = False
+
+                       self._is_cancelled = False
             self.state["status"] = "scanning"
             self.state["error_message"] = None
 
             db: Session = SessionLocal()
             try:
                 if folder_id:
-                    folders = db.query(Folder).filter(Folder.id == folder_id, Folder.is_active == True).all()
+                    folders = db.query(Folder).filter(
+                        Folder.id == folder_id,
+                        Folder.is_active == True
+                    ).all()
                 else:
-                    folders = db.query(Folder).filter(Folder.is_active == True).all()
+                    folders = db.query(Folder).filter(
+                        Folder.is_active == True
+                    ).all()
 
                 if not folders:
                     self.state["status"] = "complete"
                     self.state["progress_percentage"] = 100
+                    return
+
+                # Load excluded paths from DB before scanning
+                excluded_paths = security_service.get_excluded_paths(db)
+
+                security_service.audit(
+                    db, "scan_started", "success",
+                    details={
+                        "folder_id": folder_id,
+                        "excluded_count": len(excluded_paths),
+                    }
+                )
+
+                all_found_scans = []
+                for folder in folders:
+                    found = scan_directory(
+                        folder.path,
+                        excluded_paths=excluded_paths
+                    )
+                    for item in found:
+                        item["folder_id"] = folder.id
+                    all_found_scans.extend(found)
+
+                self.state["files_found"] = len(all_found_scans)
+
+                if len(all_found_scans) == 0:
+                    self.state["status"] = "complete"
+                    self.state["progress_percentage"] = 100
+                    return
+
+                processed = 0
+                failed = 0
+                chunks_total = 0
+                vectors_total = 0
+
+                for idx, item_meta in enumerate(all_found_scans):
+                    if self._is_cancelled:
+                        logger.info("Scan cancelled by user.")
+                        self.state["status"] = "idle"
+                        self.state["current_file"] = "Scan cancelled"
+                        return
                     return
 
                 all_found_scans = []
@@ -274,18 +322,48 @@ class IndexingService:
                 # Final vector mapping synchronization check
                 self._sync_vector_mappings(db)
 
-                self.state["status"] = "complete"
+             self.state["status"] = "complete"
                 self.state["progress_percentage"] = 100
                 self.state["current_file"] = "Finished"
-                logger.info(f"Indexing complete. Processed: {processed}, Failed: {failed}, Chunks: {chunks_total}, Vectors: {vectors_total}")
+                logger.info(
+                    f"Indexing complete. Processed: {processed}, "
+                    f"Failed: {failed}, Chunks: {chunks_total}, "
+                    f"Vectors: {vectors_total}"
+                )
+
+                security_service.audit(
+                    db,
+                    "scan_completed",
+                    "success",
+                    details={
+                        "files_processed": processed,
+                        "files_failed": failed,
+                        "chunks_created": chunks_total,
+                        "vectors_created": vectors_total,
+                    }
+                )
 
             except Exception as e:
-                logger.error(f"Indexing pipeline failed: {e}", exc_info=True)
+                logger.error(
+                    f"Indexing pipeline failed: {e}",
+                    exc_info=True
+                )
                 db.rollback()
                 self.state["status"] = "failed"
                 self.state["error_message"] = str(e)
+
+                try:
+                    security_service.audit(
+                        db,
+                        "scan_failed",
+                        "failure",
+                        error=str(e)[:256]
+                    )
+                except Exception:
+                    pass
             finally:
                 db.close()
+
         finally:
             self._scan_lock.release()
 

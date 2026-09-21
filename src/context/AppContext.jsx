@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { apiService } from '../services/apiService';
 import { semanticSearchService } from '../services/semanticSearchService';
+import { securityService } from '../services/securityService';
 
 const AppContext = createContext(null);
 
@@ -49,10 +50,19 @@ export const AppProvider = ({ children }) => {
   // Toast Notifications
   const [toasts, setToasts] = useState([]);
 
-  // Load folders & search history on startup
+  // === Module 5: Security / Auth State ===
+  // Session token lives ONLY in React state — never localStorage/sessionStorage
+  const [sessionToken, setSessionToken] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [lockEnabled, setLockEnabled] = useState(false);
+  const [hasPin, setHasPin] = useState(false);
+  const [securityLoading, setSecurityLoading] = useState(true);
+
+  // Load folders, search history, and security settings on startup
   useEffect(() => {
     loadFolders();
     refreshSearchHistory();
+    refreshSecuritySettings();
   }, []);
 
   const loadFolders = async () => {
@@ -112,6 +122,61 @@ export const AppProvider = ({ children }) => {
   const completeOnboarding = () => {
     localStorage.setItem('memora_onboarding_done', 'true');
     setHasCompletedOnboarding(true);
+  };
+
+  // === Module 5: Security helpers ===
+
+  const refreshSecuritySettings = async () => {
+    setSecurityLoading(true);
+    try {
+      const settings = await securityService.getSettings(sessionToken);
+      setLockEnabled(settings.lock_enabled);
+      setHasPin(settings.has_pin);
+      // If lock is enabled and we don't have a valid session, mark unauthenticated
+      if (settings.lock_enabled && !settings.session_active) {
+        setIsAuthenticated(false);
+        setSessionToken(null);
+      } else if (!settings.lock_enabled) {
+        setIsAuthenticated(true); // No lock = always authenticated
+      }
+    } catch (err) {
+      console.warn('Could not load security settings:', err);
+    } finally {
+      setSecurityLoading(false);
+    }
+  };
+
+  /**
+   * Authenticate with PIN. Returns { success, error, lockoutSeconds }.
+   * On success: stores session token in React state only.
+   */
+  const authenticate = async (pin) => {
+    try {
+      const res = await securityService.verifyPin(pin);
+      if (res.success && res.session_token) {
+        setSessionToken(res.session_token);
+        setIsAuthenticated(true);
+        return { success: true };
+      }
+      return { success: false, error: res.error, lockoutSeconds: res.lockout_seconds };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  /**
+   * Lock the application. Invalidates session on backend AND clears React state.
+   */
+  const lockApp = async () => {
+    try {
+      await securityService.lockNow(sessionToken);
+    } catch (err) {
+      console.warn('lockNow backend call failed:', err);
+    } finally {
+      // Always clear client-side session regardless of backend response
+      setSessionToken(null);
+      setIsAuthenticated(false);
+    }
   };
 
   /**
@@ -236,7 +301,16 @@ export const AppProvider = ({ children }) => {
         setPreviewFile,
         toasts,
         addToast,
-        removeToast
+        removeToast,
+        // Module 5 security
+        sessionToken,
+        isAuthenticated,
+        lockEnabled,
+        hasPin,
+        securityLoading,
+        authenticate,
+        lockApp,
+        refreshSecuritySettings,
       }}
     >
       {children}

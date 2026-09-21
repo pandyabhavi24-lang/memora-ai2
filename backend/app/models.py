@@ -203,6 +203,7 @@ class FileOperation(Base):
     file = relationship("File")
 
 
+
 # ==============================================================================
 # MODULE 3 MODELS - VISUAL & MEDIA INTELLIGENCE
 # ==============================================================================
@@ -638,4 +639,46 @@ class FileExpiry(Base):
 
 
 
+
+
+# ==========================================
+# MODULE 5 MODELS - SECURITY & PRIVACY
+# ==========================================
+
+class SecuritySettings(Base):
+    """Stores application security configuration. Only ONE row exists (singleton)."""
+    __tablename__ = "security_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+    # PIN stored only as PBKDF2-HMAC-SHA256 hash — NEVER plaintext
+    pin_hash = Column(String, nullable=True)   # hex-encoded derived key
+    pin_salt = Column(String, nullable=True)   # hex-encoded 32-byte random salt
+    lock_enabled = Column(Boolean, default=False, nullable=False)
+    pin_iterations = Column(Integer, default=260000, nullable=False)  # documented iteration count
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ExcludedFolder(Base):
+    """Paths explicitly excluded from scanning/indexing by the user."""
+    __tablename__ = "excluded_folders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    path = Column(String, unique=True, nullable=False, index=True)  # resolved/canonical path
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AuditLog(Base):
+    """
+    Security and data-operation audit trail.
+    NEVER stores: PINs, passwords, session tokens, file contents, OCR text.
+    """
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    action = Column(String, nullable=False, index=True)   # e.g. "pin_verified", "folder_added"
+    status = Column(String, nullable=False)               # "success" | "failure"
+    resource = Column(String, nullable=True)              # safe path/name — NO secrets
+    details = Column(Text, nullable=True)                 # JSON metadata — NO secrets
+    error = Column(Text, nullable=True)                   # error message if status=failure
 

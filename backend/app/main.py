@@ -7,7 +7,10 @@ from .database import engine, SessionLocal, Base, init_db_schema
 from .ai.faiss_manager import faiss_manager
 from .services.embedding_service import embedding_service
 from .services.organization_service import organization_service
+
+from .services.security_service import security_service
 from .routes import health, folders, files, scan, search, statistics, organization, media, pdf, expiry
+from .routes import security
 
 # Configure logging
 logging.basicConfig(
@@ -16,7 +19,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("memora.main")
 
-# Initialize DB tables & schema migration
+# Initialize DB tables & schema migration (including new Module 5 tables)
 Base.metadata.create_all(bind=engine)
 init_db_schema()
 
@@ -27,7 +30,7 @@ async def lifespan(app: FastAPI):
     try:
         embedding_service.load_model()
         logger.info(f"FAISS index ready with {faiss_manager.index.ntotal} vectors.")
-        
+
         # Seed default organization categories
         db = SessionLocal()
         try:
@@ -37,7 +40,10 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error during startup initialization: {e}", exc_info=True)
     yield
-    logger.info("Shutting down Memora AI FastAPI Backend...")
+    # On shutdown: invalidate the session so the next launch requires re-auth
+    logger.info("Shutting down Memora AI FastAPI Backend — invalidating session.")
+    security_service.invalidate_session()
+    logger.info("Shutdown complete.")
 
 app = FastAPI(
     title="Memora AI Backend API",
@@ -46,21 +52,23 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
-origins = [
+# CORS Configuration — restricted to known local origins (no wildcard)
+# The backend is bound to 127.0.0.1 and should only accept requests
+# from the Electron renderer and local Vite dev server.
+ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "app://."
+    "app://.",            # Electron production renderer origin
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Local desktop app requests
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Session-Token"],
 )
 
 # Include API Routers
@@ -74,6 +82,7 @@ app.include_router(organization.router)
 app.include_router(media.router)
 app.include_router(pdf.router)
 app.include_router(expiry.router)
+app.include_router(security.router)   # Module 5
 
 from .schemas import SearchRequest, SearchResponse
 from .services.search_service import search_service

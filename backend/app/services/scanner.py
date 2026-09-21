@@ -113,7 +113,7 @@ def normalize_path(path: str) -> str:
     """
     Standardizes a file path consistently:
     1. Expands absolute normalized path.
-    2. On Windows, normalizes drive letter to upper case (e.g. 'c:\...' -> 'C:\...').
+    2. On Windows, normalizes drive letter to upper case (e.g. 'c:\\...' -> 'C:\\...').
     """
     if not path:
         return ""
@@ -126,25 +126,82 @@ def normalize_path(path: str) -> str:
         return str(path)
 
 
-def scan_directory(folder_path: str) -> List[Dict[str, Any]]:
+def scan_directory(
+    folder_path: str,
+    excluded_paths: set = None
+) -> List[Dict[str, Any]]:
     """
     Recursively scans folder_path for files matching supported extensions.
-    Skips temporary, test, and system cache folders.
+    Skips temporary, test, and system cache folders, as well as
+    explicitly excluded folders.
+
+    Args:
+        folder_path: The root directory to scan.
+        excluded_paths: Optional set of canonical paths to skip.
+
     Returns list of dicts with file metadata.
     """
     found_files = []
+
     if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
-        logger.error(f"Directory path does not exist or is not a directory: '{folder_path}'")
+        logger.error(
+            f"Directory path does not exist or is not a directory: '{folder_path}'"
+        )
         return found_files
 
+    # Resolve excluded paths once before walking the directory tree.
+    excluded_real = set()
+    if excluded_paths:
+        for ep in excluded_paths:
+            try:
+                excluded_real.add(
+                    os.path.realpath(os.path.abspath(ep))
+                )
+            except Exception:
+                pass
+
+    def _is_excluded(path: str) -> bool:
+        """Returns True if resolved path is inside any excluded folder."""
+        if not excluded_real:
+            return False
+
+        try:
+            real = os.path.realpath(os.path.abspath(path))
+
+            for exc in excluded_real:
+                try:
+                    if os.path.commonpath([real, exc]) == exc:
+                        return True
+                except ValueError:
+                    pass
+
+        except Exception:
+            pass
+
+        return False
+
     for root, dirs, files in os.walk(folder_path):
-        # Prune temporary and system directories during walk
-        dirs[:] = [d for d in dirs if not is_temp_or_test_path(os.path.join(root, d))]
+
+        # Skip the entire root if it is explicitly excluded.
+        if _is_excluded(root):
+            logger.info(f"Skipping excluded directory: '{root}'")
+            dirs.clear()
+            continue
+
+        # Prune temporary, test, system, and explicitly excluded directories.
+        dirs[:] = [
+            d for d in dirs
+            if not is_temp_or_test_path(os.path.join(root, d))
+            and not _is_excluded(os.path.join(root, d))
+        ]
 
         for file in files:
             ext = os.path.splitext(file)[1].lower()
+
             if ext in SUPPORTED_EXTENSIONS:
-                full_path = normalize_path(os.path.join(root, file))
+                full_path = normalize_path(
+                    os.path.join(root, file)
+                )
 
                 if is_temp_or_test_path(full_path):
                     continue
@@ -163,11 +220,14 @@ def scan_directory(folder_path: str) -> List[Dict[str, Any]]:
                         "modified_at": modified_at,
                         "file_hash": file_hash
                     })
+
                 except PermissionError:
-                    logger.warning(f"Permission denied for file '{full_path}'")
+                    logger.warning(
+                        f"Permission denied for file '{full_path}'"
+                    )
                 except Exception as e:
-                    logger.error(f"Error reading file stat for '{full_path}': {e}")
+                    logger.error(
+                        f"Error reading file stat for '{full_path}': {e}"
+                    )
 
     return found_files
-
-
