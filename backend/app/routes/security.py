@@ -11,7 +11,7 @@ Backend validates the token server-side — React state alone is never trusted.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import AuditLog, ExcludedFolder, Folder, SecuritySettings
 from ..services.security_service import security_service
+from ..services.email_service import email_service
 
 logger = logging.getLogger("memora.routes.security")
 
@@ -69,11 +70,14 @@ class SecurityStatusResponse(BaseModel):
     lock_enabled: bool
     has_pin: bool
     session_active: bool
+    has_recovery_email: bool = False
+    masked_recovery_email: Optional[str] = None
 
 
 class SetPinRequest(BaseModel):
     pin: str
     current_pin: Optional[str] = None  # required when changing an existing PIN
+    recovery_email: Optional[str] = None  # required on first-time setup
 
     @field_validator("pin")
     @classmethod
@@ -81,6 +85,31 @@ class SetPinRequest(BaseModel):
         if len(v) < 4 or len(v) > 32:
             raise ValueError("PIN must be between 4 and 32 characters.")
         return v
+
+
+class ForgotPinRequest(BaseModel):
+    email: str
+
+
+class VerifyResetCodeRequest(BaseModel):
+    reset_code: str
+
+
+class ResetPinRequest(BaseModel):
+    reset_code: str
+    new_pin: str
+
+    @field_validator("new_pin")
+    @classmethod
+    def validate_new_pin(cls, v):
+        if len(v) < 4 or len(v) > 32:
+            raise ValueError("PIN must be between 4 and 32 characters.")
+        return v
+
+
+class ChangeRecoveryEmailRequest(BaseModel):
+    current_pin: str
+    new_email: str
 
 
 class VerifyPinRequest(BaseModel):
@@ -157,6 +186,8 @@ def get_security_settings(
         lock_enabled=settings.lock_enabled,
         has_pin=bool(settings.pin_hash),
         session_active=session_active,
+        has_recovery_email=bool(settings.recovery_email),
+        masked_recovery_email=security_service.mask_email(settings.recovery_email),
     )
 
 
@@ -169,9 +200,9 @@ def set_pin(
     """
     Set or change the application PIN.
 
+    - First-time setup requires a valid recovery email.
     - If a PIN already exists, current_pin must be supplied and verified.
     - The PIN is NEVER stored; only the PBKDF2 hash and salt are saved.
-    - Setting/changing PIN does NOT automatically enable lock.
     """
     settings = _get_settings(db)
 
@@ -179,8 +210,16 @@ def set_pin(
     if settings.lock_enabled and not security_service.validate_session(x_session_token):
         raise HTTPException(status_code=401, detail="Authentication required.")
 
-    # If changing an existing PIN, verify the old one first
-    if settings.pin_hash:
+    # First-time PIN setup requires a recovery email
+    if not settings.pin_hash:
+        if not req.recovery_email or "@" not in req.recovery_email or "." not in req.recovery_email:
+            raise HTTPException(
+                status_code=400,
+                detail="A valid recovery email is required when setting up your PIN for the first time.",
+            )
+        settings.recovery_email = req.recovery_email.strip()
+    else:
+        # If changing an existing PIN, verify the old one first
         if not req.current_pin:
             raise HTTPException(
                 status_code=400,
@@ -204,17 +243,190 @@ def set_pin(
                                    details={"reason": "incorrect_current_pin"})
             raise HTTPException(status_code=403, detail="Current PIN is incorrect.")
         security_service.on_auth_success()
+        if req.recovery_email and "@" in req.recovery_email and "." in req.recovery_email:
+            settings.recovery_email = req.recovery_email.strip()
 
     # Hash new PIN
     new_hash, new_salt = security_service.hash_pin(req.pin)
     settings.pin_hash = new_hash
     settings.pin_salt = new_salt
     settings.pin_iterations = 260_000
+
+    # Auto-enable application lock on first PIN setup
+    settings.lock_enabled = True
+
     db.commit()
 
-    security_service.audit(db, "pin_changed", "success")
+    # Issue session token so user is automatically authenticated after creation
+    token = security_service.create_session()
+    security_service.audit(db, "pin_created" if not settings.pin_hash else "pin_changed", "success")
     logger.info("Application PIN updated.")
-    return {"message": "PIN updated successfully."}
+    return {
+        "message": "PIN configured successfully.",
+        "session_token": token,
+        "masked_recovery_email": security_service.mask_email(settings.recovery_email),
+    }
+
+
+@router.post("/pin/forgot")
+def forgot_pin(req: ForgotPinRequest, db: Session = Depends(get_db)):
+    """
+    Request a 6-digit PIN reset code sent to the recovery email.
+    Returns generic success to prevent user/email enumeration.
+    """
+    settings = _get_settings(db)
+    email = req.email.strip()
+
+    if not email or "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+
+    generic_msg = "If the recovery email is configured, a reset code has been sent."
+
+    # Prevent enumeration: if email doesn't match configured recovery email, return generic response safely
+    if not settings.recovery_email or settings.recovery_email.strip().lower() != email.lower():
+        security_service.audit(db, "pin_reset_requested_unknown_email", "failure")
+        return {"message": generic_msg}
+
+    code = security_service.generate_reset_code()
+    code_hash = security_service.hash_reset_code(code)
+
+    settings.reset_code_hash = code_hash
+    settings.reset_code_expires_at = datetime.utcnow() + timedelta(minutes=10)
+    settings.reset_code_attempts = 0
+    settings.reset_code_used_at = None
+
+    ok, err_detail = email_service.send_reset_code(settings.recovery_email, code)
+    if not ok:
+        security_service.audit(db, "pin_reset_email_failed", "failure", error=err_detail)
+        raise HTTPException(
+            status_code=500,
+            detail=err_detail or "Unable to send the reset email right now. Please check your recovery email configuration or try again later.",
+        )
+
+    db.commit()
+    security_service.audit(db, "pin_reset_requested", "success")
+    return {"message": generic_msg}
+
+
+@router.post("/pin/verify-reset")
+def verify_reset_code(req: VerifyResetCodeRequest, db: Session = Depends(get_db)):
+    """
+    Verify the 6-digit reset code before allowing PIN creation.
+    """
+    settings = _get_settings(db)
+    if not settings.reset_code_hash or not settings.reset_code_expires_at:
+        raise HTTPException(status_code=400, detail="No active reset code found. Please request a new one.")
+
+    if datetime.utcnow() > settings.reset_code_expires_at:
+        raise HTTPException(status_code=400, detail="Reset code has expired. Please request a new one.")
+
+    if settings.reset_code_attempts >= 5:
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Please request a new reset code.")
+
+    ok = security_service.verify_reset_code(req.reset_code.strip(), settings.reset_code_hash)
+    if not ok:
+        settings.reset_code_attempts += 1
+        db.commit()
+        security_service.audit(db, "pin_reset_verify_failed", "failure")
+        raise HTTPException(status_code=400, detail="Invalid reset code. Please check and try again.")
+
+    return {"valid": True, "message": "Reset code verified."}
+
+
+@router.post("/pin/reset")
+def reset_pin(req: ResetPinRequest, db: Session = Depends(get_db)):
+    """
+    Reset PIN using a verified reset code.
+    Invalidates old PIN hash, clears reset code, invalidates active session.
+    """
+    settings = _get_settings(db)
+    if not settings.reset_code_hash or not settings.reset_code_expires_at:
+        raise HTTPException(status_code=400, detail="No active reset code found. Please request a new one.")
+
+    if datetime.utcnow() > settings.reset_code_expires_at:
+        raise HTTPException(status_code=400, detail="Reset code has expired. Please request a new one.")
+
+    if settings.reset_code_attempts >= 5:
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Please request a new reset code.")
+
+    ok = security_service.verify_reset_code(req.reset_code.strip(), settings.reset_code_hash)
+    if not ok:
+        settings.reset_code_attempts += 1
+        db.commit()
+        security_service.audit(db, "pin_reset_failed", "failure")
+        raise HTTPException(status_code=400, detail="Invalid reset code.")
+
+    # Update PIN hash
+    new_hash, new_salt = security_service.hash_pin(req.new_pin)
+    settings.pin_hash = new_hash
+    settings.pin_salt = new_salt
+    settings.pin_iterations = 260_000
+    settings.lock_enabled = True
+
+    # Invalidate reset code immediately
+    settings.reset_code_hash = None
+    settings.reset_code_expires_at = None
+    settings.reset_code_attempts = 0
+    settings.reset_code_used_at = datetime.utcnow()
+
+    db.commit()
+
+    # Invalidate any previous session
+    security_service.invalidate_session()
+    security_service.audit(db, "pin_reset_success", "success")
+
+    return {"message": "PIN reset successfully. Please enter your new PIN to unlock."}
+
+
+@router.post("/recovery-email/change")
+def change_recovery_email(
+    req: ChangeRecoveryEmailRequest,
+    db: Session = Depends(get_db),
+    x_session_token: Optional[str] = Header(default=None, alias="X-Session-Token"),
+):
+    """
+    Update the recovery email address. Requires current PIN verification.
+    """
+    settings = _get_settings(db)
+    if settings.lock_enabled and not security_service.validate_session(x_session_token):
+        raise HTTPException(status_code=401, detail="Authentication required.")
+
+    if not settings.pin_hash:
+        raise HTTPException(status_code=400, detail="Set a PIN before configuring recovery email.")
+
+    locked, remaining = security_service.check_lockout()
+    if locked:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed attempts. Try again in {remaining:.0f} seconds.",
+        )
+
+    ok = security_service.verify_pin(
+        req.current_pin,
+        settings.pin_hash,
+        settings.pin_salt,
+        settings.pin_iterations,
+    )
+    if not ok:
+        security_service.on_auth_failure()
+        security_service.audit(db, "recovery_email_change_failed", "failure",
+                               details={"reason": "incorrect_current_pin"})
+        raise HTTPException(status_code=403, detail="Current PIN is incorrect.")
+
+    security_service.on_auth_success()
+
+    new_email = req.new_email.strip()
+    if not new_email or "@" not in new_email or "." not in new_email:
+        raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+
+    settings.recovery_email = new_email
+    db.commit()
+
+    security_service.audit(db, "recovery_email_changed", "success")
+    return {
+        "message": "Recovery email updated successfully.",
+        "masked_recovery_email": security_service.mask_email(new_email),
+    }
 
 
 @router.delete("/pin")

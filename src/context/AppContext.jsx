@@ -53,16 +53,21 @@ export const AppProvider = ({ children }) => {
   // === Module 5: Security / Auth State ===
   // Session token lives ONLY in React state — never localStorage/sessionStorage
   const [sessionToken, setSessionToken] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Default true: no lock screen flash before settings load when lock is disabled
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [lockEnabled, setLockEnabled] = useState(false);
   const [hasPin, setHasPin] = useState(false);
+  const [hasRecoveryEmail, setHasRecoveryEmail] = useState(false);
+  const [maskedRecoveryEmail, setMaskedRecoveryEmail] = useState(null);
   const [securityLoading, setSecurityLoading] = useState(true);
 
   // Load folders, search history, and security settings on startup
   useEffect(() => {
     loadFolders();
     refreshSearchHistory();
-    refreshSecuritySettings();
+    // Pass null explicitly — no token available yet on first load
+    refreshSecuritySettings(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadFolders = async () => {
@@ -126,21 +131,32 @@ export const AppProvider = ({ children }) => {
 
   // === Module 5: Security helpers ===
 
-  const refreshSecuritySettings = async () => {
+  /**
+   * Loads security settings from the backend.
+   * Accepts an explicit token to avoid stale closure on startup (sessionToken=null).
+   */
+  const refreshSecuritySettings = async (explicitToken) => {
+    // Use the explicitly provided token, falling back to current state
+    const tok = explicitToken !== undefined ? explicitToken : sessionToken;
     setSecurityLoading(true);
     try {
-      const settings = await securityService.getSettings(sessionToken);
+      const settings = await securityService.getSettings(tok);
       setLockEnabled(settings.lock_enabled);
       setHasPin(settings.has_pin);
-      // If lock is enabled and we don't have a valid session, mark unauthenticated
-      if (settings.lock_enabled && !settings.session_active) {
+      setHasRecoveryEmail(settings.has_recovery_email);
+      setMaskedRecoveryEmail(settings.masked_recovery_email);
+      if (settings.has_pin && settings.lock_enabled && !settings.session_active) {
+        // Lock is enabled and PIN is configured but no valid session — require auth
         setIsAuthenticated(false);
         setSessionToken(null);
-      } else if (!settings.lock_enabled) {
-        setIsAuthenticated(true); // No lock = always authenticated
+      } else {
+        // Either no PIN set, lock is disabled, OR session is valid
+        setIsAuthenticated(true);
       }
     } catch (err) {
       console.warn('Could not load security settings:', err);
+      // On error, default to authenticated so app is usable
+      setIsAuthenticated(true);
     } finally {
       setSecurityLoading(false);
     }
@@ -304,9 +320,13 @@ export const AppProvider = ({ children }) => {
         removeToast,
         // Module 5 security
         sessionToken,
+        setSessionToken,
         isAuthenticated,
+        setIsAuthenticated,
         lockEnabled,
         hasPin,
+        hasRecoveryEmail,
+        maskedRecoveryEmail,
         securityLoading,
         authenticate,
         lockApp,

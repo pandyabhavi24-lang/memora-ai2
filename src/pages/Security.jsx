@@ -11,7 +11,6 @@ import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { useApp } from '../context/AppContext';
 import { securityService } from '../services/securityService';
-import { useNavigate } from 'react-router-dom';
 
 // ---------------------------------------------------------------------------
 // Small reusable row
@@ -96,6 +95,13 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [lockLoading, setLockLoading] = useState(false);
+
+  // Recovery email change modal
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailCurrentPin, setEmailCurrentPin] = useState('');
+  const [newRecoveryEmail, setNewRecoveryEmail] = useState('');
+  const [emailLoading, setEmailLoading] = useState(false);
+
   const { lockApp, isAuthenticated } = useApp();
 
   const handleSetPin = async (e) => {
@@ -104,7 +110,7 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
     if (pin !== confirmPin) { addToast('PINs do not match.', 'error'); return; }
     setLoading(true);
     try {
-      await securityService.setPin(pin, settings?.has_pin ? currentPin : null, sessionToken);
+      await securityService.setPin(pin, settings?.has_pin ? currentPin : null, null, sessionToken);
       addToast('PIN updated successfully.', 'success');
       setPin(''); setConfirmPin(''); setCurrentPin('');
       onRefresh();
@@ -112,6 +118,27 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
       addToast(err.message || 'Failed to set PIN.', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleChangeRecoveryEmail = async (e) => {
+    e.preventDefault();
+    if (!newRecoveryEmail || !newRecoveryEmail.includes('@') || !newRecoveryEmail.includes('.')) {
+      addToast('Please enter a valid recovery email.', 'warning');
+      return;
+    }
+    setEmailLoading(true);
+    try {
+      await securityService.changeRecoveryEmail(emailCurrentPin, newRecoveryEmail.trim(), sessionToken);
+      addToast('Recovery email updated successfully.', 'success');
+      setShowEmailModal(false);
+      setEmailCurrentPin('');
+      setNewRecoveryEmail('');
+      onRefresh();
+    } catch (err) {
+      addToast(err.message || 'Failed to update recovery email.', 'error');
+    } finally {
+      setEmailLoading(false);
     }
   };
 
@@ -158,6 +185,33 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
         </button>
       </SettingRow>
 
+      {/* PIN Row */}
+      <SettingRow
+        label="PIN"
+        description="Stored as a secure PBKDF2-HMAC-SHA256 hash. Never stored as plaintext."
+      >
+        <span className="font-mono text-gray-400 text-xs tracking-widest mr-3">••••••••</span>
+      </SettingRow>
+
+      {/* Recovery Email Row */}
+      <SettingRow
+        label="Recovery Email"
+        description="Used to send a 10-minute reset code if you forget your PIN."
+      >
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-blue-300 text-xs">
+            {settings?.masked_recovery_email || 'Not configured'}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowEmailModal(true)}
+          >
+            Change Recovery Email
+          </Button>
+        </div>
+      </SettingRow>
+
       {/* Lock Now */}
       {settings?.lock_enabled && isAuthenticated && (
         <div className="flex items-center justify-between p-4 rounded-xl bg-yellow-950/20 border border-yellow-500/20">
@@ -169,7 +223,7 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
         </div>
       )}
 
-      {/* PIN form */}
+      {/* Change PIN form */}
       <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-4">
         <h3 className="text-xs font-bold text-white">{settings?.has_pin ? 'Change PIN' : 'Set PIN'}</h3>
         <p className="text-[11px] text-gray-400 leading-relaxed">
@@ -225,6 +279,52 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
           </Button>
         </form>
       </div>
+
+      {/* Change Recovery Email Modal */}
+      <Modal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        title="Change Recovery Email"
+        subtitle="Current PIN verification is required to change your recovery email."
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setShowEmailModal(false)}>Cancel</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleChangeRecoveryEmail}
+              disabled={emailLoading || !emailCurrentPin || !newRecoveryEmail}
+            >
+              {emailLoading ? 'Updating…' : 'Update Email'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleChangeRecoveryEmail} className="space-y-3 pt-2">
+          <div className="space-y-1">
+            <label className="text-xs text-gray-400">Current PIN</label>
+            <input
+              type="password"
+              value={emailCurrentPin}
+              onChange={e => setEmailCurrentPin(e.target.value)}
+              placeholder="Enter current PIN"
+              required
+              className="w-full px-3 py-2 rounded-xl bg-gray-900/80 border border-gray-700/80 text-xs text-white placeholder-gray-500 outline-none"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-gray-400">New Recovery Email</label>
+            <input
+              type="email"
+              value={newRecoveryEmail}
+              onChange={e => setNewRecoveryEmail(e.target.value)}
+              placeholder="new.email@example.com"
+              required
+              className="w-full px-3 py-2 rounded-xl bg-gray-900/80 border border-gray-700/80 text-xs text-white placeholder-gray-500 outline-none"
+            />
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

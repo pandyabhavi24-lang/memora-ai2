@@ -146,6 +146,38 @@ class SecurityService:
             return False
 
     # -----------------------------------------------------------------------
+    # Reset code & Recovery email helpers
+    # -----------------------------------------------------------------------
+
+    def generate_reset_code(self) -> str:
+        """Generates a 6-digit cryptographically secure numeric reset code."""
+        return "".join(secrets.choice("0123456789") for _ in range(6))
+
+    def hash_reset_code(self, code: str) -> str:
+        """Hashes the 6-digit reset code with SHA-256."""
+        return hashlib.sha256(code.strip().encode("utf-8")).hexdigest()
+
+    def verify_reset_code(self, code: str, stored_hash: str) -> bool:
+        """Constant-time comparison of supplied reset code against stored SHA-256 hash."""
+        if not code or not stored_hash:
+            return False
+        candidate_hash = self.hash_reset_code(code)
+        return secrets.compare_digest(stored_hash, candidate_hash)
+
+    @staticmethod
+    def mask_email(email: Optional[str]) -> Optional[str]:
+        """Masks an email for safe display (e.g. user@gmail.com -> u***@gmail.com)."""
+        if not email or "@" not in email:
+            return None
+        parts = email.split("@")
+        name, domain = parts[0], parts[1]
+        if len(name) <= 2:
+            masked_name = name[0] + "*"
+        else:
+            masked_name = name[0] + "*" * (len(name) - 2) + name[-1]
+        return f"{masked_name}@{domain}"
+
+    # -----------------------------------------------------------------------
     # Session management
     # -----------------------------------------------------------------------
 

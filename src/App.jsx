@@ -23,7 +23,7 @@ import { LockScreen } from './pages/LockScreen';
  * enforce authentication server-side via the X-Session-Token header.
  */
 function AppRoutes() {
-  const { lockEnabled, isAuthenticated, securityLoading } = useApp();
+  const { lockEnabled, isAuthenticated, hasPin, securityLoading } = useApp();
 
   // While security settings are being loaded, show nothing (avoids flash)
   if (securityLoading) {
@@ -35,7 +35,7 @@ function AppRoutes() {
   }
 
   // Show lock screen when lock is enabled and no valid session
-  if (lockEnabled && !isAuthenticated) {
+  if (!hasPin || (lockEnabled && !isAuthenticated)) {
     return <LockScreen />;
   }
 

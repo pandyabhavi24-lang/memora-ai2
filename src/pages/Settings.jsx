@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Settings as SettingsIcon, 
   Folder, 
@@ -139,14 +140,14 @@ export const Settings = () => {
             data management, and backup/restore — are available in the dedicated Security & Privacy page.
           </p>
 
-          <a
-            href="/security"
-            onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.location.pathname = '/security'; }}
+          <Link
+            to="/security"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-600/25 transition-colors"
           >
             <ShieldCheck className="w-4 h-4" />
-            Open Security & Privacy
-          </a>
+            Open Security &amp; Privacy
+          </Link>
+
         </div>
       )}
 
