@@ -339,6 +339,78 @@ class EmailService:
             "message": f"Disconnected Gmail account ({email})." if email else "Disconnected Gmail account."
         }
 
+    def send_reset_code(self, to_email: str, reset_code: str) -> Tuple[bool, str]:
+        """
+        Sends a 6-digit PIN reset code to the user's recovery email.
+
+        Returns (success: bool, error_message: str).
+        SMTP credentials are read from environment variables and are
+        never stored in the database or returned by the API.
+        """
+        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_user = os.getenv("SMTP_USER", "")
+        smtp_pass = os.getenv("SMTP_PASS", "")
+        from_addr = os.getenv("SMTP_FROM", "") or smtp_user
+
+        if not smtp_user or not smtp_pass:
+            logger.warning(
+                "SMTP credentials not configured in environment "
+                "(SMTP_USER / SMTP_PASS missing)."
+            )
+            return (
+                False,
+                "Email service is not configured. Please set SMTP credentials in the backend environment.",
+            )
+
+        msg = MIMEMultipart()
+        msg["Subject"] = "Memora AI - PIN Reset Code"
+        msg["From"] = from_addr
+        msg["To"] = to_email
+
+        body = (
+            f"Your Memora AI PIN reset code is:\n\n"
+            f"{reset_code}\n\n"
+            f"This code expires in 10 minutes.\n\n"
+            f"If you did not request a PIN reset, you can safely ignore this email."
+        )
+        msg.attach(MIMEText(body, "plain"))
+
+        try:
+            import smtplib
+
+            if smtp_port == 465:
+                with smtplib.SMTP_SSL(
+                    smtp_host, smtp_port, timeout=10
+                ) as server:
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(
+                    smtp_host, smtp_port, timeout=10
+                ) as server:
+                    server.ehlo()
+                    server.starttls()
+                    server.ehlo()
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
+
+            logger.info(
+                "PIN reset email successfully delivered to %s",
+                to_email
+            )
+            return True, ""
+
+        except Exception as e:
+            logger.error(
+                "Failed to send PIN reset email via SMTP: %s",
+                str(e)
+            )
+            return (
+                False,
+                "Unable to send the reset email right now. Please check your recovery email configuration or network connection.",
+            )
+
     def send_pdf_email(self, to_email: str, subject: str, message_body: str, pdf_path: str) -> Dict[str, Any]:
         """
         Sends an email with verified PDF attachment via Gmail API using the authenticated user's account.

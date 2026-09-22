@@ -40,10 +40,42 @@ class SecurityService {
   // PIN management
   // --------------------------------------------------------------------------
 
-  async setPin(pin, currentPin = null, sessionToken = null) {
+  async setPin(pin, currentPin = null, recoveryEmail = null, sessionToken = null) {
     return this._fetch('/api/security/pin/set', {
       method: 'POST',
-      body: JSON.stringify({ pin, current_pin: currentPin }),
+      body: JSON.stringify({
+        pin,
+        current_pin: currentPin,
+        recovery_email: recoveryEmail,
+      }),
+    }, sessionToken);
+  }
+
+  async forgotPin(email) {
+    return this._fetch('/api/security/pin/forgot', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async verifyResetCode(resetCode) {
+    return this._fetch('/api/security/pin/verify-reset', {
+      method: 'POST',
+      body: JSON.stringify({ reset_code: resetCode }),
+    });
+  }
+
+  async resetPin(resetCode, newPin) {
+    return this._fetch('/api/security/pin/reset', {
+      method: 'POST',
+      body: JSON.stringify({ reset_code: resetCode, new_pin: newPin }),
+    });
+  }
+
+  async changeRecoveryEmail(currentPin, newEmail, sessionToken = null) {
+    return this._fetch('/api/security/recovery-email/change', {
+      method: 'POST',
+      body: JSON.stringify({ current_pin: currentPin, new_email: newEmail }),
     }, sessionToken);
   }
 

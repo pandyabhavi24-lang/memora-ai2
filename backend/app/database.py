@@ -81,8 +81,21 @@ def init_db_schema():
         # --- security_settings table (Module 5) ---
         cursor.execute("PRAGMA table_info(security_settings);")
         sec_cols = [row[1] for row in cursor.fetchall()]
-        if sec_cols and "pin_iterations" not in sec_cols:
-            cursor.execute("ALTER TABLE security_settings ADD COLUMN pin_iterations INTEGER DEFAULT 260000;")
+        if sec_cols:
+            if "pin_iterations" not in sec_cols:
+                cursor.execute("ALTER TABLE security_settings ADD COLUMN pin_iterations INTEGER DEFAULT 260000;")
+            if "recovery_email" not in sec_cols:
+                cursor.execute("ALTER TABLE security_settings ADD COLUMN recovery_email TEXT;")
+            if "recovery_email_verified" not in sec_cols:
+                cursor.execute("ALTER TABLE security_settings ADD COLUMN recovery_email_verified INTEGER DEFAULT 0;")
+            if "reset_code_hash" not in sec_cols:
+                cursor.execute("ALTER TABLE security_settings ADD COLUMN reset_code_hash TEXT;")
+            if "reset_code_expires_at" not in sec_cols:
+                cursor.execute("ALTER TABLE security_settings ADD COLUMN reset_code_expires_at TIMESTAMP;")
+            if "reset_code_attempts" not in sec_cols:
+                cursor.execute("ALTER TABLE security_settings ADD COLUMN reset_code_attempts INTEGER DEFAULT 0;")
+            if "reset_code_used_at" not in sec_cols:
+                cursor.execute("ALTER TABLE security_settings ADD COLUMN reset_code_used_at TIMESTAMP;")
             conn.commit()
 
         # Ensure the singleton settings row exists

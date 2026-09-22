@@ -655,6 +655,12 @@ class SecuritySettings(Base):
     pin_salt = Column(String, nullable=True)   # hex-encoded 32-byte random salt
     lock_enabled = Column(Boolean, default=False, nullable=False)
     pin_iterations = Column(Integer, default=260000, nullable=False)  # documented iteration count
+    recovery_email = Column(String, nullable=True)
+    recovery_email_verified = Column(Boolean, default=False, nullable=False)
+    reset_code_hash = Column(String, nullable=True)
+    reset_code_expires_at = Column(DateTime, nullable=True)
+    reset_code_attempts = Column(Integer, default=0, nullable=False)
+    reset_code_used_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
