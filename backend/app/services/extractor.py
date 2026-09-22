@@ -77,7 +77,11 @@ class TextExtractor:
             import tempfile
             from PIL import Image
 
+            max_ocr_pages = 10
             for idx, page in enumerate(reader.pages):
+                if idx >= max_ocr_pages:
+                    logger.info(f"Reached max OCR page cap ({max_ocr_pages}) for scanned PDF '{file_path}'. Continuing scan.")
+                    break
                 page_ocr_text = []
 
                 # Extract embedded images on this page
@@ -354,6 +358,22 @@ class TextExtractor:
             # Load image safely via PIL (handles JPG, PNG, WEBP, BMP, TIFF, GIF)
             try:
                 with Image.open(file_path) as pil_img:
+                    # Limit the image size before sending it to EasyOCR.
+                    # This protects memory when OCR is called on very large
+                    # images extracted from PDFs.
+                    max_ocr_dimension = 2000
+
+                    if max(pil_img.size) > max_ocr_dimension:
+                        pil_img.thumbnail(
+                            (max_ocr_dimension, max_ocr_dimension),
+                            Image.Resampling.LANCZOS
+                        )
+
+                        logger.debug(
+                            f"OCR image resized to {pil_img.width}x{pil_img.height} "
+                            f"for '{file_path}'"
+                        )
+
                     rgb_img = pil_img.convert("RGB")
                     img_array = np.array(rgb_img)
             except Exception as load_err:

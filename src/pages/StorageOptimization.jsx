@@ -62,7 +62,7 @@ export const StorageOptimization = () => {
   const [candidateError, setCandidateError] = useState(null);
   const [applyingOptimization, setApplyingOptimization] = useState(false);
   const [applyResult, setApplyResult] = useState(null);
-
+  const [replaceOriginal, setReplaceOriginal] = useState(false);
   // ZIP Archive Modal State
   const [showZipModal, setShowZipModal] = useState(false);
   const [zipDestination, setZipDestination] = useState('');
@@ -169,6 +169,7 @@ export const StorageOptimization = () => {
     setCandidateResult(null);
     setCandidateError(null);
     setApplyResult(null);
+    setReplaceOriginal(false);
   };
 
   const handleCloseOptimize = () => {
@@ -215,7 +216,7 @@ export const StorageOptimization = () => {
       const payload = {
         file_id: optimizeTargetFile.id,
         candidate_token: candidateResult.candidate_token,
-        replace_original: true
+        replace_original: replaceOriginal
       };
 
       const res = await storageService.applyOptimization(payload);
@@ -528,14 +529,13 @@ export const StorageOptimization = () => {
                   <th className="p-4">Category</th>
                   <th className="p-4">Size</th>
                   <th className="p-4">Modified</th>
-                  <th className="p-4">Optimization Strategy</th>
                   <th className="p-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/60">
                 {loadingOptimizable ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-400">
+                    <td colSpan={5} className="p-8 text-center text-gray-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
                         <span>Scanning optimizable assets...</span>
@@ -544,7 +544,7 @@ export const StorageOptimization = () => {
                   </tr>
                 ) : optimizableFiles.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-400">
+                    <td colSpan={5} className="p-8 text-center text-gray-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Zap className="w-8 h-8 text-gray-600" />
                         <span className="font-semibold text-gray-300">No optimizable files found</span>
@@ -584,23 +584,20 @@ export const StorageOptimization = () => {
                           {file.modified_at ? new Date(file.modified_at).toLocaleDateString() : '—'}
                         </td>
 
-                        <td className="p-4 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            <Zap className="w-3 h-3" />
-                            <span>{file.optimization_type || 'Optimizable'}</span>
-                          </span>
-                        </td>
-
                         <td className="p-4 text-right whitespace-nowrap">
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            icon={Zap}
+                          <button
+                            type="button"
                             onClick={() => handleOpenOptimize(file)}
-                            className="text-xs bg-amber-600 hover:bg-amber-500 border-amber-500/30 text-white"
+                            title={isBmp ? 'Convert to PNG' : 'Optimize file'}
+                            aria-label={isBmp ? 'Convert to PNG' : 'Optimize file'}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg
+               bg-amber-500/10 border border-amber-500/20
+               text-amber-400
+               hover:bg-amber-500/20 hover:border-amber-500/40
+               transition-colors"
                           >
-                            <span>{isBmp ? 'Convert to PNG' : 'Optimize'}</span>
-                          </Button>
+                            <Zap className="w-4 h-4" />
+                          </button>
                         </td>
                       </tr>
                     );
@@ -727,9 +724,8 @@ export const StorageOptimization = () => {
                     return (
                       <tr
                         key={file.id}
-                        className={`transition-colors hover:bg-gray-800/30 ${
-                          isSelected ? 'bg-blue-900/15' : ''
-                        }`}
+                        className={`transition-colors hover:bg-gray-800/30 ${isSelected ? 'bg-blue-900/15' : ''
+                          }`}
                       >
                         <td className="p-4 text-center">
                           <button
@@ -814,7 +810,6 @@ export const StorageOptimization = () => {
         isOpen={Boolean(optimizeTargetFile)}
         onClose={handleCloseOptimize}
         title="File Optimization Sandbox"
-        subtitle={optimizeTargetFile?.name}
         maxWidth="max-w-xl"
         actions={
           <div className="flex items-center justify-between w-full">
@@ -846,12 +841,12 @@ export const StorageOptimization = () => {
           <div className="space-y-6">
             {/* File Info Header */}
             <div className="p-4 rounded-xl bg-gray-950/70 border border-gray-800 flex items-center justify-between">
-              <div>
+              <div className="min-w-0 pr-4">
                 <div className="text-xs text-gray-400 font-medium">Original Asset</div>
-                <div className="text-sm font-bold text-white mt-0.5">{optimizeTargetFile.name}</div>
+                <div className="text-sm font-bold text-white mt-0.5 truncate">{optimizeTargetFile.name}</div>
                 <div className="text-[11px] text-gray-500 truncate max-w-sm">{optimizeTargetFile.path}</div>
               </div>
-              <div className="text-right">
+              <div className="text-right shrink-0">
                 <div className="text-xs text-gray-400 font-medium">Current Size</div>
                 <div className="text-base font-mono font-bold text-cyan-400 mt-0.5">{optimizeTargetFile.size_formatted}</div>
               </div>
@@ -866,18 +861,17 @@ export const StorageOptimization = () => {
                     <button
                       type="button"
                       onClick={() => setOptimizeMode('lossless')}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                        optimizeMode === 'lossless'
-                          ? 'bg-blue-600/20 border-blue-500/50 text-white shadow-sm'
-                          : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900'
-                      }`}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${optimizeMode === 'lossless'
+                        ? 'bg-blue-600/20 border-blue-500/50 text-white shadow-sm'
+                        : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900'
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold">Lossless (Recommended)</span>
+                        <span className="text-xs font-bold">Lossless</span>
                         {optimizeMode === 'lossless' && <CheckCircle2 className="w-4 h-4 text-blue-400" />}
                       </div>
                       <p className="text-[11px] text-gray-400">
-                        100% bit-exact visual fidelity. Strips metadata and deflates compression tables.
+                        No quality loss
                       </p>
                     </button>
 
@@ -885,20 +879,17 @@ export const StorageOptimization = () => {
                       type="button"
                       onClick={() => setOptimizeMode('lossy')}
                       disabled={optimizeTargetFile.extension === '.pdf' || optimizeTargetFile.extension === '.png' || optimizeTargetFile.extension === '.bmp'}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                        optimizeMode === 'lossy'
-                          ? 'bg-amber-600/20 border-amber-500/50 text-white shadow-sm'
-                          : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed'
-                      }`}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${optimizeMode === 'lossy'
+                        ? 'bg-amber-600/20 border-amber-500/50 text-white shadow-sm'
+                        : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed'
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold">Lossy (Higher Savings)</span>
+                        <span className="text-xs font-bold">Lossy</span>
                         {optimizeMode === 'lossy' && <CheckCircle2 className="w-4 h-4 text-amber-400" />}
                       </div>
                       <p className="text-[11px] text-gray-400">
-                        {optimizeTargetFile.extension === '.jpg' || optimizeTargetFile.extension === '.jpeg'
-                          ? 'Applies psycho-visual quantization for significant file size reduction.'
-                          : 'Lossy mode is only applicable to JPEG assets.'}
+                        Smaller file
                       </p>
                     </button>
                   </div>
@@ -936,11 +927,10 @@ export const StorageOptimization = () => {
                       <button
                         type="button"
                         onClick={() => setBmpTargetFormat('png')}
-                        className={`px-4 py-2 rounded-lg text-xs font-semibold border ${
-                          bmpTargetFormat === 'png'
-                            ? 'bg-blue-600/20 border-blue-500 text-blue-300'
-                            : 'bg-gray-900 border-gray-800 text-gray-400'
-                        }`}
+                        className={`px-4 py-2 rounded-lg text-xs font-semibold border ${bmpTargetFormat === 'png'
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                          : 'bg-gray-900 border-gray-800 text-gray-400'
+                          }`}
                       >
                         PNG (Deflate Compressed)
                       </button>
@@ -965,7 +955,7 @@ export const StorageOptimization = () => {
                     disabled={analyzingCandidate}
                     className="w-full"
                   >
-                    <span>{analyzingCandidate ? 'Analyzing & Generating Sandbox Candidate...' : 'Analyze & Generate Candidate'}</span>
+                    <span>{analyzingCandidate ? 'Generating Candidate...' : 'Generate Candidate'}</span>
                   </Button>
                 </div>
               </div>
@@ -1022,11 +1012,56 @@ export const StorageOptimization = () => {
                       )}
                     </div>
 
+                    {/* Save Choice */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-gray-300">
+                        Save optimized file
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setReplaceOriginal(false)}
+                          className={`p-3 rounded-lg border text-left transition-colors ${!replaceOriginal
+                            ? 'bg-blue-600/15 border-blue-500/50 text-white'
+                            : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900'
+                            }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4" />
+                            <span className="text-xs font-semibold">Create Copy</span>
+                          </div>
+                          <div className="text-[10px] text-gray-500 mt-1">
+                            Keep the original file
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setReplaceOriginal(true)}
+                          className={`p-3 rounded-lg border text-left transition-colors ${replaceOriginal
+                            ? 'bg-amber-600/15 border-amber-500/50 text-white'
+                            : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900'
+                            }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <HardDrive className="w-4 h-4" />
+                            <span className="text-xs font-semibold">Replace Original</span>
+                          </div>
+                          <div className="text-[10px] text-gray-500 mt-1">
+                            Replace the existing file
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Two-phase replacement notice */}
                     <div className="p-3 rounded-lg bg-gray-900/80 border border-gray-800 text-[11px] text-gray-300 flex items-start gap-2">
                       <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                       <span>
-                        Clicking <strong>Apply Optimization</strong> will stage a temporary local backup, replace the original file, and update database metadata. Automatic rollback is active if any step fails.
+                        {replaceOriginal
+                          ? 'The original file will be safely replaced. A temporary backup and automatic rollback protect your data if anything fails.'
+                          : 'A new optimized copy will be created. Your original file will remain untouched.'}
                       </span>
                     </div>
                   </div>
@@ -1170,11 +1205,10 @@ export const StorageOptimization = () => {
                       key={lvl.val}
                       type="button"
                       onClick={() => setZipCompressionLevel(lvl.val)}
-                      className={`py-2 px-3 rounded-lg text-xs font-medium border text-center transition-all cursor-pointer ${
-                        zipCompressionLevel === lvl.val
-                          ? 'bg-amber-600/20 border-amber-500 text-amber-300'
-                          : 'bg-gray-950 border-gray-800 text-gray-400 hover:bg-gray-900'
-                      }`}
+                      className={`py-2 px-3 rounded-lg text-xs font-medium border text-center transition-all cursor-pointer ${zipCompressionLevel === lvl.val
+                        ? 'bg-amber-600/20 border-amber-500 text-amber-300'
+                        : 'bg-gray-950 border-gray-800 text-gray-400 hover:bg-gray-900'
+                        }`}
                     >
                       {lvl.label}
                     </button>

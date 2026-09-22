@@ -76,6 +76,7 @@ class ApiService {
         }
       } catch (err) {
         console.error('Native Electron dialog error:', err);
+        throw err;
       }
       return [];
     }

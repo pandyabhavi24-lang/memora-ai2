@@ -214,6 +214,26 @@ class IndexingService:
                 except Exception as e:
                     logger.error(f"Error processing file '{file_path}': {e}", exc_info=True)
                     db.rollback()
+                    try:
+                        failed_file = db.query(File).filter(File.path == file_path).first()
+                        if not failed_file:
+                            failed_file = File(
+                                folder_id=folder_id_val,
+                                path=file_path,
+                                name=item_meta["name"],
+                                extension=item_meta["extension"],
+                                size=item_meta["size"],
+                                modified_at=item_meta["modified_at"],
+                                file_hash=item_meta["file_hash"],
+                                extraction_status="failed"
+                            )
+                            db.add(failed_file)
+                        else:
+                            failed_file.extraction_status = "failed"
+                        db.commit()
+                    except Exception as db_err:
+                        logger.error(f"Failed to record failed status for '{file_path}': {db_err}")
+                        db.rollback()
                     failed += 1
                     processed += 1
 
