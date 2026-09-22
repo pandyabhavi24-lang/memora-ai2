@@ -8,7 +8,7 @@ let pyProc = null;
 
 function startPythonBackend() {
   const rootDir = path.join(__dirname, '..');
-  const venvPython = path.join(rootDir, '..', '.venv', 'Scripts', 'python.exe');
+  const venvPython = path.join(rootDir, '.venv', 'Scripts', 'python.exe');
 const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python';
 
   console.log(`[Electron] Spawning FastAPI backend using: ${pythonCmd}`);
