@@ -4,11 +4,25 @@ import logging
 import base64
 import glob
 from typing import Dict, Any, Optional, Tuple
+
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 
+from dotenv import load_dotenv
+
+# Always load the .env file from the MemoraAI project root,
+# regardless of the backend process working directory.
+
+PROJECT_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..",)
+)
+ENV_FILE = os.path.join(PROJECT_ROOT, ".env")
+
+load_dotenv(ENV_FILE)
+
 logger = logging.getLogger("memora.email_service")
+
 
 # Required minimal scope for sending email only
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
