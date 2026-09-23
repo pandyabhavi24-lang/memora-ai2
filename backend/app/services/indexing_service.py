@@ -71,7 +71,7 @@ class IndexingService:
 
         try:
 
-                       self._is_cancelled = False
+            self._is_cancelled = False
             self.state["status"] = "scanning"
             self.state["error_message"] = None
 
@@ -322,7 +322,7 @@ class IndexingService:
                 # Final vector mapping synchronization check
                 self._sync_vector_mappings(db)
 
-             self.state["status"] = "complete"
+                self.state["status"] = "complete"
                 self.state["progress_percentage"] = 100
                 self.state["current_file"] = "Finished"
                 logger.info(
