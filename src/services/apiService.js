@@ -468,6 +468,18 @@ class ApiService {
     });
   }
 
+  async analyzeFileExpiry(fileId) {
+    return await this._fetch(`/api/expiry/analyze/${fileId}`, {
+      method: 'POST'
+    });
+  }
+
+  async reanalyzeExpiryRecord(expiryId) {
+    return await this._fetch(`/api/expiry/${expiryId}/reanalyze`, {
+      method: 'POST'
+    });
+  }
+
   async deleteExpiryRecord(expiryId) {
     return await this._fetch(`/api/expiry/${expiryId}`, {
       method: 'DELETE'

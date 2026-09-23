@@ -173,6 +173,33 @@ def confirm_expiry_date(
     return build_record_response(rec)
 
 
+@router.post("/analyze/{file_id}", response_model=List[ExpiryRecordResponse])
+def analyze_specific_file(file_id: int, db: Session = Depends(get_db)):
+    """
+    Analyzes or re-analyzes a specific file ID using Ollama AI + rule-based hybrid date detection.
+    """
+    rec = expiry_service.analyze_file(db, file_id=file_id, reanalyze=True)
+    if not rec:
+        raise HTTPException(status_code=404, detail="File not found or no date information could be extracted")
+    records = db.query(FileExpiry).filter(FileExpiry.file_id == file_id).all()
+    return [build_record_response(r) for r in records if r.file]
+
+
+@router.post("/{expiry_id}/reanalyze", response_model=ExpiryRecordResponse)
+def reanalyze_expiry_record(expiry_id: int, db: Session = Depends(get_db)):
+    """
+    Re-runs Ollama AI + rule-based analysis on the document associated with an existing expiry record.
+    """
+    rec = db.query(FileExpiry).filter(FileExpiry.id == expiry_id).first()
+    if not rec or not rec.file_id:
+        raise HTTPException(status_code=404, detail="Expiry record not found")
+    
+    updated_rec = expiry_service.analyze_file(db, file_id=rec.file_id, reanalyze=True)
+    if not updated_rec or not updated_rec.file:
+        raise HTTPException(status_code=500, detail="Re-analysis failed to detect date information")
+    return build_record_response(updated_rec)
+
+
 @router.delete("/{expiry_id}")
 def delete_expiry_record(expiry_id: int, db: Session = Depends(get_db)):
     """

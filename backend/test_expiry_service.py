@@ -171,8 +171,38 @@ def test_expiry_pipeline():
     assert confirmed_rec.user_confirmed is True
     print("  [OK] User confirmation succeeded.")
 
-    # 11. Test Regression Safety for Modules 1, 2, 3
-    print("\n[11/11] Testing Regression Safety for Modules 1, 2, 3...")
+    # 11. Test Documents Without Expiry Dates (PPTX, TXT, Issue-only documents)
+    print("\n[11/12] Testing Documents Without Actual Expiry Dates (PPTX, TXT, Issue-Only)...")
+    non_expiry_files = [
+        ("C:\\TestFolderExpiry\\Presentation.pptx", "Presentation.pptx", ".pptx", "Project Status Presentation. Created Date: 15/05/2024. Meeting Date: 20/06/2024."),
+        ("C:\\TestFolderExpiry\\Notes.txt", "Notes.txt", ".txt", "Developer Scratchpad. Added entry on 10/10/2023. Updated 12/12/2023."),
+        ("C:\\TestFolderExpiry\\Certificate_IssueOnly.pdf", "Certificate_IssueOnly.pdf", ".pdf", "Graduation Certificate of Excellence. Issued On: 01/06/2022.")
+    ]
+
+    for f_path, f_name, f_ext, f_text in non_expiry_files:
+        t_file = db.query(File).filter(File.path == f_path).first()
+        if not t_file:
+            t_file = File(
+                folder_id=test_folder.id,
+                path=f_path,
+                name=f_name,
+                extension=f_ext,
+                size=1024,
+                modified_at=datetime.utcnow(),
+                file_hash=f"hash_{f_name}",
+                extracted_text=f_text
+            )
+            db.add(t_file)
+            db.commit()
+
+        no_exp_res = expiry_service.analyze_file(db, t_file.id, reanalyze=True)
+        assert no_exp_res is None, f"Expected None for non-expiry document '{f_name}', got {no_exp_res}"
+        recs_in_db = db.query(FileExpiry).filter(FileExpiry.file_id == t_file.id).all()
+        assert len(recs_in_db) == 0, f"Expected 0 records in DB for non-expiry document '{f_name}', found {len(recs_in_db)}"
+        print(f"  [OK] '{f_name}' correctly created 0 Expiry records (non-expiry document filtered out).")
+
+    # 12. Test Regression Safety for Modules 1, 2, 3
+    print("\n[12/12] Testing Regression Safety for Modules 1, 2, 3...")
     summary = expiry_service.get_summary_counts(db)
     assert "total_tracked" in summary
     assert "upcoming" in summary
@@ -184,7 +214,7 @@ def test_expiry_pipeline():
 
     db.close()
     print("\n==================================================")
-    print("ALL 11 FILE EXPIRY & RENEWAL REMINDER TESTS PASSED!")
+    print("ALL 12 FILE EXPIRY & RENEWAL REMINDER TESTS PASSED!")
     print("==================================================")
 
 if __name__ == "__main__":
