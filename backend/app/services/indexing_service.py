@@ -1,13 +1,16 @@
 import os
 import logging
 import asyncio
+import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models import Folder, File, Chunk, VectorMapping
-from .scanner import scan_directory
+from .scanner import scan_directory, normalize_path
 from .extractor import text_extractor
 from .chunker import chunk_text
 from .embedding_service import embedding_service
@@ -21,6 +24,7 @@ class IndexingService:
     """
     def __init__(self):
         self.lock = asyncio.Lock()
+        self._scan_lock = threading.Lock()
         self._is_cancelled = False
         self.state: Dict[str, Any] = {
             "status": "idle",  # idle, scanning, complete, failed
@@ -58,202 +62,252 @@ class IndexingService:
     def run_folder_indexing(self, folder_id: Optional[int] = None):
         """
         Synchronous indexing worker method meant to run in background thread or task.
+        Guarded against concurrent duplicate scans.
         """
-        self._is_cancelled = False
-        self.state["status"] = "scanning"
-        self.state["error_message"] = None
+        if not self._scan_lock.acquire(blocking=False):
+            logger.info("Scan already running. Skipping duplicate scan request.")
+            return
 
-        db: Session = SessionLocal()
         try:
-            if folder_id:
-                folders = db.query(Folder).filter(Folder.id == folder_id, Folder.is_active == True).all()
-            else:
-                folders = db.query(Folder).filter(Folder.is_active == True).all()
+            self._is_cancelled = False
+            self.state["status"] = "scanning"
+            self.state["error_message"] = None
 
-            if not folders:
-                self.state["status"] = "complete"
-                self.state["progress_percentage"] = 100
-                return
+            db: Session = SessionLocal()
+            try:
+                if folder_id:
+                    folders = db.query(Folder).filter(Folder.id == folder_id, Folder.is_active == True).all()
+                else:
+                    folders = db.query(Folder).filter(Folder.is_active == True).all()
 
-            all_found_scans = []
-            for folder in folders:
-                found = scan_directory(folder.path)
-                for item in found:
-                    item["folder_id"] = folder.id
-                all_found_scans.extend(found)
-
-            self.state["files_found"] = len(all_found_scans)
-            if len(all_found_scans) == 0:
-                self.state["status"] = "complete"
-                self.state["progress_percentage"] = 100
-                return
-
-            processed = 0
-            failed = 0
-            chunks_total = 0
-            vectors_total = 0
-
-            from .scanner import is_temp_or_test_path
-
-            for idx, item_meta in enumerate(all_found_scans):
-                if self._is_cancelled:
-                    logger.info("Scan cancelled by user.")
-                    self.state["status"] = "idle"
-                    self.state["current_file"] = "Scan cancelled"
+                if not folders:
+                    self.state["status"] = "complete"
+                    self.state["progress_percentage"] = 100
                     return
 
-                file_path = item_meta["path"]
-                if is_temp_or_test_path(file_path):
-                    processed += 1
-                    continue
+                all_found_scans = []
+                for folder in folders:
+                    found = scan_directory(folder.path)
+                    for item in found:
+                        item["folder_id"] = folder.id
+                    all_found_scans.extend(found)
 
-                self.state["current_file"] = item_meta["name"]
-                folder_id_val = item_meta["folder_id"]
+                # Deduplicate scan list by normalized path
+                unique_scans = []
+                seen_paths = set()
+                for item in all_found_scans:
+                    norm_p = normalize_path(item["path"])
+                    if norm_p not in seen_paths:
+                        seen_paths.add(norm_p)
+                        item["path"] = norm_p
+                        unique_scans.append(item)
+                all_found_scans = unique_scans
 
-                try:
-                    # Check existing DB file record
-                    existing_file = db.query(File).filter(File.path == file_path).first()
+                self.state["files_found"] = len(all_found_scans)
+                if len(all_found_scans) == 0:
+                    self.state["status"] = "complete"
+                    self.state["progress_percentage"] = 100
+                    return
 
-                    if existing_file:
-                        # Check if modified or if extraction/vectors are missing
-                        existing_chunks = db.query(Chunk).filter(Chunk.file_id == existing_file.id).all()
-                        has_valid_vectors = False
-                        if existing_chunks:
-                            chunk_ids = [c.id for c in existing_chunks]
-                            v_count = db.query(VectorMapping).filter(VectorMapping.chunk_id.in_(chunk_ids)).count()
-                            has_valid_vectors = (v_count == len(existing_chunks))
+                processed = 0
+                failed = 0
+                chunks_total = 0
+                vectors_total = 0
 
-                        is_fully_indexed = (
-                            existing_file.file_hash == item_meta["file_hash"] and
-                            existing_file.modified_at == item_meta["modified_at"] and
-                            existing_file.extraction_status in ["success", "empty"] and
-                            (has_valid_vectors or not (existing_file.extracted_text and existing_file.extracted_text.strip()))
-                        )
+                from .scanner import is_temp_or_test_path
 
-                        if is_fully_indexed:
-                            # Unchanged file - count chunks & vectors
-                            processed += 1
-                            chunks_total += len(existing_chunks)
-                            vectors_total += len(existing_chunks)
-                            self._update_progress(processed, failed, chunks_total, vectors_total, len(all_found_scans))
-                            continue
-                        else:
-                            # Re-index file: Delete old chunks & vectors from FAISS and DB
-                            logger.info(f"Re-indexing file '{file_path}' (modified or missing vector mappings).")
-                            self._delete_file_chunks_and_vectors(db, existing_file.id)
-                            target_file = existing_file
-                            target_file.size = item_meta["size"]
-                            target_file.modified_at = item_meta["modified_at"]
-                            target_file.file_hash = item_meta["file_hash"]
-                    else:
-                        # New file
-                        target_file = File(
-                            folder_id=folder_id_val,
-                            path=file_path,
-                            name=item_meta["name"],
-                            extension=item_meta["extension"],
-                            size=item_meta["size"],
-                            modified_at=item_meta["modified_at"],
-                            file_hash=item_meta["file_hash"],
-                            extraction_status="pending"
-                        )
-                        db.add(target_file)
-                        db.commit()
-                        db.refresh(target_file)
+                for idx, item_meta in enumerate(all_found_scans):
+                    if self._is_cancelled:
+                        logger.info("Scan cancelled by user.")
+                        self.state["status"] = "idle"
+                        self.state["current_file"] = "Scan cancelled"
+                        return
 
-                    # Extract text content
-                    extracted_text, status_str = text_extractor.extract(file_path, item_meta["extension"])
-                    target_file.extracted_text = extracted_text
-                    target_file.extraction_status = status_str
+                    file_path = normalize_path(item_meta["path"])
+                    if is_temp_or_test_path(file_path):
+                        processed += 1
+                        continue
 
-                    # Generate and persist dynamic Smart Tags
-                    from .classification_service import classification_service
-                    _, _, _, _, smart_tags = classification_service.classify_file(
-                        filename=target_file.name,
-                        extension=target_file.extension,
-                        extracted_text=extracted_text or ""
-                    )
-                    target_file.set_smart_tags(smart_tags)
-                    db.commit()
+                    self.state["current_file"] = item_meta["name"]
+                    folder_id_val = item_meta["folder_id"]
 
-                    if status_str in ["success", "empty"] and extracted_text:
-                        # Chunk text (300-500 words per chunk with 50 word overlap)
-                        chunk_objs = chunk_text(extracted_text, chunk_size=400, overlap=50)
-                        if chunk_objs:
-                            chunk_records = []
-                            texts_to_embed = []
-                            for c in chunk_objs:
-                                ch_rec = Chunk(
-                                    file_id=target_file.id,
-                                    chunk_index=c["chunk_index"],
-                                    text=c["text"],
-                                    word_count=c["word_count"]
-                                )
-                                db.add(ch_rec)
-                                chunk_records.append(ch_rec)
-                                texts_to_embed.append(c["text"])
-
-                            db.commit()
-                            for ch_rec in chunk_records:
-                                db.refresh(ch_rec)
-
-                            # Generate embeddings locally using the unified embedding service
-                            vectors = embedding_service.embed_documents(texts_to_embed)
-                            chunk_ids = [ch.id for ch in chunk_records]
-
-                            # Add normalized float32 vectors to FAISS IndexFlatIP
-                            assigned_mappings = faiss_manager.add_vectors(vectors, chunk_ids)
-
-                            # Keep VectorMapping in sync
-                            self._sync_vector_mappings(db)
-
-                            chunks_total += len(chunk_records)
-                            vectors_total += len(assigned_mappings)
-
-                    processed += 1
-                except Exception as e:
-                    logger.error(f"Error processing file '{file_path}': {e}", exc_info=True)
-                    db.rollback()
                     try:
-                        failed_file = db.query(File).filter(File.path == file_path).first()
-                        if not failed_file:
-                            failed_file = File(
-                                folder_id=folder_id_val,
-                                path=file_path,
-                                name=item_meta["name"],
-                                extension=item_meta["extension"],
-                                size=item_meta["size"],
-                                modified_at=item_meta["modified_at"],
-                                file_hash=item_meta["file_hash"],
-                                extraction_status="failed"
+                        # 1. Search for existing DB file record by exact normalized path, falling back to case-insensitive match
+                        existing_file = db.query(File).filter(File.path == file_path).first()
+                        if not existing_file:
+                            existing_file = db.query(File).filter(func.lower(File.path) == func.lower(file_path)).first()
+
+                        if existing_file:
+                            # Safely update folder_id if needed
+                            if existing_file.folder_id != folder_id_val:
+                                existing_file.folder_id = folder_id_val
+                                db.commit()
+
+                            # Check if modified or if extraction/vectors are missing
+                            existing_chunks = db.query(Chunk).filter(Chunk.file_id == existing_file.id).all()
+                            has_valid_vectors = False
+                            if existing_chunks:
+                                chunk_ids = [c.id for c in existing_chunks]
+                                v_count = db.query(VectorMapping).filter(VectorMapping.chunk_id.in_(chunk_ids)).count()
+                                has_valid_vectors = (v_count == len(existing_chunks))
+
+                            is_fully_indexed = (
+                                existing_file.file_hash == item_meta["file_hash"] and
+                                existing_file.modified_at == item_meta["modified_at"] and
+                                existing_file.extraction_status in ["success", "empty"] and
+                                (has_valid_vectors or not (existing_file.extracted_text and existing_file.extracted_text.strip()))
                             )
-                            db.add(failed_file)
+
+                            if is_fully_indexed:
+                                # Existing unchanged file: reuse record, skip re-extraction and re-embedding
+                                logger.info(f"Existing unchanged file skipped: '{file_path}'")
+                                processed += 1
+                                chunks_total += len(existing_chunks)
+                                vectors_total += len(existing_chunks)
+                                self._update_progress(processed, failed, chunks_total, vectors_total, len(all_found_scans))
+                                continue
+                            else:
+                                # Modified or incomplete file: Re-index in place
+                                logger.info(f"Existing modified file updated: '{file_path}'")
+                                self._delete_file_chunks_and_vectors(db, existing_file.id)
+                                target_file = existing_file
+                                target_file.size = item_meta["size"]
+                                target_file.modified_at = item_meta["modified_at"]
+                                target_file.file_hash = item_meta["file_hash"]
+                                db.commit()
                         else:
-                            failed_file.extraction_status = "failed"
+                            # New file: Insert record with IntegrityError protection
+                            try:
+                                target_file = File(
+                                    folder_id=folder_id_val,
+                                    path=file_path,
+                                    name=item_meta["name"],
+                                    extension=item_meta["extension"],
+                                    size=item_meta["size"],
+                                    modified_at=item_meta["modified_at"],
+                                    file_hash=item_meta["file_hash"],
+                                    extraction_status="pending"
+                                )
+                                db.add(target_file)
+                                db.commit()
+                                db.refresh(target_file)
+                                logger.info(f"New file added: '{file_path}'")
+                            except IntegrityError as ie:
+                                db.rollback()
+                                logger.warning(f"IntegrityError inserting '{file_path}', performing DB rollback & re-fetching: {ie}")
+                                existing_file = db.query(File).filter(File.path == file_path).first()
+                                if not existing_file:
+                                    existing_file = db.query(File).filter(func.lower(File.path) == func.lower(file_path)).first()
+
+                                if existing_file:
+                                    target_file = existing_file
+                                    target_file.folder_id = folder_id_val
+                                    target_file.size = item_meta["size"]
+                                    target_file.modified_at = item_meta["modified_at"]
+                                    target_file.file_hash = item_meta["file_hash"]
+                                    db.commit()
+                                    logger.info(f"Duplicate path detected and safely reused: '{file_path}'")
+                                else:
+                                    logger.error(f"Failed to resolve path conflict for '{file_path}': {ie}")
+                                    failed += 1
+                                    processed += 1
+                                    continue
+
+                        # Extract text content
+                        extracted_text, status_str = text_extractor.extract(file_path, item_meta["extension"])
+                        target_file.extracted_text = extracted_text
+                        target_file.extraction_status = status_str
+
+                        # Generate and persist dynamic Smart Tags
+                        from .classification_service import classification_service
+                        _, _, _, _, smart_tags = classification_service.classify_file(
+                            filename=target_file.name,
+                            extension=target_file.extension,
+                            extracted_text=extracted_text or ""
+                        )
+                        target_file.set_smart_tags(smart_tags)
                         db.commit()
-                    except Exception as db_err:
-                        logger.error(f"Failed to record failed status for '{file_path}': {db_err}")
+
+                        if status_str in ["success", "empty"] and extracted_text:
+                            # Chunk text (300-500 words per chunk with 50 word overlap)
+                            chunk_objs = chunk_text(extracted_text, chunk_size=400, overlap=50)
+                            if chunk_objs:
+                                chunk_records = []
+                                texts_to_embed = []
+                                for c in chunk_objs:
+                                    ch_rec = Chunk(
+                                        file_id=target_file.id,
+                                        chunk_index=c["chunk_index"],
+                                        text=c["text"],
+                                        word_count=c["word_count"]
+                                    )
+                                    db.add(ch_rec)
+                                    chunk_records.append(ch_rec)
+                                    texts_to_embed.append(c["text"])
+
+                                db.commit()
+                                for ch_rec in chunk_records:
+                                    db.refresh(ch_rec)
+
+                                # Generate embeddings locally using the unified embedding service
+                                vectors = embedding_service.embed_documents(texts_to_embed)
+                                chunk_ids = [ch.id for ch in chunk_records]
+
+                                # Add normalized float32 vectors to FAISS IndexFlatIP
+                                assigned_mappings = faiss_manager.add_vectors(vectors, chunk_ids)
+
+                                # Keep VectorMapping in sync
+                                self._sync_vector_mappings(db)
+
+                                chunks_total += len(chunk_records)
+                                vectors_total += len(assigned_mappings)
+
+                        processed += 1
+                    except Exception as e:
+                        logger.error(f"Error processing file '{file_path}': {e}", exc_info=True)
                         db.rollback()
-                    failed += 1
-                    processed += 1
+                        try:
+                            failed_file = db.query(File).filter(File.path == file_path).first()
+                            if not failed_file:
+                                failed_file = File(
+                                    folder_id=folder_id_val,
+                                    path=file_path,
+                                    name=item_meta["name"],
+                                    extension=item_meta["extension"],
+                                    size=item_meta["size"],
+                                    modified_at=item_meta["modified_at"],
+                                    file_hash=item_meta["file_hash"],
+                                    extraction_status="failed"
+                                )
+                                db.add(failed_file)
+                            else:
+                                failed_file.extraction_status = "failed"
+                            db.commit()
+                        except Exception as db_err:
+                            logger.error(f"Failed to record failed status for '{file_path}': {db_err}")
+                            db.rollback()
+                        failed += 1
+                        processed += 1
 
-                self._update_progress(processed, failed, chunks_total, vectors_total, len(all_found_scans))
+                    self._update_progress(processed, failed, chunks_total, vectors_total, len(all_found_scans))
 
-            # Final vector mapping synchronization check
-            self._sync_vector_mappings(db)
+                # Final vector mapping synchronization check
+                self._sync_vector_mappings(db)
 
-            self.state["status"] = "complete"
-            self.state["progress_percentage"] = 100
-            self.state["current_file"] = "Finished"
-            logger.info(f"Indexing complete. Processed: {processed}, Failed: {failed}, Chunks: {chunks_total}, Vectors: {vectors_total}")
+                self.state["status"] = "complete"
+                self.state["progress_percentage"] = 100
+                self.state["current_file"] = "Finished"
+                logger.info(f"Indexing complete. Processed: {processed}, Failed: {failed}, Chunks: {chunks_total}, Vectors: {vectors_total}")
 
-        except Exception as e:
-            logger.error(f"Indexing pipeline failed: {e}", exc_info=True)
-            db.rollback()
-            self.state["status"] = "failed"
-            self.state["error_message"] = str(e)
+            except Exception as e:
+                logger.error(f"Indexing pipeline failed: {e}", exc_info=True)
+                db.rollback()
+                self.state["status"] = "failed"
+                self.state["error_message"] = str(e)
+            finally:
+                db.close()
         finally:
-            db.close()
+            self._scan_lock.release()
 
     def _sync_vector_mappings(self, db: Session):
         """Synchronizes the SQLite vector_mappings table with faiss_manager.faiss_to_chunk."""
@@ -292,4 +346,5 @@ class IndexingService:
             self.state["progress_percentage"] = min(100, int((processed / total) * 100))
 
 indexing_service = IndexingService()
+
 

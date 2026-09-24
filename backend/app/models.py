@@ -37,6 +37,13 @@ class File(Base):
     folder = relationship("Folder", back_populates="files")
     chunks = relationship("Chunk", back_populates="file", cascade="all, delete-orphan")
     suggestions = relationship("OrganizationSuggestion", back_populates="file", cascade="all, delete-orphan")
+    expiry_records = relationship("FileExpiry", back_populates="file", cascade="all, delete-orphan")
+
+    @property
+    def expiry_record(self):
+        if self.expiry_records:
+            return self.expiry_records[0]
+        return None
 
     def get_smart_tags(self) -> list:
         if not self.smart_tags:
@@ -582,6 +589,53 @@ class PDFAnnotation(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     document = relationship("PDFDocument", back_populates="annotations")
+
+
+class PDFDraft(Base):
+    """
+    Stores full document model state JSON for PDF Studio real draft persistence.
+    """
+    __tablename__ = "pdf_drafts"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False, default="Untitled PDF")
+    document_json = Column(Text, nullable=False)
+    page_count = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ==============================================================================
+# MODULE 5 MODELS - FILE EXPIRY & RENEWAL REMINDERS
+# ==============================================================================
+
+class FileExpiry(Base):
+    """
+    Stores extracted date intelligence, document classifications, and reminder configuration
+    for date-sensitive documents (Insurance, Passport, Visa, Licence, Certificate, Subscription, etc.)
+    """
+    __tablename__ = "file_expiries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_type = Column(String, nullable=False, default="Other")  # Insurance, Passport, Visa, Driving Licence, Certificate, Subscription, Contract, Warranty, Government ID, Other
+    date_type = Column(String, nullable=False, default="Expiry")  # Expiry, Renewal, Due, Issue, Start, Other
+    extracted_date = Column(DateTime, nullable=False, index=True)  # Primary date tracked
+    issue_date = Column(DateTime, nullable=True)  # Optional issue/start date
+    original_text = Column(Text, nullable=True)  # Context snippet where date was extracted
+    confidence = Column(Float, nullable=False, default=0.85)  # 0.0 to 1.0
+    extraction_method = Column(String, default="rule_based")  # ollama, rule_based, user_manual
+    reason = Column(Text, nullable=True)  # AI context analysis reasoning
+    status = Column(String, default="upcoming", index=True)  # upcoming, due_soon, expired, needs_review, no_reminder
+    user_confirmed = Column(Boolean, default=False, index=True)
+    reminder_enabled = Column(Boolean, default=True, index=True)
+    reminder_days_before = Column(Integer, default=30)  # Default 30 days before
+    last_notified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    file = relationship("File", back_populates="expiry_records")
+
 
 
 

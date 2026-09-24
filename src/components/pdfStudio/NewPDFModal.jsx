@@ -27,23 +27,40 @@ export const NewPDFModal = ({
   onClose,
   onCreateBlank,
   onCreateFromImages,
+  onCreateGeneratedDoc,
   onOpenMemoraPicker
 }) => {
-  const [activeTab, setActiveTab] = useState('blank'); // 'blank' | 'images' | 'memora'
+  const [activeTab, setActiveTab] = useState('blank'); // 'blank' | 'reportlab' | 'images' | 'memora'
 
   // Blank PDF Form State
   const [pageSize, setPageSize] = useState('A4');
   const [orientation, setOrientation] = useState('portrait');
   const [pageCount, setPageCount] = useState(1);
 
+  // ReportLab Document Generator State
+  const [docTitle, setDocTitle] = useState('New Document');
+  const [docAuthor, setDocAuthor] = useState('Memora AI');
+  const [docPageSize, setDocPageSize] = useState('A4');
+  const [docOrientation, setDocOrientation] = useState('portrait');
+  const [includePageNumbers, setIncludePageNumbers] = useState(true);
+  const [docFileName, setDocFileName] = useState('generated_document.pdf');
+  const [docSections, setDocSections] = useState([
+    { id: 'sec_1', type: 'heading', title: 'Executive Summary', text: '' },
+    { id: 'sec_2', type: 'paragraph', text: 'This document was compiled with ReportLab in Memora AI PDF Studio.', alignment: 'left' }
+  ]);
+  const [isGenerating, setIsGenerating] = useState(false);
+
   // Images PDF Form State
   const [selectedImages, setSelectedImages] = useState([]);
+  const [layoutChoice, setLayoutChoice] = useState('one_per_page'); // 'one_per_page' | 'all_on_page' | 'grid'
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
 
   const fileInputRef = useRef(null);
+  const sectionImageInputRef = useRef(null);
+  const [activeImageSectionId, setActiveImageSectionId] = useState(null);
 
   const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/bmp', 'image/tiff'];
   const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'];
@@ -187,7 +204,7 @@ export const NewPDFModal = ({
 
   const handleConfirmCreateFromImages = () => {
     if (selectedImages.length === 0) return;
-    onCreateFromImages(selectedImages);
+    onCreateFromImages(selectedImages, layoutChoice);
     onClose();
   };
 
@@ -201,10 +218,10 @@ export const NewPDFModal = ({
     >
       <div className="space-y-6">
         {/* Source Mode Tabs */}
-        <div className="flex items-center gap-2 border-b border-gray-800/80 pb-3">
+        <div className="flex items-center gap-2 border-b border-gray-800/80 pb-3 overflow-x-auto custom-scrollbar">
           <button
             onClick={() => setActiveTab('blank')}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer shrink-0 ${
               activeTab === 'blank'
                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 shadow-sm'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
@@ -215,8 +232,20 @@ export const NewPDFModal = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('reportlab')}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer shrink-0 ${
+              activeTab === 'reportlab'
+                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 shadow-sm'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>Generate Document (ReportLab)</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('images')}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer shrink-0 ${
               activeTab === 'images'
                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 shadow-sm'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
@@ -234,12 +263,356 @@ export const NewPDFModal = ({
               onClose();
               onOpenMemoraPicker();
             }}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl text-gray-400 hover:text-gray-200 hover:bg-gray-800/40 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl text-gray-400 hover:text-gray-200 hover:bg-gray-800/40 transition-all cursor-pointer shrink-0"
           >
             <Layers className="w-4 h-4 text-purple-400" />
             <span>Add from Memora</span>
           </button>
         </div>
+
+        {/* =================================================================== */}
+        {/* TAB 2: REPORTLAB PROFESSIONAL DOCUMENT GENERATOR */}
+        {/* =================================================================== */}
+        {activeTab === 'reportlab' && (
+          <div className="space-y-5 animate-fadeIn">
+            {/* Header info */}
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-950/40 to-indigo-950/40 border border-blue-500/30 text-xs flex items-start gap-2.5 text-blue-200">
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <strong className="text-white block font-semibold">ReportLab Local PDF Generator</strong>
+                <p className="text-[11px] text-blue-300/80 leading-relaxed">
+                  Generates clean, multi-page PDFs with headings, paragraphs, images, mixed image+text layouts, margins, and automatic page numbers.
+                </p>
+              </div>
+            </div>
+
+            {/* Document Setup */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Document Title</label>
+                <input
+                  type="text"
+                  value={docTitle}
+                  onChange={(e) => setDocTitle(e.target.value)}
+                  className="w-full p-2 rounded-xl glass-input text-gray-200 text-xs"
+                  placeholder="Report / Article Title"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Page Size</label>
+                <select
+                  value={docPageSize}
+                  onChange={(e) => setDocPageSize(e.target.value)}
+                  className="w-full p-2 rounded-xl glass-input text-gray-200 text-xs"
+                >
+                  <option value="A4">A4 (210 × 297 mm)</option>
+                  <option value="Letter">US Letter (8.5 × 11 in)</option>
+                  <option value="Legal">US Legal (8.5 × 14 in)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Orientation</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDocOrientation('portrait')}
+                    className={`p-2 rounded-xl border text-xs font-medium cursor-pointer ${
+                      docOrientation === 'portrait' ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold' : 'bg-gray-950/40 border-gray-800 text-gray-400'
+                    }`}
+                  >
+                    Portrait
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocOrientation('landscape')}
+                    className={`p-2 rounded-xl border text-xs font-medium cursor-pointer ${
+                      docOrientation === 'landscape' ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold' : 'bg-gray-950/40 border-gray-800 text-gray-400'
+                    }`}
+                  >
+                    Landscape
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Section Builder Toolbar */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-300">Document Sections ({docSections.length})</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setDocSections(prev => [...prev, { id: 'sec_' + Math.random().toString(36).substring(2, 7), type: 'heading', title: 'New Heading', text: '' }])}
+                    className="px-2.5 py-1 text-[11px] rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium cursor-pointer"
+                  >
+                    + Heading
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocSections(prev => [...prev, { id: 'sec_' + Math.random().toString(36).substring(2, 7), type: 'paragraph', text: '', alignment: 'left' }])}
+                    className="px-2.5 py-1 text-[11px] rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium cursor-pointer"
+                  >
+                    + Paragraph
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocSections(prev => [...prev, { id: 'sec_' + Math.random().toString(36).substring(2, 7), type: 'image', image_path: '', image_caption: '' }])}
+                    className="px-2.5 py-1 text-[11px] rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium cursor-pointer"
+                  >
+                    + Image
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocSections(prev => [...prev, { id: 'sec_' + Math.random().toString(36).substring(2, 7), type: 'image_and_text', layout: 'side_by_side', image_path: '', text: '' }])}
+                    className="px-2.5 py-1 text-[11px] rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium cursor-pointer"
+                  >
+                    + Image + Text
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocSections(prev => [...prev, { id: 'sec_' + Math.random().toString(36).substring(2, 7), type: 'page_break' }])}
+                    className="px-2.5 py-1 text-[11px] rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium cursor-pointer"
+                  >
+                    + Page Break
+                  </button>
+                </div>
+              </div>
+
+              {/* Sections List */}
+              <div className="space-y-2.5 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                {docSections.map((sec, idx) => (
+                  <div key={sec.id} className="p-3 rounded-xl glass-panel border border-gray-800 bg-gray-950/60 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono font-bold text-gray-500">#{idx + 1}</span>
+                        <Badge variant="blue" size="sm">{sec.type.toUpperCase()}</Badge>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => {
+                            setDocSections(prev => {
+                              const arr = [...prev];
+                              const t = arr[idx - 1];
+                              arr[idx - 1] = arr[idx];
+                              arr[idx] = t;
+                              return arr;
+                            });
+                          }}
+                          className="p-1 hover:text-white disabled:opacity-20 text-gray-400"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === docSections.length - 1}
+                          onClick={() => {
+                            setDocSections(prev => {
+                              const arr = [...prev];
+                              const t = arr[idx + 1];
+                              arr[idx + 1] = arr[idx];
+                              arr[idx] = t;
+                              return arr;
+                            });
+                          }}
+                          className="p-1 hover:text-white disabled:opacity-20 text-gray-400"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDocSections(prev => prev.filter((_, i) => i !== idx))}
+                          className="p-1 hover:text-red-400 text-gray-500"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Section Fields */}
+                    {sec.type === 'heading' && (
+                      <input
+                        type="text"
+                        value={sec.title || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDocSections(prev => prev.map((s, i) => i === idx ? { ...s, title: val } : s));
+                        }}
+                        className="w-full p-2 rounded-lg glass-input text-white text-xs font-semibold"
+                        placeholder="Section Heading Title"
+                      />
+                    )}
+
+                    {sec.type === 'paragraph' && (
+                      <div className="space-y-1.5">
+                        <textarea
+                          rows={2}
+                          value={sec.text || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDocSections(prev => prev.map((s, i) => i === idx ? { ...s, text: val } : s));
+                          }}
+                          className="w-full p-2 rounded-lg glass-input text-gray-200 text-xs"
+                          placeholder="Type paragraph text here..."
+                        />
+                      </div>
+                    )}
+
+                    {sec.type === 'image' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={sec.image_path || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setDocSections(prev => prev.map((s, i) => i === idx ? { ...s, image_path: val } : s));
+                            }}
+                            className="w-full p-2 rounded-lg glass-input text-gray-300 text-xs font-mono"
+                            placeholder="Image absolute file path"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (window.electronAPI?.openFile) {
+                                const res = await window.electronAPI.openFile([{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]);
+                                if (!res.canceled && res.filePaths?.[0]) {
+                                  const p = res.filePaths[0];
+                                  setDocSections(prev => prev.map((s, i) => i === idx ? { ...s, image_path: p } : s));
+                                }
+                              }
+                            }}
+                            className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 font-medium shrink-0 cursor-pointer"
+                          >
+                            Browse
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={sec.image_caption || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDocSections(prev => prev.map((s, i) => i === idx ? { ...s, image_caption: val } : s));
+                          }}
+                          className="w-full p-2 rounded-lg glass-input text-gray-300 text-xs"
+                          placeholder="Image Caption (Optional)"
+                        />
+                      </div>
+                    )}
+
+                    {sec.type === 'image_and_text' && (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={sec.image_path || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setDocSections(prev => prev.map((s, i) => i === idx ? { ...s, image_path: val } : s));
+                              }}
+                              className="w-full p-2 rounded-lg glass-input text-gray-300 text-xs font-mono"
+                              placeholder="Image file path"
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (window.electronAPI?.openFile) {
+                                  const res = await window.electronAPI.openFile([{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]);
+                                  if (!res.canceled && res.filePaths?.[0]) {
+                                    const p = res.filePaths[0];
+                                    setDocSections(prev => prev.map((s, i) => i === idx ? { ...s, image_path: p } : s));
+                                  }
+                                }
+                              }}
+                              className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 font-medium shrink-0 cursor-pointer"
+                            >
+                              Browse
+                            </button>
+                          </div>
+                          <select
+                            value={sec.layout || 'side_by_side'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setDocSections(prev => prev.map((s, i) => i === idx ? { ...s, layout: val } : s));
+                            }}
+                            className="p-2 rounded-lg glass-input text-xs text-gray-300"
+                          >
+                            <option value="side_by_side">Side by Side (Image + Text)</option>
+                            <option value="stacked">Stacked (Image on Top, Text Below)</option>
+                          </select>
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={sec.text || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDocSections(prev => prev.map((s, i) => i === idx ? { ...s, text: val } : s));
+                          }}
+                          className="w-full p-2 rounded-lg glass-input text-gray-200 text-xs"
+                          placeholder="Side/stacked accompanying text content..."
+                        />
+                      </div>
+                    )}
+
+                    {sec.type === 'page_break' && (
+                      <div className="text-[11px] text-gray-500 font-mono text-center py-1 border border-dashed border-gray-800 rounded-lg">
+                        --- Explicit Page Break ---
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer Options & Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-gray-800/80">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={includePageNumbers}
+                  onChange={(e) => setIncludePageNumbers(e.target.checked)}
+                  className="rounded border-gray-700 text-blue-600 focus:ring-0"
+                />
+                <span>Include Page Numbers ('Page X of Y')</span>
+              </label>
+
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Sparkles}
+                  disabled={isGenerating}
+                  onClick={async () => {
+                    setIsGenerating(true);
+                    try {
+                      if (onCreateGeneratedDoc) {
+                        await onCreateGeneratedDoc({
+                          title: docTitle,
+                          author: docAuthor,
+                          page_size: docPageSize,
+                          orientation: docOrientation,
+                          include_page_numbers: includePageNumbers,
+                          sections: docSections,
+                          output_path: docFileName
+                        });
+                      }
+                      onClose();
+                    } finally {
+                      setIsGenerating(false);
+                    }
+                  }}
+                >
+                  {isGenerating ? 'Generating...' : 'Generate PDF'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* =================================================================== */}
         {/* TAB 1: BLANK PDF CONFIGURATION */}
@@ -324,6 +697,46 @@ export const NewPDFModal = ({
         {/* =================================================================== */}
         {activeTab === 'images' && (
           <div className="space-y-4">
+            {/* Layout Choice Options */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-gray-300">Image Compilation Layout</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLayoutChoice('one_per_page')}
+                  className={`p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-all ${
+                    layoutChoice === 'one_per_page'
+                      ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold shadow-sm'
+                      : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  One image per page
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutChoice('all_on_page')}
+                  className={`p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-all ${
+                    layoutChoice === 'all_on_page'
+                      ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold shadow-sm'
+                      : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  All on single page
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutChoice('grid')}
+                  className={`p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-all ${
+                    layoutChoice === 'grid'
+                      ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold shadow-sm'
+                      : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  2x3 Grid layout
+                </button>
+              </div>
+            </div>
+
             {/* Error Banner */}
             {errorMessage && (
               <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">

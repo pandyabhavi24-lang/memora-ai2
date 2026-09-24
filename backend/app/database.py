@@ -67,7 +67,13 @@ def init_db_schema():
                 if col_name not in media_cols:
                     cursor.execute(f"ALTER TABLE media_analyses ADD COLUMN {col_name} {col_type};")
             conn.commit()
-            
+
+        # Ensure file_expiries table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='file_expiries';")
+        if not cursor.fetchone():
+            from .models import Base
+            Base.metadata.create_all(bind=engine)
+
         conn.close()
     except Exception as e:
         import logging

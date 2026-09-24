@@ -12,6 +12,60 @@ except ImportError:
     PYPDF_AVAILABLE = False
     logger.warning("pypdf is not installed. PDF Studio backend operations will be limited.")
 
+try:
+    import reportlab
+    from reportlab.lib.pagesizes import A4, letter, legal, landscape, portrait
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Image as RLImage,
+        PageBreak, Table, TableStyle, KeepTogether, HRFlowable, Frame
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+    from reportlab.pdfgen import canvas
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    logger.warning("reportlab is not installed. PDF Generation capabilities will be limited.")
+
+
+if REPORTLAB_AVAILABLE:
+    class NumberedCanvas(canvas.Canvas):
+        """
+        Two-pass canvas to dynamically compute total page count and draw 'Page X of Y'.
+        """
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._saved_page_states = []
+
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            num_pages = len(self._saved_page_states)
+            for state in self._saved_page_states:
+                self.__dict__.update(state)
+                self.draw_page_number(num_pages)
+                super().showPage()
+            super().save()
+
+        def draw_page_number(self, page_count):
+            self.saveState()
+            self.setFont("Helvetica", 9)
+            self.setFillColor(colors.HexColor("#64748b"))
+            
+            page_text = f"Page {self._pageNumber} of {page_count}"
+            self.drawRightString(self._pagesize[0] - 36, 24, page_text)
+            
+            # Subtle footer line
+            self.setStrokeColor(colors.HexColor("#e2e8f0"))
+            self.setLineWidth(0.5)
+            self.line(36, 38, self._pagesize[0] - 36, 38)
+            self.restoreState()
+else:
+    NumberedCanvas = None
+
 
 class PdfService:
     """
@@ -20,8 +74,9 @@ class PdfService:
     - Path validation and integrity checks
     - Document inspection (metadata, page metrics, rotation)
     - Blank document generation
+    - ReportLab professional PDF generation (text, images, mixed layouts)
     - Page operations (rotate, reorder, delete, duplicate)
-    - PDF Merging and Splitting
+    - PDF Merging, Interleaving/Alternating, and Splitting
     - Images to PDF conversion
     """
 
@@ -30,7 +85,8 @@ class PdfService:
         return {
             "pypdf_available": PYPDF_AVAILABLE,
             "pil_available": True,
-            "status": "ready" if PYPDF_AVAILABLE else "degraded"
+            "reportlab_available": REPORTLAB_AVAILABLE,
+            "status": "ready" if (PYPDF_AVAILABLE and REPORTLAB_AVAILABLE) else "degraded"
         }
 
     @staticmethod
@@ -484,6 +540,479 @@ class PdfService:
             "file_id": file_id,
             "pdf_document_id": pdf_doc_id,
             "message": f"Successfully merged {len(source_paths)} PDF files into {os.path.basename(abs_output)}."
+        }
+
+    def alternate_pages(
+        self,
+        pdf1_path: str,
+        pdf2_path: str,
+        output_path: str,
+        start_with: str = "pdf1",
+        db=None,
+        folder_id: Optional[int] = None,
+        register_in_db: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Interleaves pages from two PDF files into a single output PDF.
+        Supports:
+        - A -> B -> A -> B (start_with == 'pdf1')
+        - B -> A -> B -> A (start_with == 'pdf2')
+        - Unequal page counts (never discards remaining pages)
+        """
+        if not pdf1_path or not pdf2_path:
+            raise ValueError("Both pdf1_path and pdf2_path must be provided.")
+
+        abs_p1 = self.validate_pdf_path(pdf1_path)
+        abs_p2 = self.validate_pdf_path(pdf2_path)
+
+        abs_output = os.path.abspath(output_path)
+        if abs_output == abs_p1 or abs_output == abs_p2:
+            raise ValueError("Output path cannot be the same as any source PDF path.")
+
+        start_mode = (start_with or "pdf1").lower().strip()
+        if start_mode not in ("pdf1", "pdf2"):
+            raise ValueError("start_with must be either 'pdf1' or 'pdf2'.")
+
+        reader1 = pypdf.PdfReader(abs_p1)
+        reader2 = pypdf.PdfReader(abs_p2)
+
+        p1_pages = list(reader1.pages)
+        p2_pages = list(reader2.pages)
+
+        if len(p1_pages) == 0:
+            raise ValueError(f"PDF 1 '{os.path.basename(abs_p1)}' contains no pages.")
+        if len(p2_pages) == 0:
+            raise ValueError(f"PDF 2 '{os.path.basename(abs_p2)}' contains no pages.")
+
+        writer = pypdf.PdfWriter()
+        max_len = max(len(p1_pages), len(p2_pages))
+
+        for i in range(max_len):
+            if start_mode == "pdf1":
+                if i < len(p1_pages):
+                    writer.add_page(p1_pages[i])
+                if i < len(p2_pages):
+                    writer.add_page(p2_pages[i])
+            else:
+                if i < len(p2_pages):
+                    writer.add_page(p2_pages[i])
+                if i < len(p1_pages):
+                    writer.add_page(p1_pages[i])
+
+        os.makedirs(os.path.dirname(abs_output), exist_ok=True)
+        temp_out = abs_output + ".tmp"
+        with open(temp_out, "wb") as f:
+            writer.write(f)
+        writer.close()
+
+        if os.path.exists(abs_output):
+            os.remove(abs_output)
+        os.rename(temp_out, abs_output)
+
+        final_reader = pypdf.PdfReader(abs_output)
+        final_page_count = len(final_reader.pages)
+        expected_count = len(p1_pages) + len(p2_pages)
+
+        if final_page_count != expected_count:
+            raise RuntimeError(f"Expected {expected_count} pages in output PDF, but found {final_page_count}.")
+
+        file_id = None
+        pdf_doc_id = None
+
+        if db and register_in_db:
+            file_id = self.register_file_in_memora_db(db, abs_output, folder_id)
+            pdf_doc = self.register_or_get_document_record(db, abs_output, title=os.path.basename(abs_output), file_id=file_id)
+            pdf_doc_id = pdf_doc.id
+
+        return {
+            "status": "success",
+            "output_path": abs_output,
+            "file_name": os.path.basename(abs_output),
+            "page_count": final_page_count,
+            "file_size_bytes": os.path.getsize(abs_output),
+            "file_id": file_id,
+            "pdf_document_id": pdf_doc_id,
+            "verified": True,
+            "message": f"Successfully alternated pages ({start_mode}) between '{os.path.basename(abs_p1)}' ({len(p1_pages)} pgs) and '{os.path.basename(abs_p2)}' ({len(p2_pages)} pgs) into {os.path.basename(abs_output)} ({final_page_count} pages)."
+        }
+
+    def preview_alternate_pages(
+        self,
+        pdf1_path: str,
+        pdf2_path: str,
+        start_with: str = "pdf1"
+    ) -> Dict[str, Any]:
+        """
+        Generates preview sequence of page ordering before executing alternate pages export.
+        """
+        if not pdf1_path or not pdf2_path:
+            raise ValueError("Both pdf1_path and pdf2_path must be provided.")
+
+        abs_p1 = self.validate_pdf_path(pdf1_path)
+        abs_p2 = self.validate_pdf_path(pdf2_path)
+
+        start_mode = (start_with or "pdf1").lower().strip()
+        if start_mode not in ("pdf1", "pdf2"):
+            raise ValueError("start_with must be either 'pdf1' or 'pdf2'.")
+
+        reader1 = pypdf.PdfReader(abs_p1)
+        reader2 = pypdf.PdfReader(abs_p2)
+
+        c1 = len(reader1.pages)
+        c2 = len(reader2.pages)
+
+        order_list = []
+        out_idx = 1
+        max_len = max(c1, c2)
+
+        for i in range(max_len):
+            if start_mode == "pdf1":
+                if i < c1:
+                    order_list.append({
+                        "output_page": out_idx,
+                        "source": "PDF 1",
+                        "source_page": i + 1,
+                        "source_path": abs_p1,
+                        "label": f"PDF 1 — Page {i + 1}"
+                    })
+                    out_idx += 1
+                if i < c2:
+                    order_list.append({
+                        "output_page": out_idx,
+                        "source": "PDF 2",
+                        "source_page": i + 1,
+                        "source_path": abs_p2,
+                        "label": f"PDF 2 — Page {i + 1}"
+                    })
+                    out_idx += 1
+            else:
+                if i < c2:
+                    order_list.append({
+                        "output_page": out_idx,
+                        "source": "PDF 2",
+                        "source_page": i + 1,
+                        "source_path": abs_p2,
+                        "label": f"PDF 2 — Page {i + 1}"
+                    })
+                    out_idx += 1
+                if i < c1:
+                    order_list.append({
+                        "output_page": out_idx,
+                        "source": "PDF 1",
+                        "source_page": i + 1,
+                        "source_path": abs_p1,
+                        "label": f"PDF 1 — Page {i + 1}"
+                    })
+                    out_idx += 1
+
+        return {
+            "status": "success",
+            "total_pages": c1 + c2,
+            "pdf1_page_count": c1,
+            "pdf2_page_count": c2,
+            "start_with": start_mode,
+            "page_order": order_list
+        }
+
+    def generate_document_with_reportlab(
+        self,
+        output_path: str,
+        title: str = "Document",
+        author: str = "Memora AI",
+        subject: Optional[str] = None,
+        page_size: str = "A4",
+        orientation: str = "portrait",
+        margin_points: float = 36.0,
+        include_page_numbers: bool = True,
+        sections: Optional[List[Dict[str, Any]]] = None,
+        db=None,
+        folder_id: Optional[int] = None,
+        register_in_db: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Generates a clean, professional PDF document using ReportLab:
+        - Text paragraphs with automatic text wrapping and typography
+        - Headings and Titles
+        - Images with aspect-ratio preservation
+        - Image + Text mixed layouts
+        - Multiple pages with page numbering
+        - Validates output PDF on disk
+        """
+        if not REPORTLAB_AVAILABLE:
+            raise RuntimeError("ReportLab library is required for PDF generation.")
+
+        if not output_path or not isinstance(output_path, str):
+            raise ValueError("Output path must be a non-empty string.")
+
+        abs_output = os.path.abspath(output_path)
+        if not abs_output.lower().endswith(".pdf"):
+            abs_output += ".pdf"
+
+        os.makedirs(os.path.dirname(abs_output), exist_ok=True)
+
+        # Page size resolution
+        sz_name = (page_size or "A4").upper().strip()
+        orient = (orientation or "portrait").lower().strip()
+
+        if sz_name == "LETTER":
+            base_size = letter
+        elif sz_name == "LEGAL":
+            base_size = legal
+        else:
+            base_size = A4
+
+        doc_size = landscape(base_size) if orient == "landscape" else portrait(base_size)
+        margins = max(18.0, float(margin_points or 36.0))
+
+        doc = SimpleDocTemplate(
+            abs_output,
+            pagesize=doc_size,
+            leftMargin=margins,
+            rightMargin=margins,
+            topMargin=margins + (10 if include_page_numbers else 0),
+            bottomMargin=margins + (15 if include_page_numbers else 0),
+            title=title,
+            author=author,
+            subject=subject or ""
+        )
+
+        styles = getSampleStyleSheet()
+        
+        # Custom typography styles
+        title_style = ParagraphStyle(
+            'DocTitle',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=24,
+            leading=28,
+            textColor=colors.HexColor('#0f172a'),
+            spaceAfter=14
+        )
+        
+        h1_style = ParagraphStyle(
+            'DocH1',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=18,
+            leading=22,
+            textColor=colors.HexColor('#1e293b'),
+            spaceBefore=14,
+            spaceAfter=8
+        )
+
+        h2_style = ParagraphStyle(
+            'DocH2',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=14,
+            leading=18,
+            textColor=colors.HexColor('#334155'),
+            spaceBefore=10,
+            spaceAfter=6
+        )
+
+        body_style = ParagraphStyle(
+            'DocBody',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=10.5,
+            leading=15,
+            textColor=colors.HexColor('#1e293b'),
+            spaceAfter=10
+        )
+
+        caption_style = ParagraphStyle(
+            'DocCaption',
+            parent=styles['Normal'],
+            fontName='Helvetica-Oblique',
+            fontSize=9,
+            leading=12,
+            textColor=colors.HexColor('#64748b'),
+            alignment=TA_CENTER,
+            spaceBefore=4,
+            spaceAfter=10
+        )
+
+        story = []
+        
+        # Available content width and height
+        content_width = doc_size[0] - (2 * margins)
+        content_height = doc_size[1] - (2 * margins)
+
+        # Add Document Title if provided
+        if title and title.strip():
+            story.append(Paragraph(title.strip(), title_style))
+            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cbd5e1'), spaceBefore=2, spaceAfter=14))
+
+        if sections:
+            for sec in sections:
+                s_data = sec.dict() if hasattr(sec, "dict") else dict(sec)
+                s_type = (s_data.get("type") or "paragraph").lower().strip()
+
+                if s_type == "title":
+                    t_text = s_data.get("title") or s_data.get("text") or ""
+                    if t_text:
+                        story.append(Paragraph(t_text, title_style))
+                        story.append(Spacer(1, 8))
+
+                elif s_type in ("heading", "h1"):
+                    h_text = s_data.get("title") or s_data.get("text") or ""
+                    if h_text:
+                        story.append(Paragraph(h_text, h1_style))
+
+                elif s_type == "h2":
+                    h_text = s_data.get("title") or s_data.get("text") or ""
+                    if h_text:
+                        story.append(Paragraph(h_text, h2_style))
+
+                elif s_type in ("paragraph", "text"):
+                    p_text = s_data.get("text") or ""
+                    if p_text:
+                        align_str = (s_data.get("alignment") or "left").lower()
+                        p_style = ParagraphStyle('CustomP', parent=body_style)
+                        if align_str == "center":
+                            p_style.alignment = TA_CENTER
+                        elif align_str == "right":
+                            p_style.alignment = TA_RIGHT
+                        elif align_str == "justify":
+                            p_style.alignment = TA_JUSTIFY
+
+                        f_size = s_data.get("font_size")
+                        if f_size:
+                            p_style.fontSize = float(f_size)
+                            p_style.leading = float(f_size) * 1.35
+
+                        # Escape XML entities for safe ReportLab markup
+                        clean_text = p_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                        clean_text = clean_text.replace("\n", "<br/>")
+                        story.append(Paragraph(clean_text, p_style))
+
+                elif s_type == "image":
+                    img_path = s_data.get("image_path") or s_data.get("path")
+                    if img_path and os.path.exists(img_path):
+                        try:
+                            with Image.open(img_path) as pil_img:
+                                orig_w, orig_h = pil_img.size
+
+                            aspect = orig_w / max(1.0, orig_h)
+                            max_w = min(content_width, float(s_data.get("image_width") or content_width))
+                            max_h = min(content_height * 0.7, float(s_data.get("image_height") or (content_height * 0.7)))
+
+                            calc_w = max_w
+                            calc_h = calc_w / aspect
+                            if calc_h > max_h:
+                                calc_h = max_h
+                                calc_w = calc_h * aspect
+
+                            rl_img = RLImage(img_path, width=calc_w, height=calc_h)
+                            
+                            caption = s_data.get("image_caption") or s_data.get("title")
+                            if caption:
+                                story.append(KeepTogether([
+                                    rl_img,
+                                    Paragraph(caption, caption_style)
+                                ]))
+                            else:
+                                story.append(rl_img)
+                                story.append(Spacer(1, 8))
+                        except Exception as e:
+                            logger.error(f"Failed to add image '{img_path}' to ReportLab PDF: {e}")
+
+                elif s_type in ("image_and_text", "mixed"):
+                    img_path = s_data.get("image_path")
+                    text_content = s_data.get("text") or ""
+                    layout = (s_data.get("layout") or "stacked").lower()
+
+                    if img_path and os.path.exists(img_path):
+                        with Image.open(img_path) as pil_img:
+                            orig_w, orig_h = pil_img.size
+
+                        aspect = orig_w / max(1.0, orig_h)
+
+                        if layout == "side_by_side":
+                            img_col_w = content_width * 0.45
+                            text_col_w = content_width * 0.52
+
+                            img_w = img_col_w
+                            img_h = img_w / aspect
+                            if img_h > content_height * 0.4:
+                                img_h = content_height * 0.4
+                                img_w = img_h * aspect
+
+                            rl_img = RLImage(img_path, width=img_w, height=img_h)
+                            clean_text = text_content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+                            p_flow = Paragraph(clean_text, body_style)
+
+                            table = Table([[rl_img, p_flow]], colWidths=[img_col_w, text_col_w])
+                            table.setStyle(TableStyle([
+                                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                                ('LEFTPADDING', (1, 0), (1, 0), 12),
+                                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                            ]))
+                            story.append(KeepTogether(table))
+                            story.append(Spacer(1, 10))
+                        else:
+                            # Stacked
+                            max_w = min(content_width, content_width * 0.8)
+                            img_w = max_w
+                            img_h = img_w / aspect
+                            if img_h > content_height * 0.45:
+                                img_h = content_height * 0.45
+                                img_w = img_h * aspect
+
+                            rl_img = RLImage(img_path, width=img_w, height=img_h)
+                            story.append(rl_img)
+                            if text_content:
+                                clean_text = text_content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+                                story.append(Spacer(1, 6))
+                                story.append(Paragraph(clean_text, body_style))
+                            story.append(Spacer(1, 10))
+
+                elif s_type == "page_break":
+                    story.append(PageBreak())
+
+                elif s_type == "spacer":
+                    sp_h = float(s_data.get("height") or 14)
+                    story.append(Spacer(1, sp_h))
+
+        if not story:
+            story.append(Paragraph("Blank Document", body_style))
+
+        # Build PDF
+        canvas_maker = NumberedCanvas if (include_page_numbers and NumberedCanvas) else canvas.Canvas
+        doc.build(story, canvasmaker=canvas_maker)
+
+        # Verification
+        if not os.path.exists(abs_output):
+            raise RuntimeError(f"ReportLab failed to create physical PDF at '{abs_output}'.")
+
+        size_bytes = os.path.getsize(abs_output)
+        if size_bytes == 0:
+            raise RuntimeError(f"Generated PDF file at '{abs_output}' is empty (0 bytes).")
+
+        verify_reader = pypdf.PdfReader(abs_output)
+        actual_pages = len(verify_reader.pages)
+
+        file_id = None
+        pdf_doc_id = None
+
+        if db and register_in_db:
+            file_id = self.register_file_in_memora_db(db, abs_output, folder_id)
+            pdf_doc = self.register_or_get_document_record(db, abs_output, title=os.path.basename(abs_output), file_id=file_id)
+            pdf_doc_id = pdf_doc.id
+
+        return {
+            "status": "success",
+            "output_path": abs_output,
+            "file_name": os.path.basename(abs_output),
+            "page_count": actual_pages,
+            "file_size_bytes": size_bytes,
+            "file_id": file_id,
+            "pdf_document_id": pdf_doc_id,
+            "verified": True,
+            "message": f"Successfully generated ReportLab PDF '{os.path.basename(abs_output)}' with {actual_pages} page(s)."
         }
 
 
@@ -1281,30 +1810,87 @@ class PdfService:
                     pass
         return ImageFont.load_default()
 
+    def resolve_and_validate_image(self, img_source: str, elem_id: str = "image") -> tuple:
+        """
+        Resolves image source (file path, file:// URL, or base64 data URL) into a verified physical file.
+        Validates image with Pillow. Raises ValueError if unresolvable or corrupted.
+        Returns (resolved_file_path, is_temporary_flag).
+        """
+        import base64
+        import tempfile
+        from PIL import Image
+
+        if not img_source or not isinstance(img_source, str):
+            raise ValueError(f"Image element '{elem_id}' has missing or empty image source reference.")
+
+        clean_source = img_source.strip()
+
+        # Handle file:// URLs
+        if clean_source.startswith("file:///"):
+            clean_source = clean_source[8:]
+        elif clean_source.startswith("file://"):
+            clean_source = clean_source[7:]
+
+        # Handle base64 Data URLs
+        if clean_source.startswith("data:image/"):
+            try:
+                header, base64_data = clean_source.split(",", 1)
+                img_bytes = base64.b64decode(base64_data)
+                t_fd, temp_img_path = tempfile.mkstemp(suffix="_base64.png")
+                os.close(t_fd)
+                with open(temp_img_path, "wb") as f:
+                    f.write(img_bytes)
+
+                with Image.open(temp_img_path) as pil_img:
+                    pil_img.verify()
+                return (temp_img_path, True)
+            except Exception as b64_err:
+                raise ValueError(f"Failed to decode or validate base64 image payload for element '{elem_id}': {b64_err}")
+
+        # Handle unresolved blob: URLs
+        if clean_source.startswith("blob:"):
+            raise ValueError(f"Image element '{elem_id}' contains an unresolved browser blob URL '{clean_source}'. Original file path or base64 data must be provided.")
+
+        # Validate local disk file existence
+        abs_path = os.path.abspath(clean_source)
+        if not os.path.exists(abs_path):
+            raise FileNotFoundError(f"Image element '{elem_id}' file not found at original path: '{clean_source}'")
+
+        try:
+            with Image.open(abs_path) as pil_img:
+                pil_img.verify()
+        except Exception as pil_err:
+            raise ValueError(f"Image element '{elem_id}' at '{abs_path}' is corrupted or unreadable: {pil_err}")
+
+        return (abs_path, False)
+
     def export_workspace_pdf(
         self,
         output_path: str,
         pages: List[Dict[str, Any]],
         page_size: str = "A4",
         orientation: str = "portrait",
+        include_page_numbers: bool = False,
+        title: str = "Memora Document",
         db=None,
         folder_id: Optional[int] = None,
         register_in_db: bool = True
     ) -> Dict[str, Any]:
         """
         Compiles physical PDF from PDF Studio workspace state:
-        - Assembles base pages (PDF pages, image pages, blank pages) in exact workspace sequence with rotations.
-        - Renders text overlays using percentage-to-point coordinate conversion and crisp TrueType fonts.
-        - Renders annotations (highlights, shapes, drawings, notes).
-        - Verifies physical output file exists, is non-empty, and is a valid readable PDF.
+        - Assembles base pages (PDF pages, image pages, blank pages) in exact workspace sequence.
+        - Uses ReportLab for vector text rendering, exact font metrics, text wrapping, and image placement.
+        - Uses Pillow for image validation, orientation, and format normalization.
+        - Renders elements (text boxes, resizable images) at exact (x, y, w, h) coordinates.
+        - Verifies physical output file exists, is non-empty, and is a valid readable PDF with matching page count.
         - Registers and indexes in Memora DB if requested.
         """
         import tempfile
-        import math
-        from PIL import Image, ImageDraw
+        import html
+        from PIL import Image
 
-        if not PYPDF_AVAILABLE:
-            raise RuntimeError("pypdf is required for PDF Studio backend operations.")
+        if not PYPDF_AVAILABLE and not REPORTLAB_AVAILABLE:
+            raise RuntimeError("PDF libraries (pypdf or reportlab) are required for PDF Studio backend operations.")
 
         if not pages:
             raise ValueError("Workspace page sequence cannot be empty.")
@@ -1322,10 +1908,12 @@ class PdfService:
                 rotation = int(p_data.get("rotation", 0) or 0) % 360
 
                 base_page = None
-
                 src_pdf = p_data.get("source_pdf_path") or p_data.get("path")
                 src_idx = int(p_data.get("source_page_index", 0) or 0)
-                img_path = p_data.get("image_path") or p_data.get("path")
+                img_bg_path = p_data.get("image_path") or (p_data.get("path") if p_type == "image" else None)
+
+                # Determine base page dimensions
+                default_w, default_h = self.get_page_dimensions(page_size, orientation)
 
                 if (p_type == "pdf_page" or (src_pdf and str(src_pdf).lower().endswith(".pdf"))) and src_pdf and os.path.exists(src_pdf):
                     try:
@@ -1337,109 +1925,171 @@ class PdfService:
                     except Exception as ex:
                         logger.warning(f"Failed to read source PDF page at '{src_pdf}' index {src_idx}: {ex}")
 
-                elif (p_type == "image" or (img_path and not str(img_path).lower().endswith(".pdf"))) and img_path and os.path.exists(img_path):
-                    try:
-                        with Image.open(img_path) as img:
-                            if img.mode in ("RGBA", "P"):
-                                img = img.convert("RGB")
-                            if rotation != 0:
-                                img = img.rotate(-rotation, expand=True)
+                # Collect elements on this page
+                raw_elements = p_data.get("elements") or []
+                elements = [e.dict() if hasattr(e, "dict") else dict(e) for e in raw_elements]
 
-                            t_fd, temp_img_pdf = tempfile.mkstemp(suffix="_img.pdf")
-                            os.close(t_fd)
-                            temp_files_to_clean.append(temp_img_pdf)
+                # Convert legacy textOverlays if elements is empty
+                if not elements:
+                    legacy_text = p_data.get("textOverlays") or p_data.get("text_overlays") or []
+                    for t_item in legacy_text:
+                        td = dict(t_item)
+                        text_str = str(td.get("text", "")).strip()
+                        if text_str:
+                            x_pct = float(td.get("xPct", 10.0) or 10.0)
+                            y_pct = float(td.get("yPct", 10.0) or 10.0)
+                            w_pct = float(td.get("widthPct", 35.0) or 35.0)
+                            elements.append({
+                                "type": "text",
+                                "x": (x_pct / 100.0) * default_w,
+                                "y": (y_pct / 100.0) * default_h,
+                                "width": max(50.0, (w_pct / 100.0) * default_w),
+                                "height": max(30.0, float(td.get("fontSize", 16.0)) * 2.5),
+                                "text": text_str,
+                                "fontSize": float(td.get("fontSize", 16.0) or 16.0),
+                                "fontWeight": "bold" if td.get("isBold") else "normal",
+                                "fontStyle": "italic" if td.get("isItalic") else "normal",
+                                "textAlign": td.get("align", "left"),
+                                "color": td.get("color", "#1e293b"),
+                                "zIndex": 10
+                            })
 
-                            img.save(temp_img_pdf, "PDF")
-                            img_reader = pypdf.PdfReader(temp_img_pdf)
-                            if len(img_reader.pages) > 0:
-                                base_page = img_reader.pages[0]
-                    except Exception as ex:
-                        logger.warning(f"Failed to convert image '{img_path}' to PDF page: {ex}")
+                    # If page was marked as single background image, add as element if not already present
+                    if p_type == "image" and img_bg_path and os.path.exists(img_bg_path):
+                        elements.append({
+                            "type": "image",
+                            "x": 36.0,
+                            "y": 36.0,
+                            "width": default_w - 72.0,
+                            "height": default_h - 72.0,
+                            "imagePath": img_bg_path,
+                            "zIndex": 0
+                        })
 
-                if base_page is None:
-                    w, h = self.get_page_dimensions(page_size, orientation)
-                    writer.add_blank_page(width=w, height=h)
-                    base_page = writer.pages[-1]
-                    if rotation != 0:
-                        base_page.rotate(rotation)
-                else:
+                # Determine working page dimensions
+                page_w = float(base_page.mediabox.width) if (base_page and base_page.mediabox) else default_w
+                page_h = float(base_page.mediabox.height) if (base_page and base_page.mediabox) else default_h
+
+                # Build ReportLab canvas for elements / annotations
+                t_fd, temp_rl_pdf = tempfile.mkstemp(suffix="_rl_page.pdf")
+                os.close(t_fd)
+                temp_files_to_clean.append(temp_rl_pdf)
+
+                rl_canvas = canvas.Canvas(temp_rl_pdf, pagesize=(page_w, page_h))
+
+                # Sort elements by zIndex
+                sorted_elements = sorted(elements, key=lambda el: int(el.get("zIndex", 1) or el.get("z_index", 1) or 1))
+
+                for elem in sorted_elements:
+                    e_type = str(elem.get("type", "text")).lower()
+                    x = float(elem.get("x", 0.0) or 0.0)
+                    y = float(elem.get("y", 0.0) or 0.0)
+                    w = max(10.0, float(elem.get("width", 100.0) or 100.0))
+                    h = max(10.0, float(elem.get("height", 50.0) or 50.0))
+
+                    # Convert screen coordinates (top-left origin) to PDF coordinates (bottom-left origin)
+                    pdf_x = max(0.0, min(page_w - 10.0, x))
+                    pdf_y = max(0.0, min(page_h - 10.0, page_h - y - h))
+
+                    if e_type == "image":
+                        img_source = elem.get("source") or elem.get("imagePath") or elem.get("image_path") or elem.get("previewUrl")
+                        elem_id = str(elem.get("id", "image"))
+                        
+                        resolved_path, is_temp = self.resolve_and_validate_image(img_source, elem_id=elem_id)
+                        if is_temp:
+                            temp_files_to_clean.append(resolved_path)
+
+                        try:
+                            with Image.open(resolved_path) as pil_img:
+                                if pil_img.mode in ("CMYK", "P", "RGBA"):
+                                    pil_rgb = pil_img.convert("RGB")
+                                    t_img_fd, temp_normalized_img = tempfile.mkstemp(suffix="_rgb.png")
+                                    os.close(t_img_fd)
+                                    temp_files_to_clean.append(temp_normalized_img)
+                                    pil_rgb.save(temp_normalized_img, "PNG")
+                                    resolved_path = temp_normalized_img
+
+                                rl_canvas.drawImage(
+                                    resolved_path,
+                                    pdf_x,
+                                    pdf_y,
+                                    width=w,
+                                    height=h,
+                                    mask='auto',
+                                    preserveAspectRatio=False
+                                )
+                        except Exception as img_err:
+                            logger.error(f"Failed to render image element '{elem_id}' at '{resolved_path}' in ReportLab: {img_err}")
+                            raise ValueError(f"Failed to embed image '{elem.get('fileName', 'image')}' into PDF: {img_err}")
+
+                    elif e_type == "text":
+                        text_val = str(elem.get("text", "")).strip()
+                        if text_val:
+                            font_size = float(elem.get("fontSize") or elem.get("font_size") or 14.0)
+                            font_weight = str(elem.get("fontWeight") or elem.get("font_weight") or "normal").lower()
+                            font_style = str(elem.get("fontStyle") or elem.get("font_style") or "normal").lower()
+                            text_align_str = str(elem.get("textAlign") or elem.get("text_align") or "left").lower()
+                            color_hex = str(elem.get("color", "#1e293b"))
+
+                            is_bold = "bold" in font_weight
+                            is_italic = "italic" in font_style
+
+                            font_name = "Helvetica-Bold" if (is_bold and not is_italic) else \
+                                        "Helvetica-Oblique" if (is_italic and not is_bold) else \
+                                        "Helvetica-BoldOblique" if (is_bold and is_italic) else \
+                                        "Helvetica"
+
+                            align_code = TA_CENTER if text_align_str == "center" else \
+                                         TA_RIGHT if text_align_str == "right" else \
+                                         TA_JUSTIFY if text_align_str == "justify" else \
+                                         TA_LEFT
+
+                            escaped_text = html.escape(text_val).replace("\n", "<br/>")
+
+                            try:
+                                hex_color = colors.HexColor(color_hex)
+                            except Exception:
+                                hex_color = colors.HexColor("#1e293b")
+
+                            p_style = ParagraphStyle(
+                                name=f"style_{elem.get('id', 'txt')}_{idx}",
+                                fontName=font_name,
+                                fontSize=font_size,
+                                leading=font_size * 1.25,
+                                textColor=hex_color,
+                                alignment=align_code
+                            )
+
+                            p_flowable = Paragraph(escaped_text, p_style)
+                            frame = Frame(
+                                pdf_x,
+                                pdf_y,
+                                w,
+                                h,
+                                id=f"f_{elem.get('id', 'txt')}_{idx}",
+                                leftPadding=0,
+                                rightPadding=0,
+                                topPadding=0,
+                                bottomPadding=0
+                            )
+                            frame.addFromList([p_flowable], rl_canvas)
+
+                rl_canvas.showPage()
+                rl_canvas.save()
+
+                # Read the generated ReportLab page
+                rl_reader = pypdf.PdfReader(temp_rl_pdf)
+                rl_page = rl_reader.pages[0]
+
+                if base_page is not None:
+                    base_page.merge_page(rl_page)
                     writer.add_page(base_page)
+                else:
+                    if rotation != 0:
+                        rl_page.rotate(rotation)
+                    writer.add_page(rl_page)
 
-                target_page = writer.pages[-1]
-
-                # Render Text Overlays & Annotations onto Page
-                w_pt = float(target_page.mediabox.width) if target_page.mediabox else 595.28
-                h_pt = float(target_page.mediabox.height) if target_page.mediabox else 841.89
-
-                text_overlays = p_data.get("textOverlays") or p_data.get("text_overlays") or []
-                annotations = p_data.get("annotations") or []
-
-                if text_overlays or annotations:
-                    scale = 2.0
-                    canvas_w = int(w_pt * scale)
-                    canvas_h = int(h_pt * scale)
-
-                    overlay_img = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
-                    draw = ImageDraw.Draw(overlay_img, "RGBA")
-
-                    # Render Text Overlays with Percentage-to-Point Conversion
-                    for t_item in text_overlays:
-                        t_data = dict(t_item)
-                        text_str = str(t_data.get("text", "")).strip()
-                        if not text_str:
-                            continue
-
-                        x_pct = float(t_data.get("xPct", 20.0) or 20.0)
-                        y_pct = float(t_data.get("yPct", 20.0) or 20.0)
-
-                        phys_x = (x_pct / 100.0) * w_pt * scale
-                        phys_y = (y_pct / 100.0) * h_pt * scale
-
-                        font_size_px = float(t_data.get("fontSize", 16.0) or 16.0) * scale
-                        is_bold = bool(t_data.get("isBold", False))
-                        font_obj = self._get_font(font_size_px, is_bold=is_bold)
-
-                        color_str = t_data.get("color", "#1e293b")
-                        opacity = float(t_data.get("opacity", 1.0) if t_data.get("opacity") is not None else 1.0)
-                        rgba_color = self._parse_rgba_color(color_str, opacity)
-
-                        draw.text((phys_x, phys_y), text_str, fill=rgba_color, font=font_obj)
-
-                    # Render Shapes & Annotations
-                    for a_item in annotations:
-                        a_data = dict(a_item)
-                        a_type = a_data.get("annotation_type") or a_data.get("type", "highlight")
-                        x = float(a_data.get("x", 0.0) or 0.0) * scale
-                        y = float(a_data.get("y", 0.0) or 0.0) * scale
-                        w = float(a_data.get("width", 0.0) or 0.0) * scale
-                        h = float(a_data.get("height", 0.0) or 0.0) * scale
-
-                        color_str = a_data.get("color", "#000000")
-                        stroke_w = float(a_data.get("stroke_width", 2.0) or 2.0) * scale
-                        opacity = float(a_data.get("opacity", 1.0) if a_data.get("opacity") is not None else 1.0)
-                        rgba_stroke = self._parse_rgba_color(color_str, opacity)
-
-                        if a_type == "highlight":
-                            hl_color = self._parse_rgba_color(color_str or "#ffff00", alpha_factor=0.4 * opacity)
-                            draw.rectangle([x, y, x + max(10.0, w), y + max(10.0, h)], fill=hl_color)
-                        elif a_type == "rectangle":
-                            draw.rectangle([x, y, x + max(1.0, w), y + max(1.0, h)], outline=rgba_stroke, width=max(1, int(stroke_w)))
-                        elif a_type == "circle":
-                            draw.ellipse([x, y, x + max(1.0, w), y + max(1.0, h)], outline=rgba_stroke, width=max(1, int(stroke_w)))
-
-                    # Save and merge overlay
-                    t_fd, temp_overlay_pdf = tempfile.mkstemp(suffix="_overlay.pdf")
-                    os.close(t_fd)
-                    temp_files_to_clean.append(temp_overlay_pdf)
-
-                    overlay_img.save(temp_overlay_pdf, "PDF", dpi=(144, 144))
-                    overlay_img.close()
-
-                    overlay_reader = pypdf.PdfReader(temp_overlay_pdf)
-                    if len(overlay_reader.pages) > 0:
-                        target_page.merge_page(overlay_reader.pages[0])
-
-            # Write to output file safely
+            # Write to temporary output and atomically rename
             temp_out = abs_output + ".tmp"
             with open(temp_out, "wb") as f:
                 writer.write(f)
@@ -1448,20 +2098,21 @@ class PdfService:
                 os.remove(abs_output)
             os.rename(temp_out, abs_output)
 
-            # Verification Step
+            # Physical Verification
             if not os.path.exists(abs_output):
-                raise RuntimeError(f"Physical PDF output file not created at '{abs_output}'.")
+                raise RuntimeError(f"Physical PDF output file was not created at '{abs_output}'.")
 
             file_size_bytes = os.path.getsize(abs_output)
             if file_size_bytes <= 0:
                 raise RuntimeError(f"Created PDF file at '{abs_output}' is empty (0 bytes).")
 
-            try:
-                verify_reader = pypdf.PdfReader(abs_output)
-                final_page_count = len(verify_reader.pages)
-            except Exception as v_err:
-                raise RuntimeError(f"Generated PDF file at '{abs_output}' is unreadable or corrupted: {v_err}")
+            with open(abs_output, "rb") as verify_f:
+                magic_header = verify_f.read(5)
+                if magic_header != b"%PDF-":
+                    raise RuntimeError(f"Created file '{abs_output}' has an invalid PDF header: {magic_header}")
 
+            verify_reader = pypdf.PdfReader(abs_output)
+            final_page_count = len(verify_reader.pages)
             if final_page_count != len(pages):
                 logger.warning(f"Page count mismatch in exported PDF: expected {len(pages)}, got {final_page_count}.")
 
@@ -1499,6 +2150,7 @@ class PdfService:
                     try:
                         os.remove(tmp_f)
                     except Exception:
+                        pass
                         pass
 
     def export_pdf_with_annotations(
@@ -1851,8 +2503,64 @@ class PdfService:
             register_in_db=register_in_db
         )
 
+    # ==========================================
+    # PDF STUDIO DRAFTS PERSISTENCE
+    # ==========================================
+
+    def save_draft(self, db, draft_id: Optional[str], name: str, document_json: str, page_count: int = 1):
+        import uuid
+        import json
+        from ..models import PDFDraft
+
+        if not draft_id or draft_id == "null":
+            draft_id = f"draft_{uuid.uuid4().hex[:10]}"
+
+        try:
+            _ = json.loads(document_json)
+        except Exception as je:
+            raise ValueError(f"Invalid document model JSON for draft: {je}")
+
+        draft = db.query(PDFDraft).filter(PDFDraft.id == draft_id).first()
+        if draft:
+            draft.name = name or draft.name
+            draft.document_json = document_json
+            draft.page_count = page_count
+        else:
+            draft = PDFDraft(
+                id=draft_id,
+                name=name or "Untitled PDF",
+                document_json=document_json,
+                page_count=page_count
+            )
+            db.add(draft)
+
+        db.commit()
+        db.refresh(draft)
+        return draft
+
+    def list_drafts(self, db):
+        from ..models import PDFDraft
+        return db.query(PDFDraft).order_by(PDFDraft.updated_at.desc()).all()
+
+    def get_draft(self, db, draft_id: str):
+        from ..models import PDFDraft
+        draft = db.query(PDFDraft).filter(PDFDraft.id == draft_id).first()
+        if not draft:
+            raise FileNotFoundError(f"PDF Draft '{draft_id}' not found.")
+        return draft
+
+    def delete_draft(self, db, draft_id: str):
+        from ..models import PDFDraft
+        draft = db.query(PDFDraft).filter(PDFDraft.id == draft_id).first()
+        if not draft:
+            raise FileNotFoundError(f"PDF Draft '{draft_id}' not found.")
+        db.delete(draft)
+        db.commit()
+        return {"status": "success", "message": f"Draft '{draft_id}' deleted."}
+
 
 pdf_service = PdfService()
+
 
 
 

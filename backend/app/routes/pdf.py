@@ -11,6 +11,10 @@ from ..schemas import (
     PDFCreateBlankRequest,
     PDFManipulateRequest,
     PDFMergeRequest,
+    PDFAlternateRequest,
+    PDFAlternatePreviewRequest,
+    PDFAlternatePreviewResponse,
+    PDFGenerateDocumentRequest,
     PDFSplitRequest,
     PDFImagesToPDFRequest,
     PDFOperationResponse,
@@ -33,13 +37,29 @@ from ..schemas import (
     PDFMemoraFilesQuerySchema,
     PDFMemoraFilesResponseSchema,
     PDFExportImageComparisonRequest,
-    PDFWorkspaceExportRequest
+    PDFWorkspaceExportRequest,
+    PDFDraftCreateSchema,
+    PDFDraftResponse
 )
 from ..services.pdf_service import pdf_service
+
+from fastapi.responses import FileResponse as FastAPIFileResponse
+from ..database import get_db
 
 logger = logging.getLogger("memora.pdf_route")
 
 router = APIRouter(prefix="/api/pdf", tags=["PDF Studio"])
+
+
+@router.get("/preview-file")
+def get_pdf_preview_file(file_path: str):
+    """
+    Serves a physical compiled PDF file for PDF Studio preview viewer.
+    """
+    import os
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"Preview file not found: {file_path}")
+    return FastAPIFileResponse(os.path.abspath(file_path), media_type="application/pdf")
 
 
 @router.get("/health", response_model=PDFHealthResponse)
@@ -53,6 +73,7 @@ def pdf_studio_health():
             status=health_info["status"],
             pypdf_available=health_info["pypdf_available"],
             pil_available=health_info["pil_available"],
+            reportlab_available=health_info.get("reportlab_available", True),
             version="1.0.0"
         )
     except Exception as e:
@@ -212,6 +233,93 @@ def merge_pdf_documents(req: PDFMergeRequest, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error occurred during PDF merging operation."
+        )
+
+
+@router.post("/alternate", response_model=PDFOperationResponse)
+def alternate_pdf_pages(req: PDFAlternateRequest, db: Session = Depends(get_db)):
+    """
+    Interleaves pages from two PDF documents in alternating sequence (A->B->A->B or B->A->B->A).
+    Preserves all remaining pages if document lengths differ.
+    """
+    try:
+        res = pdf_service.alternate_pages(
+            pdf1_path=req.pdf1_path,
+            pdf2_path=req.pdf2_path,
+            output_path=req.output_path,
+            start_with=req.start_with or "pdf1",
+            db=db,
+            folder_id=req.folder_id,
+            register_in_db=req.register_in_db if req.register_in_db is not None else True
+        )
+        return PDFOperationResponse(**res)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to alternate PDF pages: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error occurred during PDF alternating operation."
+        )
+
+
+@router.post("/alternate/preview", response_model=PDFAlternatePreviewResponse)
+def preview_alternate_pdf_pages(req: PDFAlternatePreviewRequest):
+    """
+    Generates preview mapping of interleaved page sequence before executing alternate export.
+    """
+    try:
+        res = pdf_service.preview_alternate_pages(
+            pdf1_path=req.pdf1_path,
+            pdf2_path=req.pdf2_path,
+            start_with=req.start_with or "pdf1"
+        )
+        return PDFAlternatePreviewResponse(**res)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to generate alternate pages preview: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error occurred generating alternate pages preview."
+        )
+
+
+@router.post("/generate", response_model=PDFOperationResponse)
+def generate_pdf_document(req: PDFGenerateDocumentRequest, db: Session = Depends(get_db)):
+    """
+    Generates a structured, professional PDF document using ReportLab (Text, Images, Image+Text, Headings).
+    """
+    try:
+        sections_dict = [s.model_dump() for s in req.sections] if req.sections else []
+        res = pdf_service.generate_document_with_reportlab(
+            output_path=req.output_path,
+            title=req.title or "Document",
+            author=req.author or "Memora AI",
+            subject=req.subject,
+            page_size=req.page_size or "A4",
+            orientation=req.orientation or "portrait",
+            margin_points=req.margin_points if req.margin_points is not None else 36.0,
+            include_page_numbers=req.include_page_numbers if req.include_page_numbers is not None else True,
+            sections=sections_dict,
+            db=db,
+            folder_id=req.folder_id,
+            register_in_db=req.register_in_db if req.register_in_db is not None else True
+        )
+        return PDFOperationResponse(**res)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to generate ReportLab PDF document: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error occurred generating PDF document with ReportLab."
         )
 
 
@@ -587,6 +695,190 @@ def export_image_comparison_to_pdf(req: PDFExportImageComparisonRequest, db: Ses
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error exporting image comparison to PDF."
         )
+
+
+# ==========================================
+# PDF STUDIO REAL DRAFTS PERSISTENCE
+# ==========================================
+
+@router.post("/drafts", response_model=PDFDraftResponse)
+def save_pdf_draft(req: PDFDraftCreateSchema, db: Session = Depends(get_db)):
+    """
+    Persists document model JSON for PDF Studio real draft functionality.
+    """
+    try:
+        draft = pdf_service.save_draft(
+            db=db,
+            draft_id=req.id,
+            name=req.name or "Untitled PDF",
+            document_json=req.document_json,
+            page_count=req.page_count or 1
+        )
+        return PDFDraftResponse.model_validate(draft)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to save PDF draft: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save workspace draft.")
+
+
+@router.get("/drafts", response_model=list[PDFDraftResponse])
+def list_pdf_drafts(db: Session = Depends(get_db)):
+    """
+    Lists all saved workspace drafts for PDF Studio.
+    """
+    try:
+        drafts = pdf_service.list_drafts(db=db)
+        return [PDFDraftResponse.model_validate(d) for d in drafts]
+    except Exception as e:
+        logger.error(f"Failed to list PDF drafts: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to list workspace drafts.")
+
+
+@router.get("/drafts/{draft_id}", response_model=PDFDraftResponse)
+def get_pdf_draft(draft_id: str, db: Session = Depends(get_db)):
+    """
+    Fetches exact document model JSON for a specific PDF draft.
+    """
+    try:
+        draft = pdf_service.get_draft(db=db, draft_id=draft_id)
+        return PDFDraftResponse.model_validate(draft)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except Exception as e:
+        logger.error(f"Failed to fetch draft '{draft_id}': {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch workspace draft.")
+
+
+@router.delete("/drafts/{draft_id}")
+def delete_pdf_draft(draft_id: str, db: Session = Depends(get_db)):
+    """
+    Deletes a saved workspace draft.
+    """
+    try:
+        return pdf_service.delete_draft(db=db, draft_id=draft_id)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except Exception as e:
+        logger.error(f"Failed to delete draft '{draft_id}': {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete workspace draft.")
+
+
+# ==========================================
+# EMAIL SHARING ENDPOINTS (GMAIL OAUTH 2.0)
+# ==========================================
+
+from ..services.email_service import email_service
+
+
+@router.get("/email/status")
+def get_email_auth_status():
+    """
+    Checks if Gmail OAuth is configured and connected.
+    """
+    return {
+        "configured": email_service.is_configured(),
+        "connected": email_service.is_connected()
+    }
+
+
+@router.get("/email/auth-url")
+def get_email_auth_url(redirect_uri: Optional[str] = "http://localhost:8000/api/pdf/email/oauth-callback"):
+    """
+    Returns Google OAuth 2.0 authorization URL for gmail.send scope.
+    """
+    return email_service.get_auth_url(redirect_uri=redirect_uri or "http://localhost:8000/api/pdf/email/oauth-callback")
+
+
+@router.post("/email/oauth-callback")
+def handle_email_oauth_callback(payload: dict):
+    """
+    Exchanges OAuth authorization code for credentials token.
+    """
+    code = payload.get("code")
+    redirect_uri = payload.get("redirect_uri", "http://localhost:8000/api/pdf/email/oauth-callback")
+    if not code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth authorization code is required.")
+    try:
+        return email_service.handle_oauth_callback(code=code, redirect_uri=redirect_uri)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/email/send")
+def send_pdf_via_email(payload: dict):
+    """
+    Sends verified PDF file to recipient via Gmail API.
+    """
+    to_email = payload.get("to")
+    subject = payload.get("subject", "Memora AI PDF Document")
+    message = payload.get("message", "")
+    pdf_path = payload.get("pdf_path")
+
+    if not to_email or not pdf_path:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Recipient email ('to') and 'pdf_path' are required.")
+
+    try:
+        return email_service.send_pdf_email(
+            to_email=to_email,
+            subject=subject,
+            message_body=message,
+            pdf_path=pdf_path
+        )
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(re))
+    except Exception as e:
+        logger.error(f"Error sending PDF via Email: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to send email: {e}")
+
+
+# ==========================================
+# WHATSAPP SHARING ENDPOINTS (CLOUD API)
+# ==========================================
+
+from ..services.whatsapp_service import whatsapp_service
+
+
+@router.get("/whatsapp/status")
+def get_whatsapp_status():
+    """
+    Checks if WhatsApp Cloud API is configured in backend environment.
+    """
+    return whatsapp_service.get_status()
+
+
+@router.post("/whatsapp/send")
+def send_pdf_via_whatsapp(payload: dict):
+    """
+    Sends verified PDF file via official WhatsApp Business Cloud API.
+    """
+    phone_number = payload.get("phone_number")
+    pdf_path = payload.get("pdf_path")
+    caption = payload.get("caption")
+
+    if not phone_number or not pdf_path:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="'phone_number' and 'pdf_path' are required.")
+
+    try:
+        return whatsapp_service.send_pdf_document(
+            phone_number=phone_number,
+            pdf_path=pdf_path,
+            caption=caption
+        )
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(re))
+    except Exception as e:
+        logger.error(f"Error sending PDF via WhatsApp: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to send WhatsApp message: {e}")
+
 
 
 

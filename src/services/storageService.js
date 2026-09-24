@@ -108,6 +108,16 @@ class StorageService {
       body: JSON.stringify(payload)
     });
   }
+
+  /**
+   * Returns URL to preview either the original or generated candidate file in an iframe or media element.
+   * @param {string} candidateToken
+   * @param {'candidate'|'original'} target
+   */
+  getCandidatePreviewUrl(candidateToken, target = 'candidate') {
+    if (!candidateToken) return '';
+    return `${API_BASE_URL}/api/storage/optimize/candidate/${encodeURIComponent(candidateToken)}/file?target=${target}`;
+  }
 }
 
 export const storageService = new StorageService();

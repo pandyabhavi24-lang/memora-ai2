@@ -31,10 +31,17 @@ export const ConvertModal = ({
   onClose,
   activeDocument = null,
   selectedPageIndices = [0],
+  initialTool = 'pdf-to-images',
   onConfirmConversion,
   onOpenMemoraPicker
 }) => {
-  const [activeTool, setActiveTool] = useState('pdf-to-images'); // 'pdf-to-images' | 'split-pdf' | 'images-to-pdf' | 'merge-pdfs'
+  const [activeTool, setActiveTool] = useState(initialTool || 'pdf-to-images');
+
+  useEffect(() => {
+    if (isOpen && initialTool) {
+      setActiveTool(initialTool);
+    }
+  }, [isOpen, initialTool]);
 
   // Tool 1: PDF -> Images State
   const [imageScope, setImageScope] = useState('all'); // 'all' | 'selected' | 'range'
@@ -56,6 +63,84 @@ export const ConvertModal = ({
   const [selectedPdfs, setSelectedPdfs] = useState([]);
   const [mergedPdfName, setMergedPdfName] = useState('merged_document.pdf');
   const pdfInputRef = useRef(null);
+
+  // Tool 5: Alternate Pages State
+  const [alternatePdf1, setAlternatePdf1] = useState(
+    activeDocument?.path ? { name: activeDocument.title || 'Current Document.pdf', path: activeDocument.path } : null
+  );
+  const [alternatePdf2, setAlternatePdf2] = useState(null);
+  const [alternateStartWith, setAlternateStartWith] = useState('pdf1'); // 'pdf1' | 'pdf2'
+  const [alternateOutputName, setAlternateOutputName] = useState('alternated_document.pdf');
+  const [alternatePreview, setAlternatePreview] = useState(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const pdf1InputRef = useRef(null);
+  const pdf2InputRef = useRef(null);
+
+  // Helper to fetch live alternate pages preview
+  const updateAlternatePreview = async (p1, p2, startWith) => {
+    const path1 = p1?.file?.path || p1?.path;
+    const path2 = p2?.file?.path || p2?.path;
+    if (!path1 || !path2) {
+      setAlternatePreview(null);
+      return;
+    }
+    setIsLoadingPreview(true);
+    try {
+      const res = await apiService.previewAlternatePDFs({
+        pdf1_path: path1,
+        pdf2_path: path2,
+        start_with: startWith
+      });
+      setAlternatePreview(res);
+    } catch (err) {
+      console.warn('Alternate preview notice:', err);
+      setAlternatePreview(null);
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
+  const handleSelectAlternatePdf1 = async (e) => {
+    if (window.electronAPI?.openFile) {
+      const res = await window.electronAPI.openFile([{ name: 'PDF Files', extensions: ['pdf'] }]);
+      if (!res.canceled && res.filePaths?.length > 0) {
+        const filePath = res.filePaths[0];
+        const newP1 = { name: filePath.split(/[/\\]/).pop(), path: filePath };
+        setAlternatePdf1(newP1);
+        updateAlternatePreview(newP1, alternatePdf2, alternateStartWith);
+        return;
+      }
+    }
+    if (e?.target?.files?.[0]) {
+      const file = e.target.files[0];
+      const newP1 = { name: file.name, file, path: file.path || file.name };
+      setAlternatePdf1(newP1);
+      updateAlternatePreview(newP1, alternatePdf2, alternateStartWith);
+    } else if (pdf1InputRef.current) {
+      pdf1InputRef.current.click();
+    }
+  };
+
+  const handleSelectAlternatePdf2 = async (e) => {
+    if (window.electronAPI?.openFile) {
+      const res = await window.electronAPI.openFile([{ name: 'PDF Files', extensions: ['pdf'] }]);
+      if (!res.canceled && res.filePaths?.length > 0) {
+        const filePath = res.filePaths[0];
+        const newP2 = { name: filePath.split(/[/\\]/).pop(), path: filePath };
+        setAlternatePdf2(newP2);
+        updateAlternatePreview(alternatePdf1, newP2, alternateStartWith);
+        return;
+      }
+    }
+    if (e?.target?.files?.[0]) {
+      const file = e.target.files[0];
+      const newP2 = { name: file.name, file, path: file.path || file.name };
+      setAlternatePdf2(newP2);
+      updateAlternatePreview(alternatePdf1, newP2, alternateStartWith);
+    } else if (pdf2InputRef.current) {
+      pdf2InputRef.current.click();
+    }
+  };
 
   // Conversion Execution & Progress State
   const [isConverting, setIsConverting] = useState(false);
@@ -226,6 +311,19 @@ export const ConvertModal = ({
             register_in_db: indexWithMemora
           });
         }
+      } else if (activeTool === 'alternate-pdfs') {
+        const p1 = alternatePdf1?.file?.path || alternatePdf1?.path;
+        const p2 = alternatePdf2?.file?.path || alternatePdf2?.path;
+        if (!p1 || !p2) {
+          throw new Error('Please select both PDF 1 and PDF 2 to alternate pages.');
+        }
+        result = await apiService.alternatePDFs({
+          pdf1_path: p1,
+          pdf2_path: p2,
+          start_with: alternateStartWith,
+          output_path: alternateOutputName,
+          register_in_db: indexWithMemora
+        });
       }
 
       setProgressPercent(100);
@@ -249,7 +347,7 @@ export const ConvertModal = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Document Conversion Studio"
-      subtitle="Convert PDF pages to images, split documents, compile image collections, or merge multiple PDFs."
+      subtitle="Convert PDF pages to images, split documents, compile image collections, merge, or alternate PDF pages."
       maxWidth="max-w-3xl"
     >
       <div className="space-y-6">
@@ -303,6 +401,26 @@ export const ConvertModal = ({
             <Merge className="w-4 h-4 text-amber-400" />
             <span>Merge PDFs</span>
             {selectedPdfs.length > 0 && <Badge variant="warning" size="sm">{selectedPdfs.length}</Badge>}
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTool('alternate-pdfs');
+              if (activeDocument?.path && !alternatePdf1) {
+                const initialP1 = { name: activeDocument.title || 'Current Document.pdf', path: activeDocument.path };
+                setAlternatePdf1(initialP1);
+                updateAlternatePreview(initialP1, alternatePdf2, alternateStartWith);
+              }
+            }}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer shrink-0 ${
+              activeTool === 'alternate-pdfs'
+                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 shadow-sm'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
+            }`}
+          >
+            <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
+            <span>Alternate Pages</span>
+            {alternatePdf1 && alternatePdf2 && <Badge variant="cyan" size="sm">Ready</Badge>}
           </button>
         </div>
 
@@ -779,6 +897,209 @@ export const ConvertModal = ({
                     onClick={handleStartConversion}
                   >
                     Merge {selectedPdfs.length} PDF Document(s)
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* =================================================================== */}
+            {/* TOOL 5: ALTERNATE PAGES (INTERLEAVE TWO PDFS) */}
+            {/* =================================================================== */}
+            {activeTool === 'alternate-pdfs' && (
+              <div className="space-y-5 animate-fadeIn">
+                {/* Notice */}
+                <div className="p-3.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-xs flex items-start gap-2.5 text-cyan-200">
+                  <ArrowRightLeft className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <strong className="text-white block">Alternate / Interleave PDF Pages Mode</strong>
+                    <p className="text-[11px] text-cyan-300/80 leading-relaxed">
+                      Interleaves pages from exactly two PDF documents in alternating sequence (e.g., A1, B1, A2, B2...). 
+                      If document lengths differ, all remaining pages are safely preserved and appended in order without being discarded.
+                    </p>
+                  </div>
+                </div>
+
+                {/* PDF 1 & PDF 2 Selection Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* PDF 1 Card */}
+                  <div className="p-4 rounded-xl glass-panel border border-gray-800/80 bg-gray-950/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Document A (PDF 1)</span>
+                      {alternatePdf1 && <Badge variant="blue" size="sm">Selected</Badge>}
+                    </div>
+
+                    {alternatePdf1 ? (
+                      <div className="p-3 rounded-lg bg-gray-900/90 border border-blue-500/30 flex items-center justify-between">
+                        <div className="truncate mr-2">
+                          <p className="text-xs font-semibold text-white truncate">{alternatePdf1.name}</p>
+                          <p className="text-[10px] text-gray-400 font-mono truncate">{alternatePdf1.path}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setAlternatePdf1(null);
+                            setAlternatePreview(null);
+                          }}
+                          className="p-1 hover:text-red-400 text-gray-500 rounded cursor-pointer"
+                          title="Remove PDF 1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => handleSelectAlternatePdf1()}
+                        className="border-2 border-dashed border-gray-800 hover:border-blue-500/60 p-4 rounded-xl text-center cursor-pointer transition-all hover:bg-blue-500/5 group"
+                      >
+                        <Upload className="w-6 h-6 text-gray-500 group-hover:text-blue-400 mx-auto mb-1 transition-colors" />
+                        <span className="text-xs text-gray-300 font-medium block">Select PDF 1</span>
+                        <span className="text-[10px] text-gray-500">Click to browse file</span>
+                      </div>
+                    )}
+
+                    <input
+                      ref={pdf1InputRef}
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={handleSelectAlternatePdf1}
+                    />
+                  </div>
+
+                  {/* PDF 2 Card */}
+                  <div className="p-4 rounded-xl glass-panel border border-gray-800/80 bg-gray-950/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Document B (PDF 2)</span>
+                      {alternatePdf2 && <Badge variant="cyan" size="sm">Selected</Badge>}
+                    </div>
+
+                    {alternatePdf2 ? (
+                      <div className="p-3 rounded-lg bg-gray-900/90 border border-cyan-500/30 flex items-center justify-between">
+                        <div className="truncate mr-2">
+                          <p className="text-xs font-semibold text-white truncate">{alternatePdf2.name}</p>
+                          <p className="text-[10px] text-gray-400 font-mono truncate">{alternatePdf2.path}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setAlternatePdf2(null);
+                            setAlternatePreview(null);
+                          }}
+                          className="p-1 hover:text-red-400 text-gray-500 rounded cursor-pointer"
+                          title="Remove PDF 2"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => handleSelectAlternatePdf2()}
+                        className="border-2 border-dashed border-gray-800 hover:border-cyan-500/60 p-4 rounded-xl text-center cursor-pointer transition-all hover:bg-cyan-500/5 group"
+                      >
+                        <Upload className="w-6 h-6 text-gray-500 group-hover:text-cyan-400 mx-auto mb-1 transition-colors" />
+                        <span className="text-xs text-gray-300 font-medium block">Select PDF 2</span>
+                        <span className="text-[10px] text-gray-500">Click to browse file</span>
+                      </div>
+                    )}
+
+                    <input
+                      ref={pdf2InputRef}
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={handleSelectAlternatePdf2}
+                    />
+                  </div>
+                </div>
+
+                {/* Alternating Sequence Order Selection */}
+                <div className="space-y-2">
+                  <label className="block text-gray-300 font-medium text-xs">Interleaving Sequence</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAlternateStartWith('pdf1');
+                        updateAlternatePreview(alternatePdf1, alternatePdf2, 'pdf1');
+                      }}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                        alternateStartWith === 'pdf1'
+                          ? 'bg-blue-600/20 border-blue-500/60 text-blue-300 shadow-md shadow-blue-500/10'
+                          : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:border-gray-700'
+                      }`}
+                    >
+                      <div className="font-semibold text-xs text-white">Start with PDF 1 (A → B)</div>
+                      <div className="text-[11px] text-gray-400 font-mono mt-1">A1 → B1 → A2 → B2 → A3 → B3...</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAlternateStartWith('pdf2');
+                        updateAlternatePreview(alternatePdf1, alternatePdf2, 'pdf2');
+                      }}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                        alternateStartWith === 'pdf2'
+                          ? 'bg-cyan-600/20 border-cyan-500/60 text-cyan-300 shadow-md shadow-cyan-500/10'
+                          : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:border-gray-700'
+                      }`}
+                    >
+                      <div className="font-semibold text-xs text-white">Start with PDF 2 (B → A)</div>
+                      <div className="text-[11px] text-gray-400 font-mono mt-1">B1 → A1 → B2 → A2 → B3 → A3...</div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Page-Order Preview */}
+                {alternatePreview && (
+                  <div className="p-4 rounded-xl bg-gray-950/80 border border-cyan-500/30 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
+                        <Eye className="w-3.5 h-3.5" /> Resulting Page Sequence Preview ({alternatePreview.total_pages} pages)
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        PDF 1: {alternatePreview.pdf1_page_count} pgs | PDF 2: {alternatePreview.pdf2_page_count} pgs
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto custom-scrollbar p-2 bg-gray-900/60 rounded-lg border border-gray-800/60">
+                      {alternatePreview.page_order?.map((item) => (
+                        <span
+                          key={item.output_page}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono font-medium border ${
+                            item.source === 'PDF 1'
+                              ? 'bg-blue-950/80 border-blue-500/40 text-blue-300'
+                              : 'bg-cyan-950/80 border-cyan-500/40 text-cyan-300'
+                          }`}
+                        >
+                          <span className="opacity-60 font-bold">#{item.output_page}</span>
+                          <span>{item.label}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Output File Name */}
+                <div>
+                  <label className="block text-gray-300 font-medium mb-1 text-xs">Output PDF Name</label>
+                  <input
+                    type="text"
+                    value={alternateOutputName}
+                    onChange={(e) => setAlternateOutputName(e.target.value)}
+                    className="w-full p-2.5 rounded-xl glass-input text-gray-200 text-xs font-mono font-medium"
+                  />
+                </div>
+
+                {/* Modal Footer Actions */}
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-800/80">
+                  <Button variant="ghost" size="md" onClick={onClose}>Cancel</Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    icon={ArrowRightLeft}
+                    disabled={!alternatePdf1 || !alternatePdf2}
+                    onClick={handleStartConversion}
+                  >
+                    Alternate & Export PDF
                   </Button>
                 </div>
               </div>

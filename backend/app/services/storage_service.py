@@ -276,7 +276,8 @@ class StorageService:
         mode: str = "lossless",
         lossy_quality: int = 82,
         bmp_target_format: str = "png",
-        max_dimension: Optional[int] = None
+        max_dimension: Optional[int] = None,
+        pdf_image_quality: Optional[int] = 75
     ) -> Dict[str, Any]:
         """
         Generates and registers an optimization candidate in the source file's directory.
@@ -368,7 +369,11 @@ class StorageService:
             elif ext == ".pdf":
                 pdf_res = pdf_optimizer.optimize_pdf(
                     source_path=source_path,
-                    candidate_path=candidate_path
+                    candidate_path=candidate_path,
+                    image_quality=pdf_image_quality or 75,
+                    strip_metadata=True,
+                    lossy=(mode == "lossy"),
+                    max_dimension=max_dimension
                 )
                 candidate_size = pdf_res.candidate_size
                 strategy_used = pdf_res.strategy_used
@@ -403,6 +408,15 @@ class StorageService:
                     "strategy_used": strategy_used,
                     "original_dimensions": original_dims,
                     "candidate_dimensions": candidate_dims,
+                    "original_width": img_res.width if ext in (".jpg", ".jpeg", ".png", ".bmp") else None,
+                    "original_height": img_res.height if ext in (".jpg", ".jpeg", ".png", ".bmp") else None,
+                    "candidate_width": img_res.candidate_width if ext in (".jpg", ".jpeg", ".png", ".bmp") else None,
+                    "candidate_height": img_res.candidate_height if ext in (".jpg", ".jpeg", ".png", ".bmp") else None,
+                    "page_count": getattr(pdf_res, "page_count", None) if ext == ".pdf" else None,
+                    "images_count": getattr(pdf_res, "images_found", None) if ext == ".pdf" else None,
+                    "images_optimized": getattr(pdf_res, "images_recompressed", None) if ext == ".pdf" else None,
+                    "images_downsampled": getattr(pdf_res, "images_downsampled", None) if ext == ".pdf" else None,
+                    "streams_compressed": getattr(pdf_res, "streams_compressed", None) if ext == ".pdf" else None,
                     "reason": "Candidate produced insufficient savings (< 20 KB and < 3%). Original kept."
                 }
 
@@ -437,7 +451,17 @@ class StorageService:
                 "strategy_used": strategy_used,
                 "execution_time_ms": execution_time,
                 "original_dimensions": original_dims,
-                "candidate_dimensions": candidate_dims
+                "candidate_dimensions": candidate_dims,
+                "original_width": img_res.width if ext in (".jpg", ".jpeg", ".png", ".bmp") else None,
+                "original_height": img_res.height if ext in (".jpg", ".jpeg", ".png", ".bmp") else None,
+                "candidate_width": img_res.candidate_width if ext in (".jpg", ".jpeg", ".png", ".bmp") else None,
+                "candidate_height": img_res.candidate_height if ext in (".jpg", ".jpeg", ".png", ".bmp") else None,
+                "page_count": getattr(pdf_res, "page_count", None) if ext == ".pdf" else None,
+                "images_count": getattr(pdf_res, "images_found", None) if ext == ".pdf" else None,
+                "images_optimized": getattr(pdf_res, "images_recompressed", None) if ext == ".pdf" else None,
+                "images_downsampled": getattr(pdf_res, "images_downsampled", None) if ext == ".pdf" else None,
+                "streams_compressed": getattr(pdf_res, "streams_compressed", None) if ext == ".pdf" else None,
+                "preview_url": f"/api/storage/optimize/candidate/{token}/file?target=candidate"
             }
 
         except (ImageOptimizationError, PdfOptimizationError) as opt_err:
@@ -455,6 +479,13 @@ class StorageService:
                 "file_id": file_id,
                 "reason": f"Unexpected optimization failure: {str(e)}"
             }
+
+    def get_candidate_record(self, candidate_token: str) -> Optional[CandidateRecord]:
+        """
+        Retrieves active unexpired candidate record by token.
+        """
+        self._purge_expired_candidates()
+        return self._candidate_registry.get(candidate_token)
 
     # =========================================================================
     # 4. TWO-PHASE STAGED REPLACEMENT WITH ROLLBACK

@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   FileText, 
   FilePlus, 
@@ -8,13 +7,15 @@ import {
   Merge, 
   Type, 
   ShieldCheck,
-  FileOutput
+  FileOutput,
+  Save
 } from 'lucide-react';
 import { Button } from '../common/Button';
 
 export const PDFStudioEmptyState = ({
   onCreateNew,
   onOpenPDF,
+  onOpenDrafts,
   onAddFromMemora
 }) => {
   return (
@@ -51,6 +52,17 @@ export const PDFStudioEmptyState = ({
           >
             Open PDF
           </Button>
+
+          {onOpenDrafts && (
+            <Button
+              variant="secondary"
+              size="md"
+              icon={Save}
+              onClick={onOpenDrafts}
+            >
+              Drafts
+            </Button>
+          )}
 
           <Button
             variant="secondary"

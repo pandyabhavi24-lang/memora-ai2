@@ -16,7 +16,10 @@ import {
   ShieldCheck, 
   AlertTriangle, 
   Activity, 
-  CheckCircle2
+  CheckCircle2,
+  CalendarClock,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/common/Button';
@@ -33,6 +36,22 @@ function formatBytes(bytes) {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// Helper for human-readable days remaining
+function getDaysRemainingText(dateStr) {
+  if (!dateStr) return '';
+  const target = new Date(dateStr);
+  const now = new Date();
+  const targetDateOnly = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((targetDateOnly - nowDateOnly) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Expires today';
+  if (diffDays === 1) return 'Expires tomorrow';
+  if (diffDays > 1) return `in ${diffDays} days`;
+  if (diffDays === -1) return 'Expired yesterday';
+  return `${Math.abs(diffDays)} days ago`;
 }
 
 export const Dashboard = () => {
@@ -78,6 +97,16 @@ export const Dashboard = () => {
   const [suggestions, setSuggestions] = useState([]);
   const [activeTooltip, setActiveTooltip] = useState(null);
 
+  // Module 5 Expiry State
+  const [expirySummary, setExpirySummary] = useState({
+    total_tracked: 0,
+    upcoming: 0,
+    due_soon: 0,
+    expired: 0,
+    needs_review: 0
+  });
+  const [nextExpiry, setNextExpiry] = useState(null);
+
   // Loading & Error States
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -99,14 +128,18 @@ export const Dashboard = () => {
         scanStatusRes,
         duplicatesRes,
         suggestionsRes,
-        healthRes
+        healthRes,
+        expirySummaryRes,
+        expiryListRes
       ] = await Promise.allSettled([
         apiService.getStatistics(),
         organizationService.getOverview(),
         apiService.getScanStatus(),
         organizationService.getDuplicates(),
         organizationService.getSuggestions(),
-        apiService.getHealth()
+        apiService.getHealth(),
+        apiService.getExpirySummary(),
+        apiService.getExpiries({ sort_by: 'date_asc', status: 'all' })
       ]);
 
       // 1. Statistics
@@ -137,6 +170,19 @@ export const Dashboard = () => {
       // 6. System Health Check
       if (healthRes.status === 'fulfilled' && healthRes.value) {
         setHealthStatus(healthRes.value);
+      }
+
+      // 7. Expiry & Renewal Summary
+      if (expirySummaryRes.status === 'fulfilled' && expirySummaryRes.value) {
+        setExpirySummary(expirySummaryRes.value);
+      }
+
+      if (expiryListRes.status === 'fulfilled' && Array.isArray(expiryListRes.value)) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // Find next upcoming date (extracted_date >= today or top record)
+        const nextUpcoming = expiryListRes.value.find(r => new Date(r.extracted_date) >= today) || expiryListRes.value[0] || null;
+        setNextExpiry(nextUpcoming);
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -420,43 +466,125 @@ export const Dashboard = () => {
       </div>
 
       {/* ==========================================================
-          D & E. MAIN DASHBOARD GRID (PIE CHART, QUICK ACTIONS, SYSTEM STATUS)
+          D. ROW 3: MAIN CONTENT & QUICK ACTIONS RIGHT SIDEBAR
       ========================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1 min-h-[210px]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1 min-h-[220px]">
         
-        {/* File Overview Donut Chart (5 Cols) */}
-        <div className="lg:col-span-5 flex flex-col h-full">
-          <FileDistributionChart 
-            categories={categories} 
-            isLoading={isLoading} 
-            hasError={hasError}
-            onRetry={loadAllDashboardData}
-          />
+        {/* Main Content Area (9 Cols): File Overview Donut Chart + Expiry & Reminders Card */}
+        <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 gap-2.5 h-full">
+          
+          {/* File Overview Donut Chart */}
+          <div className="h-full">
+            <FileDistributionChart 
+              categories={categories} 
+              isLoading={isLoading} 
+              hasError={hasError}
+              onRetry={loadAllDashboardData}
+            />
+          </div>
+
+          {/* Expiry & Reminders Live Summary Card */}
+          <div 
+            onClick={() => navigate('/expiry')}
+            className="glass-panel p-3.5 rounded-2xl border border-slate-800 hover:border-blue-500/40 hover:bg-slate-900/80 transition-all duration-200 cursor-pointer flex flex-col justify-between shadow-lg shadow-black/20 group relative overflow-hidden h-full"
+          >
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+            <div className="flex flex-col justify-between h-full">
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
+                  <h3 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <CalendarClock className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                    <span>Expiry & Reminders</span>
+                  </h3>
+                </div>
+
+                {/* Metric Counts Grid */}
+                <div className="grid grid-cols-3 gap-1.5 mb-2.5">
+                  <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center">
+                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Upcoming</div>
+                    <div className="text-base font-black text-emerald-400 font-mono mt-0.5">{expirySummary.upcoming}</div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center">
+                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Due Soon</div>
+                    <div className="text-base font-black text-amber-400 font-mono mt-0.5">{expirySummary.due_soon}</div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center">
+                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Expired</div>
+                    <div className="text-base font-black text-red-400 font-mono mt-0.5">{expirySummary.expired}</div>
+                  </div>
+                </div>
+
+                {/* Next Expiry Highlight */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
+                    <span>NEXT UPCOMING EXPIRY</span>
+                    {nextExpiry && (
+                      <span className="text-blue-400 font-mono">{nextExpiry.date_type}</span>
+                    )}
+                  </div>
+
+                  {nextExpiry ? (
+                    <div className="flex items-center justify-between gap-2 pt-0.5">
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-white truncate max-w-[160px]" title={nextExpiry.file_name}>
+                          {nextExpiry.file_name}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {new Date(nextExpiry.extracted_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 ${
+                        nextExpiry.status === 'due_soon'
+                          ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
+                          : (nextExpiry.status === 'expired'
+                              ? 'text-red-400 bg-red-500/10 border-red-500/30'
+                              : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30')
+                      }`}>
+                        {getDaysRemainingText(nextExpiry.extracted_date)}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 italic py-0.5">No upcoming document dates detected.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/60">
+                <span>Tracked Documents: {expirySummary.total_tracked}</span>
+                {expirySummary.needs_review > 0 && (
+                  <span className="text-purple-400 font-semibold">{expirySummary.needs_review} Needs Review</span>
+                )}
+              </div>
+            </div>
+          </div>
+
         </div>
 
-        {/* Quick Actions (4 Cols) */}
-        <div className="lg:col-span-4 glass-panel p-3.5 rounded-2xl border border-slate-800 flex flex-col justify-between shadow-lg shadow-black/20">
+        {/* Dedicated Quick Actions Sidebar (3 Cols) */}
+        <div className="lg:col-span-3 glass-panel p-3 sm:p-3.5 rounded-2xl border border-slate-800 flex flex-col justify-between shadow-lg shadow-black/20 h-full">
           <div>
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2.5">
               <h3 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-blue-400" />
                 <span>Quick Actions</span>
               </h3>
-              <span className="text-[10px] text-slate-400 font-medium">Fast Navigation</span>
+              <span className="text-[10px] text-slate-400 font-medium">Nav</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="space-y-1.5 text-xs">
               {/* Action 1: Search */}
               <button
                 type="button"
                 onClick={() => navigate('/search')}
-                className="p-2.5 rounded-xl bg-slate-950/50 hover:bg-blue-600/20 text-slate-200 border border-slate-800 hover:border-blue-500/40 text-left transition-all cursor-pointer group flex flex-col justify-between shadow-sm"
-                title="Search Files — Natural language search query"
+                className="w-full p-2 rounded-xl bg-slate-950/50 hover:bg-blue-600/20 text-slate-200 border border-slate-800 hover:border-blue-500/40 text-left transition-all cursor-pointer group flex items-center gap-2.5 shadow-sm"
+                title="Search Files — Natural language semantic query"
               >
-                <Search className="w-4 h-4 text-blue-400 mb-1 group-hover:scale-110 transition-transform" />
-                <div>
-                  <div className="font-bold text-xs text-white">Search</div>
-                  <div className="text-[10px] text-slate-400">Semantic search</div>
+                <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform shrink-0">
+                  <Search className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-white leading-tight">Search</div>
+                  <div className="text-[10px] text-slate-400 truncate">Semantic query</div>
                 </div>
               </button>
 
@@ -464,103 +592,106 @@ export const Dashboard = () => {
               <button
                 type="button"
                 onClick={() => navigate('/organize')}
-                className="p-2.5 rounded-xl bg-slate-950/50 hover:bg-amber-600/20 text-slate-200 border border-slate-800 hover:border-amber-500/40 text-left transition-all cursor-pointer group flex flex-col justify-between shadow-sm"
-                title="Organize Files — Smart organization suggestions"
+                className="w-full p-2 rounded-xl bg-slate-950/50 hover:bg-amber-600/20 text-slate-200 border border-slate-800 hover:border-amber-500/40 text-left transition-all cursor-pointer group flex items-center gap-2.5 shadow-sm"
+                title="Organize Files — Smart taxonomy & duplicate detection"
               >
-                <FolderTree className="w-4 h-4 text-amber-400 mb-1 group-hover:scale-110 transition-transform" />
-                <div>
-                  <div className="font-bold text-xs text-white">Organize</div>
-                  <div className="text-[10px] text-slate-400">Smart taxonomy</div>
+                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform shrink-0">
+                  <FolderTree className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-white leading-tight">Organize</div>
+                  <div className="text-[10px] text-slate-400 truncate">Smart taxonomy</div>
                 </div>
               </button>
 
-              {/* Action 3: Media */}
+              {/* Action 3: Expiries */}
+              <button
+                type="button"
+                onClick={() => navigate('/expiry')}
+                className="w-full p-2 rounded-xl bg-slate-950/50 hover:bg-purple-600/20 text-slate-200 border border-slate-800 hover:border-purple-500/40 text-left transition-all cursor-pointer group flex items-center gap-2.5 shadow-sm"
+                title="Expiry & Reminders — Document dates & renewal alerts"
+              >
+                <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 group-hover:scale-110 transition-transform shrink-0">
+                  <CalendarClock className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-white leading-tight">Expiries</div>
+                  <div className="text-[10px] text-slate-400 truncate">Date reminders</div>
+                </div>
+              </button>
+
+              {/* Action 4: Media */}
               <button
                 type="button"
                 onClick={() => navigate('/media')}
-                className="p-2.5 rounded-xl bg-slate-950/50 hover:bg-emerald-600/20 text-slate-200 border border-slate-800 hover:border-emerald-500/40 text-left transition-all cursor-pointer group flex flex-col justify-between shadow-sm"
-                title="Media Intelligence — File content and intelligence processing"
+                className="w-full p-2 rounded-xl bg-slate-950/50 hover:bg-emerald-600/20 text-slate-200 border border-slate-800 hover:border-emerald-500/40 text-left transition-all cursor-pointer group flex items-center gap-2.5 shadow-sm"
+                title="Media Intelligence — OCR text & visual processing"
               >
-                <BarChart3 className="w-4 h-4 text-emerald-400 mb-1 group-hover:scale-110 transition-transform" />
-                <div>
-                  <div className="font-bold text-xs text-white">Media</div>
-                  <div className="text-[10px] text-slate-400">OCR & Visual</div>
+                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform shrink-0">
+                  <BarChart3 className="w-3.5 h-3.5" />
                 </div>
-              </button>
-
-              {/* Action 4: PDF Studio */}
-              <button
-                type="button"
-                onClick={() => navigate('/pdf-studio')}
-                className="p-2.5 rounded-xl bg-slate-950/50 hover:bg-purple-600/20 text-slate-200 border border-slate-800 hover:border-purple-500/40 text-left transition-all cursor-pointer group flex flex-col justify-between shadow-sm"
-                title="PDF Studio — Document tools & page editing"
-              >
-                <FileText className="w-4 h-4 text-purple-400 mb-1 group-hover:scale-110 transition-transform" />
-                <div>
-                  <div className="font-bold text-xs text-white">PDF Studio</div>
-                  <div className="text-[10px] text-slate-400">Document tools</div>
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-white leading-tight">Media</div>
+                  <div className="text-[10px] text-slate-400 truncate">OCR & Visual</div>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* Add Folder Button */}
           <button
             type="button"
             onClick={selectFolderNative}
-            className="w-full mt-2 p-2 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-300 hover:text-white text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+            className="w-full mt-2 p-1.5 sm:p-2 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-blue-300 hover:text-white text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
           >
             <FolderPlus className="w-3.5 h-3.5 text-blue-400" />
             <span>Add New Directory</span>
           </button>
         </div>
 
-        {/* System Status (3 Cols) */}
-        <div className="lg:col-span-3 glass-panel p-3.5 rounded-2xl border border-slate-800 flex flex-col justify-between shadow-lg shadow-black/20">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
-              <h3 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                <span>System Status</span>
-              </h3>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${systemOperationalColor}`}>
-                {systemOperationalLabel}
-              </span>
-            </div>
+      </div>
 
-            <div className="space-y-1.5 text-xs">
-              {/* Search Engine Status */}
-              <div className="p-2 rounded-xl bg-slate-950/50 border border-slate-800/60 flex items-center justify-between">
-                <span className="text-[11px] text-slate-400 font-medium">Search Engine</span>
-                <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Ready
-                </span>
-              </div>
+      {/* ==========================================================
+          E. ROW 4: SYSTEM STATUS (SLIGHTLY TALLER & READABLE HORIZONTAL BAR)
+      ========================================================== */}
+      <div className="glass-panel p-3 sm:p-3.5 rounded-2xl border border-slate-800 shrink-0 shadow-md shadow-black/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        
+        {/* Left Status Label & Operational Badge */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-emerald-400" />
+            <span className="font-bold text-xs text-white uppercase tracking-wider">
+              System Status
+            </span>
+          </div>
+          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${systemOperationalColor}`}>
+            {systemOperationalLabel}
+          </span>
+        </div>
 
-              {/* Indexed Files Count */}
-              <div className="p-2 rounded-xl bg-slate-950/50 border border-slate-800/60 flex items-center justify-between">
-                <span className="text-[11px] text-slate-400 font-medium">Indexed Files</span>
-                <span className="text-xs sm:text-[13px] font-mono font-black text-white">
-                  {stats.files}
-                </span>
-              </div>
-
-              {/* Monitored Folders */}
-              <div className="p-2 rounded-xl bg-slate-950/50 border border-slate-800/60 flex items-center justify-between">
-                <span className="text-[11px] text-slate-400 font-medium">Monitored Folders</span>
-                <span className="text-xs sm:text-[13px] font-mono font-black text-blue-400">
-                  {stats.folders || folders.length}
-                </span>
-              </div>
-            </div>
+        {/* Center Horizontal Metric Cards */}
+        <div className="grid grid-cols-3 gap-2 flex-1 max-w-xl">
+          <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between px-3">
+            <span className="text-xs text-slate-400 font-medium">Search Engine</span>
+            <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+            </span>
           </div>
 
-          {/* Privacy Footnote */}
-          <div className="mt-2 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-[10px] text-emerald-400 font-semibold">
-            <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-            <span>Local & Private — 100% offline</span>
+          <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between px-3">
+            <span className="text-xs text-slate-400 font-medium">Indexed Files</span>
+            <span className="text-sm font-mono font-black text-white">{stats.files}</span>
           </div>
+
+          <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between px-3">
+            <span className="text-xs text-slate-400 font-medium">Monitored Folders</span>
+            <span className="text-sm font-mono font-black text-blue-400">{stats.folders || folders.length}</span>
+          </div>
+        </div>
+
+        {/* Right Local Privacy Footnote */}
+        <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-xs text-emerald-400 font-semibold shrink-0">
+          <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-400" />
+          <span>Local & Private &bull; 100% offline</span>
         </div>
 
       </div>

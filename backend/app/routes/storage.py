@@ -1,6 +1,8 @@
+import os
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse as FastAPIFileResponse
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -112,7 +114,8 @@ def create_optimization_candidate(
             mode=req.mode,
             lossy_quality=req.lossy_quality,
             bmp_target_format=req.bmp_target_format,
-            max_dimension=req.max_dimension
+            max_dimension=req.max_dimension,
+            pdf_image_quality=req.pdf_image_quality
         )
         return OptimizeCandidateResponse(**data)
     except StorageServiceError as e:
@@ -123,6 +126,42 @@ def create_optimization_candidate(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal error creating optimization candidate."
         )
+
+
+@router.get("/optimize/candidate/{candidate_token}/file")
+def get_candidate_file(
+    candidate_token: str,
+    target: str = Query("candidate", pattern=r"^(candidate|original)$")
+):
+    """
+    Serves the candidate file or original file for preview in storage optimization comparison.
+    Token-validated and strictly scoped to active registered candidate records.
+    """
+    record = storage_service.get_candidate_record(candidate_token)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate record not found or has expired. Please re-analyze the file."
+        )
+
+    file_path = record.candidate_path if target == "candidate" else record.source_path
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Requested file does not exist on disk: {file_path}"
+        )
+
+    ext = os.path.splitext(file_path)[1].lower()
+    media_types = {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".bmp": "image/bmp",
+        ".webp": "image/webp"
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+    return FastAPIFileResponse(os.path.abspath(file_path), media_type=media_type)
 
 
 @router.post("/optimize/apply", response_model=OptimizeApplyResponse)

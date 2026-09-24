@@ -15,5 +15,6 @@ opencv-python-headless
 easyocr
 scikit-learn
 sentence-transformers
+reportlab
 pillow
 ollama==0.6.2

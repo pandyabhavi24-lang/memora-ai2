@@ -25,7 +25,11 @@ import {
   Loader2,
   Filter,
   CheckSquare,
-  Square
+  Square,
+  Eye,
+  Copy,
+  FileCheck,
+  SlidersHorizontal
 } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useApp } from '../context/AppContext';
@@ -57,12 +61,16 @@ export const StorageOptimization = () => {
   const [optimizeMode, setOptimizeMode] = useState('lossless'); // 'lossless' | 'lossy'
   const [lossyQuality, setLossyQuality] = useState(82);
   const [bmpTargetFormat, setBmpTargetFormat] = useState('png');
+  const [maxDimension, setMaxDimension] = useState(null);
+  const [pdfImageQuality, setPdfImageQuality] = useState(75);
   const [analyzingCandidate, setAnalyzingCandidate] = useState(false);
   const [candidateResult, setCandidateResult] = useState(null);
   const [candidateError, setCandidateError] = useState(null);
   const [applyingOptimization, setApplyingOptimization] = useState(false);
   const [applyResult, setApplyResult] = useState(null);
   const [replaceOriginal, setReplaceOriginal] = useState(false);
+  const [comparisonTab, setComparisonTab] = useState('metrics'); // 'metrics' | 'preview'
+  const [previewTarget, setPreviewTarget] = useState('candidate'); // 'candidate' | 'original'
   // ZIP Archive Modal State
   const [showZipModal, setShowZipModal] = useState(false);
   const [zipDestination, setZipDestination] = useState('');
@@ -163,13 +171,18 @@ export const StorageOptimization = () => {
   // --------------------------------------------------------------------------
   const handleOpenOptimize = (file) => {
     setOptimizeTargetFile(file);
-    setOptimizeMode('lossless');
+    const isPdf = file.extension?.toLowerCase() === '.pdf';
+    setOptimizeMode(isPdf ? 'lossy' : 'lossless');
     setLossyQuality(82);
     setBmpTargetFormat('png');
     setCandidateResult(null);
     setCandidateError(null);
     setApplyResult(null);
     setReplaceOriginal(false);
+    setMaxDimension(null);
+    setPdfImageQuality(75);
+    setComparisonTab('metrics');
+    setPreviewTarget('candidate');
   };
 
   const handleCloseOptimize = () => {
@@ -177,6 +190,8 @@ export const StorageOptimization = () => {
     setCandidateResult(null);
     setCandidateError(null);
     setApplyResult(null);
+    setComparisonTab('metrics');
+    setPreviewTarget('candidate');
   };
 
   const handleGenerateCandidate = async () => {
@@ -186,15 +201,20 @@ export const StorageOptimization = () => {
     setCandidateResult(null);
 
     try {
+      const isPdf = optimizeTargetFile.extension?.toLowerCase() === '.pdf';
       const payload = {
         file_id: optimizeTargetFile.id,
         mode: optimizeMode,
         lossy_quality: optimizeMode === 'lossy' ? lossyQuality : undefined,
-        bmp_target_format: optimizeTargetFile.extension === '.bmp' ? bmpTargetFormat : undefined
+        bmp_target_format: optimizeTargetFile.extension === '.bmp' ? bmpTargetFormat : undefined,
+        max_dimension: maxDimension || undefined,
+        pdf_image_quality: (isPdf && optimizeMode === 'lossy') ? pdfImageQuality : undefined
       };
 
       const res = await storageService.createOptimizationCandidate(payload);
       setCandidateResult(res);
+      setComparisonTab('metrics');
+      setPreviewTarget('candidate');
       if (res.status === 'no_meaningful_savings') {
         addToast('No meaningful savings found. Original file remains untouched.', 'info');
       }
@@ -810,28 +830,55 @@ export const StorageOptimization = () => {
         isOpen={Boolean(optimizeTargetFile)}
         onClose={handleCloseOptimize}
         title="File Optimization Sandbox"
-        maxWidth="max-w-xl"
+        maxWidth={candidateResult?.status === 'optimized' ? 'max-w-4xl' : 'max-w-xl'}
         actions={
           <div className="flex items-center justify-between w-full">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCloseOptimize}
-              disabled={analyzingCandidate || applyingOptimization}
-            >
-              <span>{applyResult ? 'Close' : 'Cancel'}</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCloseOptimize}
+                disabled={analyzingCandidate || applyingOptimization}
+              >
+                <span>{applyResult ? 'Close' : 'Cancel'}</span>
+              </Button>
+
+              {candidateResult?.status === 'optimized' && !applyResult && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCandidateResult(null);
+                    setCandidateError(null);
+                  }}
+                  disabled={applyingOptimization}
+                  className="text-xs"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1 text-gray-400" />
+                  <span>Change Options</span>
+                </Button>
+              )}
+            </div>
 
             {candidateResult?.status === 'optimized' && !applyResult && (
               <Button
                 variant="primary"
                 size="sm"
-                icon={Check}
+                icon={applyingOptimization ? Loader2 : (replaceOriginal ? HardDrive : FileCheck)}
                 onClick={handleApplyOptimization}
                 disabled={applyingOptimization}
-                className="bg-emerald-600 hover:bg-emerald-500 border-emerald-500/30 text-white"
+                className={replaceOriginal
+                  ? "bg-amber-600 hover:bg-amber-500 border-amber-500/30 text-white"
+                  : "bg-emerald-600 hover:bg-emerald-500 border-emerald-500/30 text-white"
+                }
               >
-                <span>{applyingOptimization ? 'Applying Replacement...' : 'Apply Optimization'}</span>
+                <span>
+                  {applyingOptimization
+                    ? 'Applying...'
+                    : replaceOriginal
+                      ? 'Replace Original File'
+                      : 'Save Optimized Copy'}
+                </span>
               </Button>
             )}
           </div>
@@ -878,7 +925,7 @@ export const StorageOptimization = () => {
                     <button
                       type="button"
                       onClick={() => setOptimizeMode('lossy')}
-                      disabled={optimizeTargetFile.extension === '.pdf' || optimizeTargetFile.extension === '.png' || optimizeTargetFile.extension === '.bmp'}
+                      disabled={optimizeTargetFile.extension === '.png' || optimizeTargetFile.extension === '.bmp'}
                       className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${optimizeMode === 'lossy'
                         ? 'bg-amber-600/20 border-amber-500/50 text-white shadow-sm'
                         : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed'
@@ -896,7 +943,7 @@ export const StorageOptimization = () => {
                 </div>
 
                 {/* Quality Slider for Lossy JPEG */}
-                {optimizeMode === 'lossy' && (
+                {optimizeMode === 'lossy' && optimizeTargetFile.extension !== '.pdf' && (
                   <div className="p-4 rounded-xl bg-gray-950/60 border border-gray-800 space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold text-gray-300">JPEG Compression Quality</span>
@@ -919,6 +966,33 @@ export const StorageOptimization = () => {
                   </div>
                 )}
 
+                {/* PDF image quality slider — shown only when PDF + lossy selected */}
+                {optimizeMode === 'lossy' && optimizeTargetFile.extension?.toLowerCase() === '.pdf' && (
+                  <div className="p-4 rounded-xl bg-gray-950/60 border border-amber-800/40 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-gray-300">📄 PDF Image Compression Quality</span>
+                      <span className="font-mono font-bold text-amber-400">{pdfImageQuality}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={50}
+                      max={95}
+                      step={5}
+                      value={pdfImageQuality}
+                      onChange={(e) => setPdfImageQuality(parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-gray-500">
+                      <span>50% (Max savings)</span>
+                      <span>75% (Balanced)</span>
+                      <span>95% (Near lossless)</span>
+                    </div>
+                    <p className="text-[10px] text-amber-400/80">
+                      Embedded images (photos, diagrams) will be re-encoded at this quality. Text and layout are not affected.
+                    </p>
+                  </div>
+                )}
+
                 {/* BMP to PNG Options */}
                 {optimizeTargetFile.extension === '.bmp' && (
                   <div className="p-4 rounded-xl bg-gray-950/60 border border-gray-800 space-y-2">
@@ -935,6 +1009,47 @@ export const StorageOptimization = () => {
                         PNG (Deflate Compressed)
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Resolution / Dimension Picker */}
+                {(['.jpg', '.jpeg', '.png', '.bmp'].includes(optimizeTargetFile.extension?.toLowerCase()) || (optimizeTargetFile.extension?.toLowerCase() === '.pdf' && optimizeMode === 'lossy')) && (
+                  <div className="p-4 rounded-xl bg-gray-950/60 border border-gray-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-gray-300">
+                        {optimizeTargetFile.extension?.toLowerCase() === '.pdf' ? '📐 Downsample Embedded Images' : '📐 Resize Resolution'}
+                      </span>
+                      <span className="text-[10px] text-gray-500">Optional — longest side</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: 'Original', value: null },
+                        { label: '4K (3840)', value: 3840 },
+                        { label: 'Full HD (1920)', value: 1920 },
+                        { label: 'HD (1280)', value: 1280 },
+                        { label: 'Web (800)', value: 800 },
+                        { label: 'Thumb (480)', value: 480 },
+                      ].map(opt => (
+                        <button
+                          key={String(opt.value)}
+                          type="button"
+                          onClick={() => setMaxDimension(opt.value)}
+                          className={`py-1.5 px-2 rounded-lg text-[11px] font-medium border text-center transition-all cursor-pointer ${maxDimension === opt.value
+                              ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300'
+                              : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800'
+                            }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    {maxDimension && (
+                      <p className="text-[10px] text-cyan-400">
+                        {optimizeTargetFile.extension?.toLowerCase() === '.pdf'
+                          ? `Embedded photos and scans larger than ${maxDimension} px will be downsampled proportionally (LANCZOS). Vectors and text remain untouched.`
+                          : `Image will be downsampled so its longest side ≤ ${maxDimension} px (proportional, LANCZOS)`}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -966,90 +1081,224 @@ export const StorageOptimization = () => {
               <div className="space-y-4">
                 {candidateResult.status === 'optimized' ? (
                   <div className="space-y-4">
-                    {/* Savings Highlight Box */}
-                    <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Candidate Generated Successfully</span>
-                        </span>
-                        <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
-                          -{candidateResult.percentage_saved}%
-                        </span>
-                      </div>
+                    {/* View Switcher Tabs: Metrics vs Live Preview */}
+                    <div className="flex items-center gap-2 p-1 bg-gray-950/80 rounded-xl border border-gray-800">
+                      <button
+                        type="button"
+                        onClick={() => setComparisonTab('metrics')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${comparisonTab === 'metrics'
+                          ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 shadow-sm'
+                          : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>Comparison Metrics</span>
+                      </button>
 
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-emerald-500/20 text-center">
-                        <div>
-                          <span className="text-[10px] text-gray-400 uppercase">Original</span>
-                          <div className="text-xs font-mono font-medium text-gray-300 mt-0.5">
-                            {candidateResult.original_size_formatted}
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-center text-emerald-400">
-                          <ArrowRight className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-gray-400 uppercase">Optimized</span>
-                          <div className="text-xs font-mono font-bold text-emerald-400 mt-0.5">
-                            {candidateResult.candidate_size_formatted}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-center pt-1">
-                        <span className="text-xs text-emerald-300">
-                          Net Savings: <strong className="font-mono">{candidateResult.bytes_saved_formatted}</strong>
-                        </span>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setComparisonTab('preview')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${comparisonTab === 'preview'
+                          ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 shadow-sm'
+                          : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Live Document Preview</span>
+                      </button>
                     </div>
 
-                    {/* Technical details */}
-                    <div className="p-3 rounded-lg bg-gray-950/60 border border-gray-800 text-[11px] text-gray-400 space-y-1">
-                      <div>Strategy: <span className="text-gray-200 font-mono">{candidateResult.strategy_used}</span></div>
-                      <div>Mode: <span className="text-gray-200">{candidateResult.is_lossless ? 'Lossless bit-exact' : 'Lossy perceptual'}</span></div>
-                      {candidateResult.execution_time_ms && (
-                        <div>Execution Time: <span className="text-gray-200 font-mono">{candidateResult.execution_time_ms} ms</span></div>
-                      )}
-                    </div>
+                    {/* Tab 1: Comparison Metrics */}
+                    {comparisonTab === 'metrics' && (
+                      <div className="space-y-3">
+                        {/* Savings Highlight Box */}
+                        <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Candidate Ready for Verification</span>
+                            </span>
+                            <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                              -{candidateResult.percentage_saved}%
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-emerald-500/20 text-center">
+                            <div>
+                              <span className="text-[10px] text-gray-400 uppercase">Original</span>
+                              <div className="text-xs font-mono font-medium text-gray-300 mt-0.5">
+                                {candidateResult.original_size_formatted}
+                              </div>
+                              {candidateResult.original_width && (
+                                <div className="text-[10px] text-gray-500 mt-0.5">
+                                  {candidateResult.original_width} × {candidateResult.original_height} px
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-center text-emerald-400">
+                              <ArrowRight className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-gray-400 uppercase">Optimized</span>
+                              <div className="text-xs font-mono font-bold text-emerald-400 mt-0.5">
+                                {candidateResult.candidate_size_formatted}
+                              </div>
+                              {candidateResult.candidate_width && (
+                                <div className="text-[10px] text-emerald-600 mt-0.5">
+                                  {candidateResult.candidate_width} × {candidateResult.candidate_height} px
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="text-center pt-1">
+                            <span className="text-xs text-emerald-300">
+                              Net Storage Saved: <strong className="font-mono text-emerald-400">{candidateResult.bytes_saved_formatted}</strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* PDF Specific Structural Stats */}
+                        {optimizeTargetFile.extension?.toLowerCase() === '.pdf' && (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                            <div className="p-2.5 rounded-lg bg-gray-950/60 border border-gray-800">
+                              <span className="text-[10px] text-gray-500 block uppercase">Pages Intact</span>
+                              <span className="font-mono font-bold text-gray-200 mt-0.5 block">
+                                {candidateResult.page_count ?? '—'}
+                              </span>
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-gray-950/60 border border-gray-800">
+                              <span className="text-[10px] text-gray-500 block uppercase">Images Optimized</span>
+                              <span className="font-mono font-bold text-emerald-400 mt-0.5 block">
+                                {candidateResult.images_optimized ?? 0} / {candidateResult.images_count ?? 0}
+                              </span>
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-gray-950/60 border border-gray-800">
+                              <span className="text-[10px] text-gray-500 block uppercase">Downsampled</span>
+                              <span className="font-mono font-bold text-cyan-400 mt-0.5 block">
+                                {candidateResult.images_downsampled ?? 0}
+                              </span>
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-gray-950/60 border border-gray-800">
+                              <span className="text-[10px] text-gray-500 block uppercase">Content Streams</span>
+                              <span className="font-mono font-bold text-blue-400 mt-0.5 block">
+                                {candidateResult.streams_compressed ? `${candidateResult.streams_compressed} deflated` : 'Optimized'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Technical details */}
+                        <div className="p-3 rounded-lg bg-gray-950/60 border border-gray-800 text-[11px] text-gray-400 space-y-1">
+                          <div>Strategy: <span className="text-gray-200 font-mono">{candidateResult.strategy_used}</span></div>
+                          <div>Mode: <span className="text-gray-200">{candidateResult.is_lossless ? 'Lossless bit-exact' : 'Perceptually balanced'}</span></div>
+                          {candidateResult.execution_time_ms && (
+                            <div>Execution Time: <span className="text-gray-200 font-mono">{candidateResult.execution_time_ms} ms</span></div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tab 2: Live Document / Image Preview */}
+                    {comparisonTab === 'preview' && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between bg-gray-950/70 p-2 rounded-xl border border-gray-800">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewTarget('candidate')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${previewTarget === 'candidate'
+                                ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/50'
+                                : 'text-gray-400 hover:text-gray-200'
+                              }`}
+                            >
+                              ✨ Compressed ({candidateResult.candidate_size_formatted})
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setPreviewTarget('original')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${previewTarget === 'original'
+                                ? 'bg-blue-600/20 text-blue-300 border border-blue-500/50'
+                                : 'text-gray-400 hover:text-gray-200'
+                              }`}
+                            >
+                              📄 Original ({candidateResult.original_size_formatted})
+                            </button>
+                          </div>
+
+                          <span className="text-[11px] text-gray-400 font-mono hidden sm:inline">
+                            Viewing: <strong className="text-gray-200">{previewTarget === 'candidate' ? 'Optimized Candidate' : 'Original Source'}</strong>
+                          </span>
+                        </div>
+
+                        <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden min-h-[440px] flex items-center justify-center relative">
+                          {optimizeTargetFile.extension?.toLowerCase() === '.pdf' ? (
+                            <iframe
+                              key={previewTarget}
+                              src={storageService.getCandidatePreviewUrl(candidateResult.candidate_token, previewTarget)}
+                              title="PDF Document Comparison"
+                              className="w-full h-[450px] border-0 bg-white"
+                            />
+                          ) : (
+                            <img
+                              key={previewTarget}
+                              src={storageService.getCandidatePreviewUrl(candidateResult.candidate_token, previewTarget)}
+                              alt="Comparison View"
+                              className="max-h-[440px] max-w-full object-contain p-2"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Save Choice */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 pt-1">
                       <div className="text-xs font-semibold text-gray-300">
-                        Save optimized file
+                        Select Save Option
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
                           onClick={() => setReplaceOriginal(false)}
-                          className={`p-3 rounded-lg border text-left transition-colors ${!replaceOriginal
-                            ? 'bg-blue-600/15 border-blue-500/50 text-white'
-                            : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900'
+                          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${!replaceOriginal
+                            ? 'bg-emerald-600/15 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-500/30'
+                            : 'bg-gray-950/60 border-gray-800 text-gray-400 hover:bg-gray-900'
                             }`}
                         >
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4" />
-                            <span className="text-xs font-semibold">Create Copy</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Copy className="w-4 h-4 text-emerald-400" />
+                              <span className="text-xs font-bold text-gray-100">Create Copy</span>
+                            </div>
+                            <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">Recommended</span>
                           </div>
-                          <div className="text-[10px] text-gray-500 mt-1">
-                            Keep the original file
+                          <div className="text-[11px] text-gray-400 mt-1.5 leading-snug">
+                            Saves as a new optimized file. Keeps original 100% untouched.
                           </div>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => setReplaceOriginal(true)}
-                          className={`p-3 rounded-lg border text-left transition-colors ${replaceOriginal
-                            ? 'bg-amber-600/15 border-amber-500/50 text-white'
-                            : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900'
+                          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${replaceOriginal
+                            ? 'bg-amber-600/15 border-amber-500 text-white shadow-sm ring-1 ring-amber-500/30'
+                            : 'bg-gray-950/60 border-gray-800 text-gray-400 hover:bg-gray-900'
                             }`}
                         >
-                          <div className="flex items-center gap-2">
-                            <HardDrive className="w-4 h-4" />
-                            <span className="text-xs font-semibold">Replace Original</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <HardDrive className="w-4 h-4 text-amber-400" />
+                              <span className="text-xs font-bold text-gray-100">Replace Original</span>
+                            </div>
+                            <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">Frees Space</span>
                           </div>
-                          <div className="text-[10px] text-gray-500 mt-1">
-                            Replace the existing file
+                          <div className="text-[11px] text-gray-400 mt-1.5 leading-snug">
+                            Replaces existing file in-place. Staged backup & rollback protect your data.
                           </div>
                         </button>
                       </div>
