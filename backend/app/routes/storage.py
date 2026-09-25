@@ -9,6 +9,7 @@ from ..database import get_db
 from ..schemas import (
     StorageSummaryResponse,
     LargeFilesResponse,
+    AllFilesResponse,
     OptimizeCandidateRequest,
     OptimizeCandidateResponse,
     OptimizeApplyRequest,
@@ -96,6 +97,29 @@ def get_optimizable_files(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal error retrieving optimizable files."
+        )
+
+
+@router.get("/all-files", response_model=AllFilesResponse)
+def get_all_files(
+    limit: int = Query(500, ge=1, le=1000, description="Maximum number of files to return"),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns ALL indexed files so the user can manually select them for
+    optimization or ZIP packaging.  is_optimizable is TRUE only for
+    types Memora supports: JPEG, PNG, BMP, PDF.
+    """
+    try:
+        data = storage_service.get_all_files(db=db, limit=limit)
+        return AllFilesResponse(**data)
+    except StorageServiceError as e:
+        _handle_storage_error(e)
+    except Exception as e:
+        logger.error(f"Failed to retrieve all files: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error retrieving all files."
         )
 
 

@@ -742,6 +742,11 @@ class LargeFilesResponse(BaseModel):
     total_count: int
 
 
+class AllFilesResponse(BaseModel):
+    items: List[LargeFileItem]
+    total_count: int
+
+
 class OptimizeCandidateRequest(BaseModel):
     file_id: int = Field(..., gt=0)
     mode: Literal["lossless", "lossy"] = "lossless"

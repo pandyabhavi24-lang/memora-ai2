@@ -74,6 +74,22 @@ class StorageService {
   }
 
   /**
+   * Retrieves ALL indexed files so the user can manually select them
+   * for optimization or ZIP packaging.
+   * GET /api/storage/all-files
+   * @param {Object} params - { limit?: number }
+   */
+  async getAllFiles(params = {}) {
+    const query = new URLSearchParams();
+    if (params.limit !== undefined && params.limit !== null) {
+      query.append('limit', params.limit);
+    }
+    const queryString = query.toString();
+    const endpoint = `/api/storage/all-files${queryString ? `?${queryString}` : ''}`;
+    return await this._fetch(endpoint);
+  }
+
+  /**
    * Generates a lossless or lossy optimization candidate in the source directory.
    * POST /api/storage/optimize/candidate
    * @param {Object} payload - { file_id: number, mode?: 'lossless'|'lossy', lossy_quality?: number, bmp_target_format?: 'png'|'webp' }

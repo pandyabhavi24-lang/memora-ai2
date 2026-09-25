@@ -1,64 +1,221 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  HardDrive,
-  Sparkles,
-  Zap,
-  Archive,
-  FolderOpen,
-  CheckCircle2,
-  AlertTriangle,
-  RefreshCw,
-  Clock,
-  Layers,
-  FileText,
-  Image as ImageIcon,
-  Code,
-  FileArchive,
-  FileQuestion,
-  ChevronRight,
-  ShieldCheck,
-  Check,
-  X,
-  Sliders,
-  ArrowRight,
-  Info,
-  Loader2,
-  Filter,
-  CheckSquare,
-  Square,
-  Eye,
-  Copy,
-  FileCheck,
-  SlidersHorizontal
+  HardDrive, Zap, Archive, FolderOpen, CheckCircle2, AlertTriangle,
+  RefreshCw, Layers, ArrowRight, Info, Loader2, Filter, CheckSquare,
+  Square, Eye, Copy, FileCheck, SlidersHorizontal, ShieldCheck,
+  ChevronRight, ChevronDown, Folder
 } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/common/Button';
-import { Card } from '../components/common/Card';
 import { Modal } from '../components/common/Modal';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const getDirFromPath = (p) => {
+  if (!p) return 'Unknown';
+  const sep = p.includes('\\') ? '\\' : '/';
+  const parts = p.split(sep);
+  parts.pop();
+  return parts.join(sep) || sep;
+};
+
+const EXT_COLORS = {
+  '.pdf':  'text-red-400 bg-red-500/10 border-red-500/20',
+  '.jpg':  'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+  '.jpeg': 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+  '.png':  'text-blue-400 bg-blue-500/10 border-blue-500/20',
+  '.bmp':  'text-purple-400 bg-purple-500/10 border-purple-500/20',
+};
+const ExtBadge = ({ ext }) => {
+  const label = ext ? ext.replace('.','').toUpperCase().slice(0,4) : '?';
+  const cls = EXT_COLORS[ext?.toLowerCase()] || 'text-gray-400 bg-gray-500/10 border-gray-500/20';
+  return <span className={`inline-block text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border ${cls}`}>{label}</span>;
+};
+
+const CAT_COLORS = {
+  'Media': 'from-blue-500 to-indigo-600',
+  'Documents': 'from-purple-500 to-pink-600',
+  'Code & Text': 'from-emerald-500 to-teal-600',
+  'Archives': 'from-amber-500 to-orange-600',
+};
+const getCategoryColor = (c) => CAT_COLORS[c] || 'from-gray-500 to-slate-600';
+
+// ─── Accordion Header ─────────────────────────────────────────────────────────
+
+const AccordionHeader = ({ icon: Icon, title, subtitle, badge, isOpen, onToggle, accent = 'text-cyan-400' }) => (
+  <button type="button" onClick={onToggle}
+    className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-800/30 transition-colors group">
+    <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gray-800/60 ${accent}`}>
+      <Icon className="w-4 h-4" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-semibold text-white">{title}</span>
+        {badge !== undefined && badge !== null && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-700/60 text-gray-400 font-mono">{badge}</span>
+        )}
+      </div>
+      {subtitle && <p className="text-[11px] text-gray-500 mt-0.5 truncate">{subtitle}</p>}
+    </div>
+    {isOpen
+      ? <ChevronDown className="w-4 h-4 text-gray-500 shrink-0 group-hover:text-gray-300" />
+      : <ChevronRight className="w-4 h-4 text-gray-500 shrink-0 group-hover:text-gray-300" />}
+  </button>
+);
+
+// ─── File Browser ─────────────────────────────────────────────────────────────
+
+const FileBrowser = ({ files, loading, selectedFileIds, onToggle, onToggleFolder, filterOptimizable, showOptimize, onOptimize }) => {
+  const [openFolders, setOpenFolders] = useState({});
+
+  const grouped = useMemo(() => {
+    const map = {};
+    const list = filterOptimizable ? files.filter(f => f.is_optimizable) : files;
+    for (const f of list) {
+      const dir = getDirFromPath(f.path);
+      if (!map[dir]) map[dir] = [];
+      map[dir].push(f);
+    }
+    return map;
+  }, [files, filterOptimizable]);
+
+  const folderKeys = useMemo(() => Object.keys(grouped).sort(), [grouped]);
+  const folderKeysStr = folderKeys.join('|');
+
+  const toggleFolder = useCallback((dir) => setOpenFolders(prev => ({ ...prev, [dir]: !prev[dir] })), []);
+
+  useEffect(() => {
+    if (folderKeys.length > 0) {
+      setOpenFolders(prev => Object.keys(prev).length === 0 ? { [folderKeys[0]]: true } : prev);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderKeysStr]);
+
+  if (loading) return (
+    <div className="flex items-center justify-center gap-2 py-10 text-gray-500 text-sm">
+      <Loader2 className="w-4 h-4 animate-spin" /> Loading files…
+    </div>
+  );
+  if (folderKeys.length === 0) return (
+    <div className="py-10 text-center text-gray-500 text-sm">No files found.</div>
+  );
+
+  return (
+    <div className="divide-y divide-gray-800/60 max-h-[420px] overflow-y-auto">
+      {folderKeys.map(dir => {
+        const fFiles = grouped[dir];
+        const isOpen = !!openFolders[dir];
+        const selCount = fFiles.filter(f => selectedFileIds.includes(f.id)).length;
+        const allSel = selCount === fFiles.length && fFiles.length > 0;
+        return (
+          <div key={dir}>
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-900/60 hover:bg-gray-800/40 transition-colors">
+              <button type="button" title={allSel ? 'Deselect folder' : 'Select folder'}
+                onClick={() => onToggleFolder(fFiles.map(f => f.id), !allSel)}
+                className="text-gray-500 hover:text-white transition-colors shrink-0">
+                {allSel
+                  ? <CheckSquare className="w-3.5 h-3.5 text-cyan-400" />
+                  : selCount > 0
+                    ? <CheckSquare className="w-3.5 h-3.5 text-cyan-600" />
+                    : <Square className="w-3.5 h-3.5" />}
+              </button>
+              <button type="button" onClick={() => toggleFolder(dir)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                <Folder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-xs font-medium text-gray-300 truncate flex-1" title={dir}>{dir}</span>
+                <span className="text-[10px] text-gray-500 shrink-0">{selCount > 0 ? `${selCount}/` : ''}{fFiles.length}</span>
+                {isOpen
+                  ? <ChevronDown className="w-3 h-3 text-gray-600 shrink-0" />
+                  : <ChevronRight className="w-3 h-3 text-gray-600 shrink-0" />}
+              </button>
+            </div>
+            {isOpen && (
+              <div className="divide-y divide-gray-800/30 bg-gray-950/20">
+                {fFiles.map(file => {
+                  const isSel = selectedFileIds.includes(file.id);
+                  return (
+                    <div key={file.id}
+                      className={`flex items-center gap-2.5 px-4 py-2 transition-colors ${isSel ? 'bg-cyan-500/5' : 'hover:bg-gray-800/20'}`}>
+                      <button type="button" onClick={() => onToggle(file.id)}
+                        className="text-gray-500 hover:text-white transition-colors shrink-0">
+                        {isSel ? <CheckSquare className="w-3.5 h-3.5 text-cyan-400" /> : <Square className="w-3.5 h-3.5" />}
+                      </button>
+                      <ExtBadge ext={file.extension} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-white truncate" title={file.name}>{file.name}</p>
+                      </div>
+                      <span className="text-[11px] font-mono text-gray-400 shrink-0">{file.size_formatted}</span>
+                      {showOptimize && file.is_optimizable && (
+                        <button type="button" title="Optimize" onClick={() => onOptimize(file)}
+                          className="w-6 h-6 rounded flex items-center justify-center bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors shrink-0">
+                          <Zap className="w-3 h-3" />
+                        </button>
+                      )}
+                      {showOptimize && !file.is_optimizable && (
+                        <span className="text-[10px] text-gray-600 shrink-0 w-6 text-center" title="ZIP only">—</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ─── Selection Bar ─────────────────────────────────────────────────────────────
+
+const SelectionBar = ({ count, optimizableCount, onOptimize, onZip, showOptimize }) => {
+  if (count === 0) return null;
+  const zipOnly = count - optimizableCount;
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 bg-cyan-950/30 border-t border-cyan-500/20">
+      <div className="text-xs text-gray-300">
+        <span className="font-semibold text-white">{count}</span> file{count !== 1 ? 's' : ''} selected
+        {optimizableCount > 0 && <span className="ml-2 text-emerald-400">· {optimizableCount} optimizable</span>}
+        {zipOnly > 0 && <span className="ml-2 text-gray-500">· {zipOnly} ZIP only</span>}
+      </div>
+      <div className="flex items-center gap-2">
+        {showOptimize && optimizableCount > 0 && (
+          <Button variant="primary" size="sm" onClick={onOptimize}>
+            <Zap className="w-3.5 h-3.5 mr-1" />Optimize First
+          </Button>
+        )}
+        <Button variant="secondary" size="sm" onClick={onZip}>
+          <Archive className="w-3.5 h-3.5 mr-1" />Create ZIP
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Component ────────────────────────────────────────────────────────────
 
 export const StorageOptimization = () => {
   const { addToast } = useApp();
 
-  // Primary Data State
   const [summary, setSummary] = useState(null);
   const [largeFiles, setLargeFiles] = useState([]);
   const [largeFilesTotal, setLargeFilesTotal] = useState(0);
-  const [optimizableFiles, setOptimizableFiles] = useState([]);
   const [optimizableFilesTotal, setOptimizableFilesTotal] = useState(0);
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [loadingFiles, setLoadingFiles] = useState(true);
-  const [loadingOptimizable, setLoadingOptimizable] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [allFiles, setAllFiles] = useState([]);
+  const [loadingAllFiles, setLoadingAllFiles] = useState(true);
 
-  // Filter & Query State
   const [minSizeMb, setMinSizeMb] = useState(5.0);
   const [limit, setLimit] = useState(50);
   const [selectedFileIds, setSelectedFileIds] = useState([]);
+  const [openSection, setOpenSection] = useState(null);
 
-  // Optimization Modal State
+  // Optimize modal
   const [optimizeTargetFile, setOptimizeTargetFile] = useState(null);
-  const [optimizeMode, setOptimizeMode] = useState('lossless'); // 'lossless' | 'lossy'
+  const [optimizeMode, setOptimizeMode] = useState('lossless');
   const [lossyQuality, setLossyQuality] = useState(82);
   const [bmpTargetFormat, setBmpTargetFormat] = useState('png');
   const [maxDimension, setMaxDimension] = useState(null);
@@ -69,9 +226,10 @@ export const StorageOptimization = () => {
   const [applyingOptimization, setApplyingOptimization] = useState(false);
   const [applyResult, setApplyResult] = useState(null);
   const [replaceOriginal, setReplaceOriginal] = useState(false);
-  const [comparisonTab, setComparisonTab] = useState('metrics'); // 'metrics' | 'preview'
-  const [previewTarget, setPreviewTarget] = useState('candidate'); // 'candidate' | 'original'
-  // ZIP Archive Modal State
+  const [comparisonTab, setComparisonTab] = useState('metrics');
+  const [previewTarget, setPreviewTarget] = useState('candidate');
+
+  // ZIP modal
   const [showZipModal, setShowZipModal] = useState(false);
   const [zipDestination, setZipDestination] = useState('');
   const [zipCompressionLevel, setZipCompressionLevel] = useState(9);
@@ -79,814 +237,353 @@ export const StorageOptimization = () => {
   const [creatingZip, setCreatingZip] = useState(false);
   const [zipResult, setZipResult] = useState(null);
 
-  useEffect(() => {
-    loadAllData();
-  }, []);
-
-  useEffect(() => {
-    loadLargeFiles(minSizeMb, limit);
-  }, [minSizeMb, limit]);
+  useEffect(() => { loadAllData(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadLargeFiles(minSizeMb, limit); }, [minSizeMb, limit]);
 
   const loadAllData = async () => {
     setIsRefreshing(true);
-    await Promise.all([
-      loadSummary(),
-      loadOptimizableFiles(),
-      loadLargeFiles(minSizeMb, limit)
-    ]);
+    await Promise.all([loadSummary(), loadLargeFiles(minSizeMb, limit), loadAllFiles()]);
     setIsRefreshing(false);
   };
 
   const loadSummary = async () => {
     setLoadingSummary(true);
-    try {
-      const data = await storageService.getStorageSummary();
-      setSummary(data);
-    } catch (err) {
-      console.error('Failed to load storage summary:', err);
-      addToast('Failed to load storage summary metrics', 'error');
-    } finally {
-      setLoadingSummary(false);
-    }
+    try { setSummary(await storageService.getStorageSummary()); }
+    catch { addToast('Failed to load storage summary', 'error'); }
+    finally { setLoadingSummary(false); }
   };
 
-  const loadOptimizableFiles = async () => {
-    setLoadingOptimizable(true);
+  const loadAllFiles = async () => {
+    setLoadingAllFiles(true);
     try {
-      const data = await storageService.getOptimizableFiles({ limit: 50 });
-      setOptimizableFiles(data.items || []);
-      setOptimizableFilesTotal(data.total_count || 0);
-    } catch (err) {
-      console.error('Failed to load optimizable files:', err);
-      addToast('Failed to load optimizable files list', 'error');
-    } finally {
-      setLoadingOptimizable(false);
-    }
+      const data = await storageService.getAllFiles({ limit: 500 });
+      setAllFiles(data.items || []);
+      setOptimizableFilesTotal((data.items || []).filter(f => f.is_optimizable).length);
+    } catch { setAllFiles([]); }
+    finally { setLoadingAllFiles(false); }
   };
 
-  const loadLargeFiles = async (minMb, currentLimit) => {
+  const loadLargeFiles = async (minMb, lim) => {
     setLoadingFiles(true);
     try {
-      const data = await storageService.getLargeFiles({
-        min_size_mb: minMb,
-        limit: currentLimit
-      });
+      const data = await storageService.getLargeFiles({ min_size_mb: minMb, limit: lim });
       setLargeFiles(data.items || []);
       setLargeFilesTotal(data.total_count || 0);
-    } catch (err) {
-      console.error('Failed to load large files:', err);
-      addToast('Failed to load large files analysis', 'error');
-    } finally {
-      setLoadingFiles(false);
-    }
+    } catch { addToast('Failed to load large files', 'error'); }
+    finally { setLoadingFiles(false); }
   };
 
-  // --------------------------------------------------------------------------
-  // Selection Logic
-  // --------------------------------------------------------------------------
-  const handleToggleSelectFile = (fileId) => {
-    setSelectedFileIds(prev =>
-      prev.includes(fileId) ? prev.filter(id => id !== fileId) : [...prev, fileId]
-    );
-  };
+  const handleToggle = useCallback((id) =>
+    setSelectedFileIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]), []);
 
-  const handleSelectAll = () => {
-    if (selectedFileIds.length === largeFiles.length) {
-      setSelectedFileIds([]);
-    } else {
-      setSelectedFileIds(largeFiles.map(f => f.id));
-    }
-  };
+  const handleToggleFolder = useCallback((ids, select) =>
+    setSelectedFileIds(prev => {
+      const without = prev.filter(x => !ids.includes(x));
+      return select ? [...without, ...ids] : without;
+    }), []);
 
-  const selectedFilesList = useMemo(() => {
-    return largeFiles.filter(f => selectedFileIds.includes(f.id));
-  }, [largeFiles, selectedFileIds]);
+  const handleSelectAll = () =>
+    setSelectedFileIds(prev => prev.length === allFiles.length ? [] : allFiles.map(f => f.id));
 
-  const selectedTotalBytes = useMemo(() => {
-    return selectedFilesList.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
-  }, [selectedFilesList]);
+  const selectedList = useMemo(() => allFiles.filter(f => selectedFileIds.includes(f.id)), [allFiles, selectedFileIds]);
+  const selectedBytes = useMemo(() => selectedList.reduce((a, f) => a + (f.size_bytes || 0), 0), [selectedList]);
+  const selectedOptimizable = useMemo(() => selectedList.filter(f => f.is_optimizable), [selectedList]);
+  const optimizableLargeFiles = useMemo(() => largeFiles.filter(f => f.is_optimizable), [largeFiles]);
 
-  // --------------------------------------------------------------------------
-  // Optimization Actions
-  // --------------------------------------------------------------------------
   const handleOpenOptimize = (file) => {
     setOptimizeTargetFile(file);
     const isPdf = file.extension?.toLowerCase() === '.pdf';
     setOptimizeMode(isPdf ? 'lossy' : 'lossless');
-    setLossyQuality(82);
-    setBmpTargetFormat('png');
-    setCandidateResult(null);
-    setCandidateError(null);
-    setApplyResult(null);
-    setReplaceOriginal(false);
-    setMaxDimension(null);
-    setPdfImageQuality(75);
-    setComparisonTab('metrics');
-    setPreviewTarget('candidate');
+    setLossyQuality(82); setBmpTargetFormat('png'); setCandidateResult(null);
+    setCandidateError(null); setApplyResult(null); setReplaceOriginal(false);
+    setMaxDimension(null); setPdfImageQuality(75);
+    setComparisonTab('metrics'); setPreviewTarget('candidate');
   };
-
   const handleCloseOptimize = () => {
-    setOptimizeTargetFile(null);
-    setCandidateResult(null);
-    setCandidateError(null);
-    setApplyResult(null);
-    setComparisonTab('metrics');
-    setPreviewTarget('candidate');
+    setOptimizeTargetFile(null); setCandidateResult(null);
+    setCandidateError(null); setApplyResult(null);
   };
-
   const handleGenerateCandidate = async () => {
     if (!optimizeTargetFile) return;
-    setAnalyzingCandidate(true);
-    setCandidateError(null);
-    setCandidateResult(null);
-
+    setAnalyzingCandidate(true); setCandidateError(null); setCandidateResult(null);
     try {
       const isPdf = optimizeTargetFile.extension?.toLowerCase() === '.pdf';
-      const payload = {
-        file_id: optimizeTargetFile.id,
-        mode: optimizeMode,
+      const res = await storageService.createOptimizationCandidate({
+        file_id: optimizeTargetFile.id, mode: optimizeMode,
         lossy_quality: optimizeMode === 'lossy' ? lossyQuality : undefined,
         bmp_target_format: optimizeTargetFile.extension === '.bmp' ? bmpTargetFormat : undefined,
         max_dimension: maxDimension || undefined,
-        pdf_image_quality: (isPdf && optimizeMode === 'lossy') ? pdfImageQuality : undefined
-      };
-
-      const res = await storageService.createOptimizationCandidate(payload);
-      setCandidateResult(res);
-      setComparisonTab('metrics');
-      setPreviewTarget('candidate');
-      if (res.status === 'no_meaningful_savings') {
-        addToast('No meaningful savings found. Original file remains untouched.', 'info');
-      }
+        pdf_image_quality: (isPdf && optimizeMode === 'lossy') ? pdfImageQuality : undefined,
+      });
+      setCandidateResult(res); setComparisonTab('metrics'); setPreviewTarget('candidate');
+      if (res.status === 'no_meaningful_savings') addToast('No meaningful savings. File unchanged.', 'info');
     } catch (err) {
-      console.error('Error generating optimization candidate:', err);
-      const msg = err.message || 'Failed to analyze optimization potential.';
-      setCandidateError(msg);
-      addToast(msg, 'error');
-    } finally {
-      setAnalyzingCandidate(false);
-    }
+      const msg = err.message || 'Failed to generate candidate.';
+      setCandidateError(msg); addToast(msg, 'error');
+    } finally { setAnalyzingCandidate(false); }
   };
-
   const handleApplyOptimization = async () => {
     if (!optimizeTargetFile || !candidateResult?.candidate_token) return;
     setApplyingOptimization(true);
-
     try {
-      const payload = {
+      const res = await storageService.applyOptimization({
         file_id: optimizeTargetFile.id,
         candidate_token: candidateResult.candidate_token,
-        replace_original: replaceOriginal
-      };
-
-      const res = await storageService.applyOptimization(payload);
+        replace_original: replaceOriginal,
+      });
       setApplyResult(res);
-      addToast(`Optimization applied successfully! Saved ${candidateResult.bytes_saved_formatted || 'storage'}.`, 'success');
-
-      // Refresh data
-      loadSummary();
-      loadOptimizableFiles();
-      loadLargeFiles(minSizeMb, limit);
+      addToast('Optimization applied!', 'success');
+      loadSummary(); loadAllFiles(); loadLargeFiles(minSizeMb, limit);
     } catch (err) {
-      console.error('Error applying optimization:', err);
-      let msg = err.message || 'Failed to apply optimization.';
-      if (err.status === 409 || msg.includes('modified after')) {
-        msg = 'The source file was modified after candidate analysis. Optimization aborted to prevent data loss. Please re-analyze.';
-      } else if (err.status === 400 && (msg.includes('expired') || msg.includes('Invalid'))) {
-        msg = 'This optimization candidate has expired. Please analyze the file again.';
-      }
-      setCandidateError(msg);
-      addToast(msg, 'error');
-    } finally {
-      setApplyingOptimization(false);
-    }
+      let msg = err.message || 'Failed to apply.';
+      if (err.status === 409 || msg.includes('modified after')) msg = 'File changed after analysis. Re-analyze.';
+      else if (err.status === 400 && (msg.includes('expired') || msg.includes('Invalid'))) msg = 'Candidate expired. Re-analyze.';
+      setCandidateError(msg); addToast(msg, 'error');
+    } finally { setApplyingOptimization(false); }
   };
 
-  // --------------------------------------------------------------------------
-  // ZIP Archive Actions
-  // --------------------------------------------------------------------------
   const handleOpenZipModal = () => {
-    if (selectedFileIds.length === 0) return;
-    // Suggest default destination path based on first selected file directory
-    const firstFile = selectedFilesList[0];
-    if (firstFile && firstFile.path) {
-      const dir = firstFile.path.substring(0, Math.max(firstFile.path.lastIndexOf('/'), firstFile.path.lastIndexOf('\\')));
-      const separator = firstFile.path.includes('\\') ? '\\' : '/';
-      setZipDestination(`${dir}${separator}memora_archive_${Date.now()}.zip`);
-    } else {
-      setZipDestination('');
-    }
-    setZipCompressionLevel(9);
-    setZipOverwrite(false);
-    setZipResult(null);
-    setShowZipModal(true);
+    if (!selectedFileIds.length) return;
+    const f = selectedList[0];
+    if (f?.path) {
+      const dir = f.path.substring(0, Math.max(f.path.lastIndexOf('/'), f.path.lastIndexOf('\\')));
+      const sep = f.path.includes('\\') ? '\\' : '/';
+      setZipDestination(`${dir}${sep}memora_archive_${Date.now()}.zip`);
+    } else setZipDestination('');
+    setZipCompressionLevel(9); setZipOverwrite(false); setZipResult(null); setShowZipModal(true);
   };
-
   const handleBrowseZipDestination = async () => {
     if (window.electronAPI?.showSaveDialog) {
       try {
-        const defaultName = `memora_archive_${Date.now()}.zip`;
         const res = await window.electronAPI.showSaveDialog({
-          title: 'Choose Destination for ZIP Archive',
-          defaultPath: zipDestination || defaultName,
-          filters: [{ name: 'ZIP Archives (*.zip)', extensions: ['zip'] }]
+          title: 'ZIP Destination', defaultPath: zipDestination,
+          filters: [{ name: 'ZIP', extensions: ['zip'] }],
         });
-        if (!res.canceled && res.filePath) {
-          setZipDestination(res.filePath);
-        }
-      } catch (err) {
-        console.warn('Error opening native save dialog:', err);
-      }
+        if (!res.canceled && res.filePath) setZipDestination(res.filePath);
+      } catch {}
     } else if (window.electronAPI?.openDirectory) {
       try {
         const res = await window.electronAPI.openDirectory();
-        if (!res.canceled && res.filePaths && res.filePaths.length > 0) {
-          const chosenDir = res.filePaths[0];
-          const separator = chosenDir.includes('\\') ? '\\' : '/';
-          setZipDestination(`${chosenDir}${separator}memora_archive_${Date.now()}.zip`);
+        if (!res.canceled && res.filePaths?.[0]) {
+          const d = res.filePaths[0];
+          const sep = d.includes('\\') ? '\\' : '/';
+          setZipDestination(`${d}${sep}memora_archive_${Date.now()}.zip`);
         }
-      } catch (err) {
-        console.warn('Error opening directory dialog:', err);
-      }
+      } catch {}
     }
   };
-
   const handleCreateZip = async () => {
-    if (!zipDestination || selectedFileIds.length === 0) {
-      addToast('Please provide a valid destination path for the archive', 'warning');
-      return;
-    }
+    if (!zipDestination || !selectedFileIds.length) { addToast('Provide a destination path', 'warning'); return; }
     setCreatingZip(true);
-
     try {
-      const payload = {
-        file_ids: selectedFileIds,
-        destination_path: zipDestination.trim(),
-        compression_level: Number(zipCompressionLevel),
-        overwrite: Boolean(zipOverwrite)
-      };
-
-      const res = await storageService.createZipArchive(payload);
-      setZipResult(res);
-      addToast(`ZIP archive created successfully with ${res.files_archived} files!`, 'success');
-      setSelectedFileIds([]);
-      loadSummary();
-      loadOptimizableFiles();
-      loadLargeFiles(minSizeMb, limit);
-    } catch (err) {
-      console.error('Error creating ZIP archive:', err);
-      const msg = err.message || 'Failed to create ZIP archive.';
-      addToast(msg, 'error');
-    } finally {
-      setCreatingZip(false);
-    }
+      const res = await storageService.createZipArchive({
+        file_ids: selectedFileIds, destination_path: zipDestination.trim(),
+        compression_level: Number(zipCompressionLevel), overwrite: Boolean(zipOverwrite),
+      });
+      setZipResult(res); setSelectedFileIds([]);
+      addToast(`ZIP created with ${res.files_archived} files!`, 'success');
+      loadSummary(); loadAllFiles(); loadLargeFiles(minSizeMb, limit);
+    } catch (err) { addToast(err.message || 'ZIP creation failed', 'error'); }
+    finally { setCreatingZip(false); }
   };
 
-  // Helper for category badge styling
-  const getCategoryIcon = (category) => {
-    switch (category) {
-      case 'Media':
-        return <ImageIcon className="w-3.5 h-3.5 text-blue-400" />;
-      case 'Documents':
-        return <FileText className="w-3.5 h-3.5 text-purple-400" />;
-      case 'Code & Text':
-        return <Code className="w-3.5 h-3.5 text-emerald-400" />;
-      case 'Archives':
-        return <FileArchive className="w-3.5 h-3.5 text-amber-400" />;
-      default:
-        return <FileQuestion className="w-3.5 h-3.5 text-gray-400" />;
-    }
-  };
-
-  const getCategoryColor = (category) => {
-    switch (category) {
-      case 'Media':
-        return 'from-blue-500 to-indigo-600';
-      case 'Documents':
-        return 'from-purple-500 to-pink-600';
-      case 'Code & Text':
-        return 'from-emerald-500 to-teal-600';
-      case 'Archives':
-        return 'from-amber-500 to-orange-600';
-      default:
-        return 'from-gray-500 to-slate-600';
-    }
-  };
+  const toggleSection = (key) => setOpenSection(prev => prev === key ? null : key);
 
   return (
-    <div className="space-y-8 pb-12">
-      {/* ------------------------------------------------------------------- */}
+    <div className="space-y-5 pb-12">
+
       {/* HEADER */}
-      {/* ------------------------------------------------------------------- */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800/80 pb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
-              <HardDrive className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white tracking-wide flex items-center gap-2">
-                Storage Analysis & Optimization
-              </h1>
-              <p className="text-xs text-gray-400">
-                Inspect disk utilization, audit large assets, apply bit-safe local compression, and create archives.
-              </p>
-            </div>
-          </div>
-        </div>
-
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800/80 pb-5">
         <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            onClick={loadAllData}
-            disabled={isRefreshing}
-            className={isRefreshing ? 'animate-pulse' : ''}
-          >
-            <span>{isRefreshing ? 'Refreshing...' : 'Refresh Analysis'}</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* ------------------------------------------------------------------- */}
-      {/* SECTION A: METRICS OVERVIEW */}
-      {/* ------------------------------------------------------------------- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="flex flex-col justify-between border-gray-800/80 bg-gray-900/40">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Indexed Files</span>
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
-              <Layers className="w-4 h-4" />
-            </div>
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
+            <HardDrive className="w-4 h-4" />
           </div>
-          <div className="mt-3">
-            <span className="text-2xl font-bold text-white tracking-tight">
-              {loadingSummary ? '...' : (summary?.total_files?.toLocaleString() || 0)}
-            </span>
-            <p className="text-[11px] text-gray-400 mt-0.5">Across all scanned folders</p>
-          </div>
-        </Card>
-
-        <Card className="flex flex-col justify-between border-gray-800/80 bg-gray-900/40">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Storage</span>
-            <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
-              <HardDrive className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-bold text-white tracking-tight">
-              {loadingSummary ? '...' : (summary?.total_size_formatted || '0 B')}
-            </span>
-            <p className="text-[11px] text-gray-400 mt-0.5">Combined disk footprint</p>
-          </div>
-        </Card>
-
-        <Card className="flex flex-col justify-between border-gray-800/80 bg-gray-900/40">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Optimizable Files</span>
-            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
-              <Zap className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-bold text-amber-400 tracking-tight">
-              {loadingSummary ? '...' : (summary?.optimizable_candidates_count || 0)}
-            </span>
-            <p className="text-[11px] text-gray-400 mt-0.5">JPEG, PNG, BMP, and PDF files</p>
-          </div>
-        </Card>
-
-        <Card className="flex flex-col justify-between border-gray-800/80 bg-gray-900/40">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Large Files Audited</span>
-            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
-              <Filter className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-bold text-white tracking-tight">
-              {loadingFiles ? '...' : largeFilesTotal}
-            </span>
-            <p className="text-[11px] text-gray-400 mt-0.5">Files exceeding {minSizeMb} MB threshold</p>
-          </div>
-        </Card>
-      </div>
-
-      {/* ------------------------------------------------------------------- */}
-      {/* SECTION B: CATEGORY BREAKDOWN */}
-      {/* ------------------------------------------------------------------- */}
-      <Card className="border-gray-800/80 bg-gray-900/30 p-6 space-y-5">
-        <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-white">Storage Category Distribution</h2>
-            <p className="text-xs text-gray-400">Breakdown of indexed content by type and volume</p>
+            <h1 className="text-xl font-bold text-white">Storage Optimization</h1>
+            <p className="text-[11px] text-gray-500">Compress files, audit large assets, and create archives.</p>
           </div>
         </div>
+        <Button variant="secondary" size="sm" icon={RefreshCw} onClick={loadAllData} disabled={isRefreshing}
+          className={isRefreshing ? 'animate-pulse' : ''}>
+          <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
+        </Button>
+      </div>
 
-        {/* Stacked Progress Bar */}
-        <div className="w-full h-3.5 bg-gray-950 rounded-full overflow-hidden flex border border-gray-800">
-          {summary?.category_breakdown?.map((cat) => (
-            <div
-              key={cat.category}
-              style={{ width: `${Math.max(cat.percentage, 0)}%` }}
-              title={`${cat.category}: ${cat.formatted} (${cat.percentage}%)`}
-              className={`h-full bg-gradient-to-r ${getCategoryColor(cat.category)} transition-all duration-500`}
-            />
-          ))}
-        </div>
+      {/* METRICS */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Files', val: loadingSummary ? '…' : (summary?.total_files?.toLocaleString() || 0), icon: Layers, color: 'text-blue-400' },
+          { label: 'Total Size',  val: loadingSummary ? '…' : (summary?.total_size_formatted || '0 B'), icon: HardDrive, color: 'text-cyan-400' },
+          { label: 'Optimizable', val: loadingAllFiles ? '…' : optimizableFilesTotal, icon: Zap, color: 'text-amber-400' },
+          { label: `≥ ${minSizeMb} MB`, val: loadingFiles ? '…' : largeFilesTotal, icon: Filter, color: 'text-purple-400' },
+        ].map(m => (
+          <div key={m.label} className="flex items-center gap-3 p-3 rounded-xl bg-gray-900/40 border border-gray-800/80">
+            <m.icon className={`w-4 h-4 shrink-0 ${m.color}`} />
+            <div>
+              <div className="text-lg font-bold text-white leading-none">{m.val}</div>
+              <div className="text-[10px] text-gray-500 mt-0.5">{m.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
 
-        {/* Breakdown Legend Items */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 pt-2">
-          {summary?.category_breakdown?.map((cat) => (
-            <div
-              key={cat.category}
-              className="p-3 rounded-xl bg-gray-950/60 border border-gray-800/60 flex flex-col justify-between"
-            >
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className={`w-2.5 h-2.5 rounded-full bg-gradient-to-tr ${getCategoryColor(cat.category)}`} />
-                <span className="text-xs font-semibold text-gray-300">{cat.category}</span>
+      {/* CATEGORY BAR */}
+      {summary?.category_breakdown && (
+        <div className="rounded-xl border border-gray-800/80 bg-gray-900/30 p-4 space-y-3">
+          <span className="text-xs font-semibold text-gray-400">Storage by type</span>
+          <div className="w-full h-2.5 bg-gray-950 rounded-full overflow-hidden flex border border-gray-800/60">
+            {summary.category_breakdown.map(cat => (
+              <div key={cat.category} style={{ width: `${Math.max(cat.percentage, 0)}%` }}
+                title={`${cat.category}: ${cat.formatted} (${cat.percentage}%)`}
+                className={`h-full bg-gradient-to-r ${getCategoryColor(cat.category)}`} />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {summary.category_breakdown.map(cat => (
+              <div key={cat.category} className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full bg-gradient-to-tr ${getCategoryColor(cat.category)}`} />
+                <span className="text-[11px] text-gray-400">{cat.category}</span>
+                <span className="text-[11px] font-mono text-gray-300">{cat.formatted}</span>
+                <span className="text-[10px] text-gray-600">({cat.percentage}%)</span>
               </div>
-              <div>
-                <span className="text-sm font-bold text-white">{cat.formatted}</span>
-                <div className="flex items-center justify-between text-[11px] text-gray-400 mt-0.5">
-                  <span>{cat.count} files</span>
-                  <span className="font-mono text-cyan-400">{cat.percentage}%</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* ------------------------------------------------------------------- */}
-      {/* SECTION C: OPTIMIZABLE FILES (INDEPENDENT OF SIZE THRESHOLD) */}
-      {/* ------------------------------------------------------------------- */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Zap className="w-5 h-5 text-amber-400" />
-              <span>Optimizable Files</span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                {loadingOptimizable ? '...' : `${optimizableFilesTotal} available`}
-              </span>
-            </h2>
-            <p className="text-xs text-gray-400">
-              Supported assets (JPEG, PNG, BMP, PDF) ready for lossless compression or conversion, regardless of size.
-            </p>
+            ))}
           </div>
         </div>
+      )}
 
-        {/* Optimizable Files Table */}
-        <div className="glass-panel border-gray-800/80 rounded-xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-gray-300">
-              <thead className="bg-gray-950/80 text-gray-400 uppercase tracking-wider font-semibold border-b border-gray-800">
-                <tr>
-                  <th className="p-4">File Name & Path</th>
-                  <th className="p-4">Category</th>
-                  <th className="p-4">Size</th>
-                  <th className="p-4">Modified</th>
-                  <th className="p-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800/60">
-                {loadingOptimizable ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-gray-400">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
-                        <span>Scanning optimizable assets...</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : optimizableFiles.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-gray-400">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Zap className="w-8 h-8 text-gray-600" />
-                        <span className="font-semibold text-gray-300">No optimizable files found</span>
-                        <span className="text-[11px] text-gray-500">Supported formats: JPEG, PNG, BMP, PDF</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  optimizableFiles.map((file) => {
-                    const isBmp = file.extension?.toLowerCase() === '.bmp';
-                    return (
-                      <tr
-                        key={file.id}
-                        className="transition-colors hover:bg-gray-800/30"
-                      >
-                        <td className="p-4 max-w-xs md:max-w-md">
-                          <div className="font-semibold text-white truncate" title={file.name}>
-                            {file.name}
-                          </div>
-                          <div className="text-[11px] text-gray-500 truncate mt-0.5" title={file.path}>
-                            {file.path}
-                          </div>
-                        </td>
-
-                        <td className="p-4 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-900 border border-gray-800 text-[11px] text-gray-300">
-                            {getCategoryIcon(file.category)}
-                            <span>{file.category}</span>
-                          </span>
-                        </td>
-
-                        <td className="p-4 whitespace-nowrap font-mono font-medium text-white">
-                          {file.size_formatted}
-                        </td>
-
-                        <td className="p-4 whitespace-nowrap text-gray-400">
-                          {file.modified_at ? new Date(file.modified_at).toLocaleDateString() : '—'}
-                        </td>
-
-                        <td className="p-4 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenOptimize(file)}
-                            title={isBmp ? 'Convert to PNG' : 'Optimize file'}
-                            aria-label={isBmp ? 'Convert to PNG' : 'Optimize file'}
-                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg
-               bg-amber-500/10 border border-amber-500/20
-               text-amber-400
-               hover:bg-amber-500/20 hover:border-amber-500/40
-               transition-colors"
-                          >
-                            <Zap className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+      {/* ─ SECTION 1: OPTIMIZE FILES ─ */}
+      <div className="rounded-xl border border-gray-800/80 bg-gray-900/30 overflow-hidden">
+        <AccordionHeader icon={Zap} title="Optimize Files"
+          subtitle="Compress JPEG, PNG, BMP, and PDF files to save space"
+          badge={optimizableFilesTotal || undefined}
+          isOpen={openSection === 'optimize'} onToggle={() => toggleSection('optimize')}
+          accent="text-amber-400" />
+        {openSection === 'optimize' && (
+          <div className="border-t border-gray-800/60">
+            <FileBrowser files={allFiles} loading={loadingAllFiles} selectedFileIds={selectedFileIds}
+              onToggle={handleToggle} onToggleFolder={handleToggleFolder}
+              filterOptimizable={true} showOptimize={true} onOptimize={handleOpenOptimize} />
+            <SelectionBar count={selectedList.length} optimizableCount={selectedOptimizable.length}
+              onOptimize={() => selectedOptimizable.length > 0 && handleOpenOptimize(selectedOptimizable[0])}
+              onZip={handleOpenZipModal} showOptimize={true} />
           </div>
-        </div>
+        )}
       </div>
 
-      {/* ------------------------------------------------------------------- */}
-      {/* SECTION D: LARGE FILES AUDIT & ARCHIVING */}
-      {/* ------------------------------------------------------------------- */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              Large File Audit & Optimization
-            </h2>
-            <p className="text-xs text-gray-400">
-              Select files to optimize in-place or package into compressed ZIP archives.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Minimum Size Threshold Filter */}
-            <div className="flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300">
-              <span className="text-gray-400">Min Size:</span>
-              <select
-                value={minSizeMb}
-                onChange={(e) => setMinSizeMb(parseFloat(e.target.value))}
-                className="bg-transparent text-white font-medium focus:outline-none cursor-pointer"
-              >
-                <option value={1.0} className="bg-gray-900">1.0 MB</option>
-                <option value={5.0} className="bg-gray-900">5.0 MB</option>
-                <option value={10.0} className="bg-gray-900">10.0 MB</option>
-                <option value={25.0} className="bg-gray-900">25.0 MB</option>
-                <option value={50.0} className="bg-gray-900">50.0 MB</option>
-                <option value={100.0} className="bg-gray-900">100.0 MB</option>
+      {/* ─ SECTION 2: LARGE FILE AUDIT ─ */}
+      <div className="rounded-xl border border-gray-800/80 bg-gray-900/30 overflow-hidden">
+        <AccordionHeader icon={HardDrive} title="Large File Audit"
+          subtitle={`Optimizable files above ${minSizeMb} MB`}
+          badge={largeFilesTotal || undefined}
+          isOpen={openSection === 'audit'} onToggle={() => toggleSection('audit')}
+          accent="text-blue-400" />
+        {openSection === 'audit' && (
+          <div className="border-t border-gray-800/60">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-800/40 bg-gray-950/30">
+              <span className="text-[11px] text-gray-400 shrink-0">Min size:</span>
+              <select value={minSizeMb} onChange={e => setMinSizeMb(parseFloat(e.target.value))}
+                className="bg-gray-900 border border-gray-700 text-white text-xs rounded-lg px-2 py-1 focus:outline-none cursor-pointer">
+                {[1,5,10,25,50,100].map(v => <option key={v} value={v}>{v} MB</option>)}
+              </select>
+              <span className="text-[11px] text-gray-400 shrink-0 ml-4">Limit:</span>
+              <select value={limit} onChange={e => setLimit(parseInt(e.target.value))}
+                className="bg-gray-900 border border-gray-700 text-white text-xs rounded-lg px-2 py-1 focus:outline-none cursor-pointer">
+                {[25,50,100,200].map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
-
-            {/* Limit Filter */}
-            <div className="flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300">
-              <span className="text-gray-400">Limit:</span>
-              <select
-                value={limit}
-                onChange={(e) => setLimit(parseInt(e.target.value))}
-                className="bg-transparent text-white font-medium focus:outline-none cursor-pointer"
-              >
-                <option value={25} className="bg-gray-900">25</option>
-                <option value={50} className="bg-gray-900">50</option>
-                <option value={100} className="bg-gray-900">100</option>
-                <option value={200} className="bg-gray-900">200</option>
-              </select>
-            </div>
-
-            {/* Create ZIP Action */}
-            {selectedFileIds.length > 0 && (
-              <Button
-                variant="primary"
-                size="sm"
-                icon={Archive}
-                onClick={handleOpenZipModal}
-                className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-500/30 text-white"
-              >
-                <span>Create ZIP ({selectedFileIds.length})</span>
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Files Table */}
-        <div className="glass-panel border-gray-800/80 rounded-xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-gray-300">
-              <thead className="bg-gray-950/80 text-gray-400 uppercase tracking-wider font-semibold border-b border-gray-800">
-                <tr>
-                  <th className="p-4 w-10 text-center">
-                    <button
-                      onClick={handleSelectAll}
-                      className="text-gray-400 hover:text-white transition-colors cursor-pointer"
-                      title={selectedFileIds.length === largeFiles.length ? "Deselect all" : "Select all"}
-                    >
-                      {selectedFileIds.length > 0 && selectedFileIds.length === largeFiles.length ? (
-                        <CheckSquare className="w-4 h-4 text-blue-400" />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
-                    </button>
-                  </th>
-                  <th className="p-4">File Name & Path</th>
-                  <th className="p-4">Category</th>
-                  <th className="p-4">Size</th>
-                  <th className="p-4">Modified</th>
-                  <th className="p-4">Optimization Potential</th>
-                  <th className="p-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800/60">
-                {loadingFiles ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-gray-400">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
-                        <span>Loading large files analysis...</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : largeFiles.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-gray-400">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <HardDrive className="w-8 h-8 text-gray-600" />
-                        <span className="font-semibold text-gray-300">No large files found matching threshold</span>
-                        <span className="text-[11px] text-gray-500">Try lowering the minimum size filter above</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  largeFiles.map((file) => {
-                    const isSelected = selectedFileIds.includes(file.id);
-                    return (
-                      <tr
-                        key={file.id}
-                        className={`transition-colors hover:bg-gray-800/30 ${isSelected ? 'bg-blue-900/15' : ''
-                          }`}
-                      >
-                        <td className="p-4 text-center">
-                          <button
-                            onClick={() => handleToggleSelectFile(file.id)}
-                            className="text-gray-400 hover:text-white transition-colors cursor-pointer"
-                          >
-                            {isSelected ? (
-                              <CheckSquare className="w-4 h-4 text-blue-400" />
-                            ) : (
-                              <Square className="w-4 h-4" />
-                            )}
+            {loadingFiles
+              ? <div className="flex items-center justify-center gap-2 py-10 text-gray-500 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+              : optimizableLargeFiles.length === 0
+                ? <div className="py-10 text-center text-gray-500 text-sm">No optimizable files above {minSizeMb} MB.</div>
+                : <div className="divide-y divide-gray-800/40 max-h-[380px] overflow-y-auto">
+                    {optimizableLargeFiles.map(file => {
+                      const isSel = selectedFileIds.includes(file.id);
+                      return (
+                        <div key={file.id}
+                          className={`flex items-center gap-2.5 px-4 py-2.5 transition-colors ${isSel ? 'bg-cyan-500/5' : 'hover:bg-gray-800/20'}`}>
+                          <button type="button" onClick={() => handleToggle(file.id)} className="text-gray-500 hover:text-white shrink-0">
+                            {isSel ? <CheckSquare className="w-3.5 h-3.5 text-cyan-400" /> : <Square className="w-3.5 h-3.5" />}
                           </button>
-                        </td>
-
-                        <td className="p-4 max-w-xs md:max-w-md">
-                          <div className="font-semibold text-white truncate" title={file.name}>
-                            {file.name}
+                          <ExtBadge ext={file.extension} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-white truncate" title={file.name}>{file.name}</p>
+                            <p className="text-[10px] text-gray-500 truncate">{getDirFromPath(file.path)}</p>
                           </div>
-                          <div className="text-[11px] text-gray-500 truncate mt-0.5" title={file.path}>
-                            {file.path}
-                          </div>
-                        </td>
-
-                        <td className="p-4 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-900 border border-gray-800 text-[11px] text-gray-300">
-                            {getCategoryIcon(file.category)}
-                            <span>{file.category}</span>
-                          </span>
-                        </td>
-
-                        <td className="p-4 whitespace-nowrap font-mono font-medium text-white">
-                          {file.size_formatted}
-                        </td>
-
-                        <td className="p-4 whitespace-nowrap text-gray-400">
-                          {file.modified_at ? new Date(file.modified_at).toLocaleDateString() : '—'}
-                        </td>
-
-                        <td className="p-4 whitespace-nowrap">
-                          {file.is_optimizable ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                              <Zap className="w-3 h-3" />
-                              <span>{file.optimization_type || 'Optimizable'}</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-800 text-gray-400 border border-gray-700">
-                              <Archive className="w-3 h-3" />
-                              <span>Archive only</span>
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="p-4 text-right whitespace-nowrap">
-                          {file.is_optimizable ? (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              icon={Zap}
-                              onClick={() => handleOpenOptimize(file)}
-                              className="text-xs"
-                            >
-                              <span>Optimize</span>
-                            </Button>
-                          ) : (
-                            <span className="text-[11px] text-gray-500 italic">No optimizer</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                          <span className="text-[11px] font-mono text-gray-400 shrink-0">{file.size_formatted}</span>
+                          <button type="button" title="Optimize" onClick={() => handleOpenOptimize(file)}
+                            className="w-6 h-6 rounded flex items-center justify-center bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors shrink-0">
+                            <Zap className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+            }
+            <SelectionBar count={selectedList.length} optimizableCount={selectedOptimizable.length}
+              onOptimize={() => selectedOptimizable.length > 0 && handleOpenOptimize(selectedOptimizable[0])}
+              onZip={handleOpenZipModal} showOptimize={true} />
           </div>
-        </div>
+        )}
       </div>
 
-      {/* ------------------------------------------------------------------- */}
-      {/* OPTIMIZATION MODAL */}
-      {/* ------------------------------------------------------------------- */}
-      <Modal
-        isOpen={Boolean(optimizeTargetFile)}
-        onClose={handleCloseOptimize}
+      {/* ─ SECTION 3: ZIP / ARCHIVE ─ */}
+      <div className="rounded-xl border border-gray-800/80 bg-gray-900/30 overflow-hidden">
+        <AccordionHeader icon={Archive} title="ZIP / Archive"
+          subtitle="Select files from any folder and package into one ZIP"
+          badge={selectedFileIds.length > 0 ? `${selectedFileIds.length} selected` : undefined}
+          isOpen={openSection === 'zip'} onToggle={() => toggleSection('zip')}
+          accent="text-orange-400" />
+        {openSection === 'zip' && (
+          <div className="border-t border-gray-800/60">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800/40 bg-gray-950/30">
+              <span className="text-[11px] text-gray-400">Select files across folders, then create a ZIP.</span>
+              <button type="button" onClick={handleSelectAll} className="text-[11px] text-cyan-400 hover:text-cyan-300">
+                {selectedFileIds.length === allFiles.length ? 'Clear all' : 'Select all'}
+              </button>
+            </div>
+            <FileBrowser files={allFiles} loading={loadingAllFiles} selectedFileIds={selectedFileIds}
+              onToggle={handleToggle} onToggleFolder={handleToggleFolder}
+              filterOptimizable={false} showOptimize={false} onOptimize={handleOpenOptimize} />
+            <SelectionBar count={selectedList.length} optimizableCount={selectedOptimizable.length}
+              onOptimize={() => selectedOptimizable.length > 0 && handleOpenOptimize(selectedOptimizable[0])}
+              onZip={handleOpenZipModal} showOptimize={false} />
+          </div>
+        )}
+      </div>
+
+      {/* ─ OPTIMIZATION MODAL ─ */}
+      <Modal isOpen={Boolean(optimizeTargetFile)} onClose={handleCloseOptimize}
         title="File Optimization Sandbox"
         maxWidth={candidateResult?.status === 'optimized' ? 'max-w-4xl' : 'max-w-xl'}
         actions={
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCloseOptimize}
-                disabled={analyzingCandidate || applyingOptimization}
-              >
+              <Button variant="ghost" size="sm" onClick={handleCloseOptimize} disabled={analyzingCandidate || applyingOptimization}>
                 <span>{applyResult ? 'Close' : 'Cancel'}</span>
               </Button>
-
               {candidateResult?.status === 'optimized' && !applyResult && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setCandidateResult(null);
-                    setCandidateError(null);
-                  }}
-                  disabled={applyingOptimization}
-                  className="text-xs"
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1 text-gray-400" />
-                  <span>Change Options</span>
+                <Button variant="outline" size="sm"
+                  onClick={() => { setCandidateResult(null); setCandidateError(null); }}
+                  disabled={applyingOptimization} className="text-xs">
+                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1 text-gray-400" /><span>Change Options</span>
                 </Button>
               )}
             </div>
-
             {candidateResult?.status === 'optimized' && !applyResult && (
-              <Button
-                variant="primary"
-                size="sm"
+              <Button variant="primary" size="sm"
                 icon={applyingOptimization ? Loader2 : (replaceOriginal ? HardDrive : FileCheck)}
-                onClick={handleApplyOptimization}
-                disabled={applyingOptimization}
+                onClick={handleApplyOptimization} disabled={applyingOptimization}
                 className={replaceOriginal
-                  ? "bg-amber-600 hover:bg-amber-500 border-amber-500/30 text-white"
-                  : "bg-emerald-600 hover:bg-emerald-500 border-emerald-500/30 text-white"
-                }
-              >
-                <span>
-                  {applyingOptimization
-                    ? 'Applying...'
-                    : replaceOriginal
-                      ? 'Replace Original File'
-                      : 'Save Optimized Copy'}
-                </span>
+                  ? 'bg-amber-600 hover:bg-amber-500 border-amber-500/30 text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500/30 text-white'}>
+                <span>{applyingOptimization ? 'Applying...' : replaceOriginal ? 'Replace Original File' : 'Save Optimized Copy'}</span>
               </Button>
             )}
           </div>
-        }
-      >
+        }>
         {optimizeTargetFile && (
           <div className="space-y-6">
-            {/* File Info Header */}
             <div className="p-4 rounded-xl bg-gray-950/70 border border-gray-800 flex items-center justify-between">
               <div className="min-w-0 pr-4">
                 <div className="text-xs text-gray-400 font-medium">Original Asset</div>
@@ -899,621 +596,339 @@ export const StorageOptimization = () => {
               </div>
             </div>
 
-            {/* Mode & Strategy Configuration */}
             {!candidateResult && !applyResult && (
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-gray-300 block mb-2">Optimization Mode</label>
                   <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setOptimizeMode('lossless')}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${optimizeMode === 'lossless'
-                        ? 'bg-blue-600/20 border-blue-500/50 text-white shadow-sm'
-                        : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold">Lossless</span>
-                        {optimizeMode === 'lossless' && <CheckCircle2 className="w-4 h-4 text-blue-400" />}
-                      </div>
-                      <p className="text-[11px] text-gray-400">
-                        No quality loss
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setOptimizeMode('lossy')}
-                      disabled={optimizeTargetFile.extension === '.png' || optimizeTargetFile.extension === '.bmp'}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${optimizeMode === 'lossy'
-                        ? 'bg-amber-600/20 border-amber-500/50 text-white shadow-sm'
-                        : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold">Lossy</span>
-                        {optimizeMode === 'lossy' && <CheckCircle2 className="w-4 h-4 text-amber-400" />}
-                      </div>
-                      <p className="text-[11px] text-gray-400">
-                        Smaller file
-                      </p>
-                    </button>
+                    {[
+                      { key: 'lossless', label: 'Lossless', desc: 'No quality loss', disabled: false, activeClass: 'bg-blue-600/20 border-blue-500/50', icon: 'text-blue-400' },
+                      { key: 'lossy',    label: 'Lossy',    desc: 'Smaller file',   disabled: ['.png','.bmp'].includes(optimizeTargetFile.extension), activeClass: 'bg-amber-600/20 border-amber-500/50', icon: 'text-amber-400' },
+                    ].map(m => (
+                      <button key={m.key} type="button" onClick={() => !m.disabled && setOptimizeMode(m.key)} disabled={m.disabled}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${optimizeMode === m.key ? `${m.activeClass} text-white shadow-sm` : 'bg-gray-950/50 border-gray-800 text-gray-400 hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed'}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold">{m.label}</span>
+                          {optimizeMode === m.key && <CheckCircle2 className={`w-4 h-4 ${m.icon}`} />}
+                        </div>
+                        <p className="text-[11px] text-gray-400">{m.desc}</p>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Quality Slider for Lossy JPEG */}
                 {optimizeMode === 'lossy' && optimizeTargetFile.extension !== '.pdf' && (
                   <div className="p-4 rounded-xl bg-gray-950/60 border border-gray-800 space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-gray-300">JPEG Compression Quality</span>
+                      <span className="font-semibold text-gray-300">JPEG Quality</span>
                       <span className="font-mono font-bold text-amber-400">{lossyQuality}%</span>
                     </div>
-                    <input
-                      type="range"
-                      min={65}
-                      max={90}
-                      step={1}
-                      value={lossyQuality}
-                      onChange={(e) => setLossyQuality(parseInt(e.target.value))}
-                      className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                    />
+                    <input type="range" min={65} max={90} step={1} value={lossyQuality}
+                      onChange={e => setLossyQuality(parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-amber-500" />
                     <div className="flex justify-between text-[10px] text-gray-500">
-                      <span>65% (Smaller size)</span>
-                      <span>82% (Balanced Default)</span>
-                      <span>90% (Near lossless)</span>
+                      <span>65% (Smaller)</span><span>82% (Default)</span><span>90% (Near lossless)</span>
                     </div>
                   </div>
                 )}
 
-                {/* PDF image quality slider — shown only when PDF + lossy selected */}
                 {optimizeMode === 'lossy' && optimizeTargetFile.extension?.toLowerCase() === '.pdf' && (
                   <div className="p-4 rounded-xl bg-gray-950/60 border border-amber-800/40 space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-gray-300">📄 PDF Image Compression Quality</span>
+                      <span className="font-semibold text-gray-300">PDF Image Quality</span>
                       <span className="font-mono font-bold text-amber-400">{pdfImageQuality}%</span>
                     </div>
-                    <input
-                      type="range"
-                      min={50}
-                      max={95}
-                      step={5}
-                      value={pdfImageQuality}
-                      onChange={(e) => setPdfImageQuality(parseInt(e.target.value))}
-                      className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                    />
+                    <input type="range" min={50} max={95} step={5} value={pdfImageQuality}
+                      onChange={e => setPdfImageQuality(parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-amber-500" />
                     <div className="flex justify-between text-[10px] text-gray-500">
-                      <span>50% (Max savings)</span>
-                      <span>75% (Balanced)</span>
-                      <span>95% (Near lossless)</span>
+                      <span>50% (Max savings)</span><span>75% (Balanced)</span><span>95% (Near lossless)</span>
                     </div>
-                    <p className="text-[10px] text-amber-400/80">
-                      Embedded images (photos, diagrams) will be re-encoded at this quality. Text and layout are not affected.
-                    </p>
+                    <p className="text-[10px] text-amber-400/80">Embedded images only. Text/layout unaffected.</p>
                   </div>
                 )}
 
-                {/* BMP to PNG Options */}
                 {optimizeTargetFile.extension === '.bmp' && (
                   <div className="p-4 rounded-xl bg-gray-950/60 border border-gray-800 space-y-2">
-                    <span className="text-xs font-semibold text-gray-300 block">Conversion Target Format</span>
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setBmpTargetFormat('png')}
-                        className={`px-4 py-2 rounded-lg text-xs font-semibold border ${bmpTargetFormat === 'png'
-                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
-                          : 'bg-gray-900 border-gray-800 text-gray-400'
-                          }`}
-                      >
-                        PNG (Deflate Compressed)
-                      </button>
-                    </div>
+                    <span className="text-xs font-semibold text-gray-300 block">Conversion Format</span>
+                    <button type="button" onClick={() => setBmpTargetFormat('png')}
+                      className="px-4 py-2 rounded-lg text-xs font-semibold border bg-blue-600/20 border-blue-500 text-blue-300">
+                      PNG (Deflate Compressed)
+                    </button>
                   </div>
                 )}
 
-                {/* Resolution / Dimension Picker */}
-                {(['.jpg', '.jpeg', '.png', '.bmp'].includes(optimizeTargetFile.extension?.toLowerCase()) || (optimizeTargetFile.extension?.toLowerCase() === '.pdf' && optimizeMode === 'lossy')) && (
+                {(['.jpg','.jpeg','.png','.bmp'].includes(optimizeTargetFile.extension?.toLowerCase()) ||
+                  (optimizeTargetFile.extension?.toLowerCase() === '.pdf' && optimizeMode === 'lossy')) && (
                   <div className="p-4 rounded-xl bg-gray-950/60 border border-gray-800 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-gray-300">
-                        {optimizeTargetFile.extension?.toLowerCase() === '.pdf' ? '📐 Downsample Embedded Images' : '📐 Resize Resolution'}
+                        {optimizeTargetFile.extension?.toLowerCase() === '.pdf' ? 'Downsample Embedded Images' : 'Resize Resolution'}
                       </span>
                       <span className="text-[10px] text-gray-500">Optional — longest side</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { label: 'Original', value: null },
-                        { label: '4K (3840)', value: 3840 },
-                        { label: 'Full HD (1920)', value: 1920 },
-                        { label: 'HD (1280)', value: 1280 },
-                        { label: 'Web (800)', value: 800 },
-                        { label: 'Thumb (480)', value: 480 },
-                      ].map(opt => (
-                        <button
-                          key={String(opt.value)}
-                          type="button"
-                          onClick={() => setMaxDimension(opt.value)}
-                          className={`py-1.5 px-2 rounded-lg text-[11px] font-medium border text-center transition-all cursor-pointer ${maxDimension === opt.value
-                              ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300'
-                              : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800'
-                            }`}
-                        >
+                      {[{label:'Original',value:null},{label:'4K',value:3840},{label:'Full HD',value:1920},{label:'HD',value:1280},{label:'Web 800',value:800},{label:'Thumb 480',value:480}].map(opt => (
+                        <button key={String(opt.value)} type="button" onClick={() => setMaxDimension(opt.value)}
+                          className={`py-1.5 px-2 rounded-lg text-[11px] font-medium border text-center transition-all cursor-pointer ${maxDimension === opt.value ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300' : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800'}`}>
                           {opt.label}
                         </button>
                       ))}
                     </div>
-                    {maxDimension && (
-                      <p className="text-[10px] text-cyan-400">
-                        {optimizeTargetFile.extension?.toLowerCase() === '.pdf'
-                          ? `Embedded photos and scans larger than ${maxDimension} px will be downsampled proportionally (LANCZOS). Vectors and text remain untouched.`
-                          : `Image will be downsampled so its longest side ≤ ${maxDimension} px (proportional, LANCZOS)`}
-                      </p>
-                    )}
+                    {maxDimension && <p className="text-[10px] text-cyan-400">Longest side ≤ {maxDimension}px (LANCZOS, proportional).</p>}
                   </div>
                 )}
 
-                {/* Safe Staging Note */}
                 <div className="flex items-start gap-2.5 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-300">
                   <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-blue-400" />
-                  <span>
-                    The candidate is safely generated in a hidden local sandbox staging file. Your original asset will remain completely untouched until you explicitly click "Apply Optimization".
-                  </span>
+                  <span>Candidate generated in a sandbox. Original is untouched until you explicitly apply.</span>
                 </div>
-
                 <div className="pt-2">
-                  <Button
-                    variant="primary"
-                    size="md"
-                    icon={analyzingCandidate ? Loader2 : Zap}
-                    onClick={handleGenerateCandidate}
-                    disabled={analyzingCandidate}
-                    className="w-full"
-                  >
+                  <Button variant="primary" size="md" icon={analyzingCandidate ? Loader2 : Zap}
+                    onClick={handleGenerateCandidate} disabled={analyzingCandidate} className="w-full">
                     <span>{analyzingCandidate ? 'Generating Candidate...' : 'Generate Candidate'}</span>
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* Candidate Result View */}
             {candidateResult && !applyResult && (
               <div className="space-y-4">
                 {candidateResult.status === 'optimized' ? (
                   <div className="space-y-4">
-                    {/* View Switcher Tabs: Metrics vs Live Preview */}
                     <div className="flex items-center gap-2 p-1 bg-gray-950/80 rounded-xl border border-gray-800">
-                      <button
-                        type="button"
-                        onClick={() => setComparisonTab('metrics')}
-                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${comparisonTab === 'metrics'
-                          ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 shadow-sm'
-                          : 'text-gray-400 hover:text-gray-200'
-                        }`}
-                      >
-                        <Layers className="w-3.5 h-3.5" />
-                        <span>Comparison Metrics</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setComparisonTab('preview')}
-                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${comparisonTab === 'preview'
-                          ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 shadow-sm'
-                          : 'text-gray-400 hover:text-gray-200'
-                        }`}
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Live Document Preview</span>
-                      </button>
+                      {[
+                        { key: 'metrics', label: 'Comparison Metrics', icon: Layers },
+                        { key: 'preview', label: 'Live Preview', icon: Eye },
+                      ].map(t => (
+                        <button key={t.key} type="button" onClick={() => setComparisonTab(t.key)}
+                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${comparisonTab === t.key ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}>
+                          <t.icon className="w-3.5 h-3.5" /><span>{t.label}</span>
+                        </button>
+                      ))}
                     </div>
 
-                    {/* Tab 1: Comparison Metrics */}
                     {comparisonTab === 'metrics' && (
                       <div className="space-y-3">
-                        {/* Savings Highlight Box */}
                         <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
-                              <CheckCircle2 className="w-4 h-4" />
-                              <span>Candidate Ready for Verification</span>
+                              <CheckCircle2 className="w-4 h-4" /><span>Candidate Ready</span>
                             </span>
                             <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
                               -{candidateResult.percentage_saved}%
                             </span>
                           </div>
-
                           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-emerald-500/20 text-center">
                             <div>
                               <span className="text-[10px] text-gray-400 uppercase">Original</span>
-                              <div className="text-xs font-mono font-medium text-gray-300 mt-0.5">
-                                {candidateResult.original_size_formatted}
-                              </div>
-                              {candidateResult.original_width && (
-                                <div className="text-[10px] text-gray-500 mt-0.5">
-                                  {candidateResult.original_width} × {candidateResult.original_height} px
-                                </div>
-                              )}
+                              <div className="text-xs font-mono font-medium text-gray-300 mt-0.5">{candidateResult.original_size_formatted}</div>
+                              {candidateResult.original_width && <div className="text-[10px] text-gray-500 mt-0.5">{candidateResult.original_width}×{candidateResult.original_height}px</div>}
                             </div>
-                            <div className="flex items-center justify-center text-emerald-400">
-                              <ArrowRight className="w-4 h-4" />
-                            </div>
+                            <div className="flex items-center justify-center text-emerald-400"><ArrowRight className="w-4 h-4" /></div>
                             <div>
                               <span className="text-[10px] text-gray-400 uppercase">Optimized</span>
-                              <div className="text-xs font-mono font-bold text-emerald-400 mt-0.5">
-                                {candidateResult.candidate_size_formatted}
-                              </div>
-                              {candidateResult.candidate_width && (
-                                <div className="text-[10px] text-emerald-600 mt-0.5">
-                                  {candidateResult.candidate_width} × {candidateResult.candidate_height} px
-                                </div>
-                              )}
+                              <div className="text-xs font-mono font-bold text-emerald-400 mt-0.5">{candidateResult.candidate_size_formatted}</div>
+                              {candidateResult.candidate_width && <div className="text-[10px] text-emerald-600 mt-0.5">{candidateResult.candidate_width}×{candidateResult.candidate_height}px</div>}
                             </div>
                           </div>
-
                           <div className="text-center pt-1">
-                            <span className="text-xs text-emerald-300">
-                              Net Storage Saved: <strong className="font-mono text-emerald-400">{candidateResult.bytes_saved_formatted}</strong>
-                            </span>
+                            <span className="text-xs text-emerald-300">Saved: <strong className="font-mono text-emerald-400">{candidateResult.bytes_saved_formatted}</strong></span>
                           </div>
                         </div>
-
-                        {/* PDF Specific Structural Stats */}
                         {optimizeTargetFile.extension?.toLowerCase() === '.pdf' && (
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                            <div className="p-2.5 rounded-lg bg-gray-950/60 border border-gray-800">
-                              <span className="text-[10px] text-gray-500 block uppercase">Pages Intact</span>
-                              <span className="font-mono font-bold text-gray-200 mt-0.5 block">
-                                {candidateResult.page_count ?? '—'}
-                              </span>
-                            </div>
-
-                            <div className="p-2.5 rounded-lg bg-gray-950/60 border border-gray-800">
-                              <span className="text-[10px] text-gray-500 block uppercase">Images Optimized</span>
-                              <span className="font-mono font-bold text-emerald-400 mt-0.5 block">
-                                {candidateResult.images_optimized ?? 0} / {candidateResult.images_count ?? 0}
-                              </span>
-                            </div>
-
-                            <div className="p-2.5 rounded-lg bg-gray-950/60 border border-gray-800">
-                              <span className="text-[10px] text-gray-500 block uppercase">Downsampled</span>
-                              <span className="font-mono font-bold text-cyan-400 mt-0.5 block">
-                                {candidateResult.images_downsampled ?? 0}
-                              </span>
-                            </div>
-
-                            <div className="p-2.5 rounded-lg bg-gray-950/60 border border-gray-800">
-                              <span className="text-[10px] text-gray-500 block uppercase">Content Streams</span>
-                              <span className="font-mono font-bold text-blue-400 mt-0.5 block">
-                                {candidateResult.streams_compressed ? `${candidateResult.streams_compressed} deflated` : 'Optimized'}
-                              </span>
-                            </div>
+                            {[
+                              {label:'Pages',val:candidateResult.page_count??'—',color:'text-gray-200'},
+                              {label:'Images Opt.',val:`${candidateResult.images_optimized??0}/${candidateResult.images_count??0}`,color:'text-emerald-400'},
+                              {label:'Downsampled',val:candidateResult.images_downsampled??0,color:'text-cyan-400'},
+                              {label:'Streams',val:candidateResult.streams_compressed?`${candidateResult.streams_compressed}`:'OK',color:'text-blue-400'},
+                            ].map(s => (
+                              <div key={s.label} className="p-2.5 rounded-lg bg-gray-950/60 border border-gray-800">
+                                <span className="text-[10px] text-gray-500 block uppercase">{s.label}</span>
+                                <span className={`font-mono font-bold mt-0.5 block ${s.color}`}>{s.val}</span>
+                              </div>
+                            ))}
                           </div>
                         )}
-
-                        {/* Technical details */}
                         <div className="p-3 rounded-lg bg-gray-950/60 border border-gray-800 text-[11px] text-gray-400 space-y-1">
                           <div>Strategy: <span className="text-gray-200 font-mono">{candidateResult.strategy_used}</span></div>
                           <div>Mode: <span className="text-gray-200">{candidateResult.is_lossless ? 'Lossless bit-exact' : 'Perceptually balanced'}</span></div>
-                          {candidateResult.execution_time_ms && (
-                            <div>Execution Time: <span className="text-gray-200 font-mono">{candidateResult.execution_time_ms} ms</span></div>
-                          )}
+                          {candidateResult.execution_time_ms && <div>Time: <span className="text-gray-200 font-mono">{candidateResult.execution_time_ms}ms</span></div>}
                         </div>
                       </div>
                     )}
 
-                    {/* Tab 2: Live Document / Image Preview */}
                     {comparisonTab === 'preview' && (
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between bg-gray-950/70 p-2 rounded-xl border border-gray-800">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewTarget('candidate')}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${previewTarget === 'candidate'
-                                ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/50'
-                                : 'text-gray-400 hover:text-gray-200'
-                              }`}
-                            >
-                              ✨ Compressed ({candidateResult.candidate_size_formatted})
+                        <div className="flex items-center gap-2 bg-gray-950/70 p-2 rounded-xl border border-gray-800">
+                          {[
+                            {key:'candidate',label:`Compressed (${candidateResult.candidate_size_formatted})`,cls:'bg-emerald-600/20 text-emerald-300 border-emerald-500/50'},
+                            {key:'original', label:`Original (${candidateResult.original_size_formatted})`,cls:'bg-blue-600/20 text-blue-300 border-blue-500/50'},
+                          ].map(b => (
+                            <button key={b.key} type="button" onClick={() => setPreviewTarget(b.key)}
+                              className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${previewTarget === b.key ? `border ${b.cls}` : 'text-gray-400 hover:text-gray-200'}`}>
+                              {b.label}
                             </button>
-
-                            <button
-                              type="button"
-                              onClick={() => setPreviewTarget('original')}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${previewTarget === 'original'
-                                ? 'bg-blue-600/20 text-blue-300 border border-blue-500/50'
-                                : 'text-gray-400 hover:text-gray-200'
-                              }`}
-                            >
-                              📄 Original ({candidateResult.original_size_formatted})
-                            </button>
-                          </div>
-
-                          <span className="text-[11px] text-gray-400 font-mono hidden sm:inline">
-                            Viewing: <strong className="text-gray-200">{previewTarget === 'candidate' ? 'Optimized Candidate' : 'Original Source'}</strong>
-                          </span>
+                          ))}
                         </div>
-
-                        <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden min-h-[440px] flex items-center justify-center relative">
-                          {optimizeTargetFile.extension?.toLowerCase() === '.pdf' ? (
-                            <iframe
-                              key={previewTarget}
-                              src={storageService.getCandidatePreviewUrl(candidateResult.candidate_token, previewTarget)}
-                              title="PDF Document Comparison"
-                              className="w-full h-[450px] border-0 bg-white"
-                            />
-                          ) : (
-                            <img
-                              key={previewTarget}
-                              src={storageService.getCandidatePreviewUrl(candidateResult.candidate_token, previewTarget)}
-                              alt="Comparison View"
-                              className="max-h-[440px] max-w-full object-contain p-2"
-                            />
-                          )}
+                        <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden min-h-[440px] flex items-center justify-center">
+                          {optimizeTargetFile.extension?.toLowerCase() === '.pdf'
+                            ? <iframe key={previewTarget} src={storageService.getCandidatePreviewUrl(candidateResult.candidate_token, previewTarget)} title="PDF" className="w-full h-[450px] border-0 bg-white" />
+                            : <img key={previewTarget} src={storageService.getCandidatePreviewUrl(candidateResult.candidate_token, previewTarget)} alt="Preview" className="max-h-[440px] max-w-full object-contain p-2" />}
                         </div>
                       </div>
                     )}
 
-                    {/* Save Choice */}
                     <div className="space-y-2 pt-1">
-                      <div className="text-xs font-semibold text-gray-300">
-                        Select Save Option
-                      </div>
-
+                      <div className="text-xs font-semibold text-gray-300">Select Save Option</div>
                       <div className="grid grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setReplaceOriginal(false)}
-                          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${!replaceOriginal
-                            ? 'bg-emerald-600/15 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-500/30'
-                            : 'bg-gray-950/60 border-gray-800 text-gray-400 hover:bg-gray-900'
-                            }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Copy className="w-4 h-4 text-emerald-400" />
-                              <span className="text-xs font-bold text-gray-100">Create Copy</span>
+                        {[
+                          {val:false,label:'Create Copy',icon:Copy,desc:'New file. Original untouched.',badge:'Recommended',badgeCls:'bg-emerald-500/20 text-emerald-300',activeCls:'bg-emerald-600/15 border-emerald-500 ring-emerald-500/30',iconCls:'text-emerald-400'},
+                          {val:true, label:'Replace Original',icon:HardDrive,desc:'Replaces in-place. Backup protects you.',badge:'Frees Space',badgeCls:'bg-amber-500/20 text-amber-300',activeCls:'bg-amber-600/15 border-amber-500 ring-amber-500/30',iconCls:'text-amber-400'},
+                        ].map(opt => (
+                          <button key={String(opt.val)} type="button" onClick={() => setReplaceOriginal(opt.val)}
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${replaceOriginal === opt.val ? `${opt.activeCls} text-white shadow-sm ring-1` : 'bg-gray-950/60 border-gray-800 text-gray-400 hover:bg-gray-900'}`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <opt.icon className={`w-4 h-4 ${opt.iconCls}`} />
+                                <span className="text-xs font-bold text-gray-100">{opt.label}</span>
+                              </div>
+                              <span className={`text-[10px] uppercase font-mono px-1.5 py-0.5 rounded ${opt.badgeCls} font-bold`}>{opt.badge}</span>
                             </div>
-                            <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">Recommended</span>
-                          </div>
-                          <div className="text-[11px] text-gray-400 mt-1.5 leading-snug">
-                            Saves as a new optimized file. Keeps original 100% untouched.
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setReplaceOriginal(true)}
-                          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${replaceOriginal
-                            ? 'bg-amber-600/15 border-amber-500 text-white shadow-sm ring-1 ring-amber-500/30'
-                            : 'bg-gray-950/60 border-gray-800 text-gray-400 hover:bg-gray-900'
-                            }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <HardDrive className="w-4 h-4 text-amber-400" />
-                              <span className="text-xs font-bold text-gray-100">Replace Original</span>
-                            </div>
-                            <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">Frees Space</span>
-                          </div>
-                          <div className="text-[11px] text-gray-400 mt-1.5 leading-snug">
-                            Replaces existing file in-place. Staged backup & rollback protect your data.
-                          </div>
-                        </button>
+                            <div className="text-[11px] text-gray-400 mt-1.5 leading-snug">{opt.desc}</div>
+                          </button>
+                        ))}
                       </div>
                     </div>
-
-                    {/* Two-phase replacement notice */}
                     <div className="p-3 rounded-lg bg-gray-900/80 border border-gray-800 text-[11px] text-gray-300 flex items-start gap-2">
                       <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <span>
-                        {replaceOriginal
-                          ? 'The original file will be safely replaced. A temporary backup and automatic rollback protect your data if anything fails.'
-                          : 'A new optimized copy will be created. Your original file will remain untouched.'}
-                      </span>
+                      <span>{replaceOriginal ? 'Safely replaced with backup rollback protection.' : 'New copy created. Original untouched.'}</span>
                     </div>
                   </div>
                 ) : candidateResult.status === 'no_meaningful_savings' ? (
                   <div className="p-5 rounded-xl bg-gray-950/80 border border-gray-800 text-center space-y-2">
                     <Info className="w-6 h-6 text-blue-400 mx-auto" />
-                    <h4 className="text-sm font-bold text-white">No Meaningful Savings Found</h4>
-                    <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                      This file is already efficiently compressed. Optimization would save less than the 20 KB / 3% threshold.
-                    </p>
-                    <p className="text-[11px] text-emerald-400 font-medium">Your original file was not changed.</p>
+                    <h4 className="text-sm font-bold text-white">No Meaningful Savings</h4>
+                    <p className="text-xs text-gray-400">Already well-compressed. Below 20 KB / 3% threshold.</p>
+                    <p className="text-[11px] text-emerald-400 font-medium">Original unchanged.</p>
                   </div>
                 ) : (
                   <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-2 text-center">
                     <AlertTriangle className="w-6 h-6 text-amber-400 mx-auto" />
                     <h4 className="text-sm font-bold text-white">Optimization Not Applicable</h4>
-                    <p className="text-xs text-gray-300">{candidateResult.reason || 'This asset cannot be optimized further.'}</p>
-                    <p className="text-[11px] text-gray-400">Your original file remains untouched.</p>
+                    <p className="text-xs text-gray-300">{candidateResult.reason || 'Cannot optimize further.'}</p>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Apply Result Screen */}
             {applyResult && (
               <div className="p-6 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-center space-y-3">
                 <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto animate-bounce" />
-                <h4 className="text-base font-bold text-white">Optimization Applied Successfully!</h4>
+                <h4 className="text-base font-bold text-white">Optimization Applied!</h4>
                 <p className="text-xs text-gray-300">{applyResult.message}</p>
-                <div className="text-xs font-mono text-emerald-400">
-                  New size: {candidateResult?.candidate_size_formatted}
-                </div>
+                <div className="text-xs font-mono text-emerald-400">New size: {candidateResult?.candidate_size_formatted}</div>
               </div>
             )}
 
-            {/* Error Message */}
             {candidateError && (
               <div className="p-3 rounded-lg bg-red-950/40 border border-red-500/30 text-xs text-red-300 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <span>{candidateError}</span>
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" /><span>{candidateError}</span>
               </div>
             )}
           </div>
         )}
       </Modal>
 
-      {/* ------------------------------------------------------------------- */}
-      {/* ZIP ARCHIVE MODAL */}
-      {/* ------------------------------------------------------------------- */}
-      <Modal
-        isOpen={showZipModal}
-        onClose={() => setShowZipModal(false)}
-        title="Create Compressed ZIP Archive"
+      {/* ─ ZIP MODAL ─ */}
+      <Modal isOpen={showZipModal} onClose={() => setShowZipModal(false)}
+        title="Create ZIP Archive"
         subtitle={`Packaging ${selectedFileIds.length} selected files`}
         maxWidth="max-w-lg"
         actions={
           <div className="flex items-center justify-between w-full">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowZipModal(false)}
-              disabled={creatingZip}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setShowZipModal(false)} disabled={creatingZip}>
               <span>{zipResult ? 'Close' : 'Cancel'}</span>
             </Button>
-
             {!zipResult && (
-              <Button
-                variant="primary"
-                size="sm"
-                icon={Archive}
-                onClick={handleCreateZip}
+              <Button variant="primary" size="sm" icon={Archive} onClick={handleCreateZip}
                 disabled={creatingZip || !zipDestination}
-                className="bg-amber-600 hover:bg-amber-500 border-amber-500/30 text-white"
-              >
-                <span>{creatingZip ? 'Compressing Archive...' : 'Create Archive'}</span>
+                className="bg-amber-600 hover:bg-amber-500 border-amber-500/30 text-white">
+                <span>{creatingZip ? 'Compressing...' : 'Create Archive'}</span>
               </Button>
             )}
           </div>
-        }
-      >
+        }>
         <div className="space-y-4">
           {!zipResult ? (
             <>
-              {/* Selected Files Overview */}
               <div className="p-3.5 rounded-xl bg-gray-950/70 border border-gray-800 flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-semibold text-gray-300">Selected Items</span>
-                  <div className="text-[11px] text-gray-400 mt-0.5">{selectedFileIds.length} files selected</div>
+                  <span className="text-xs font-semibold text-gray-300">Selected Files</span>
+                  <div className="text-[11px] text-gray-400 mt-0.5">{selectedFileIds.length} files</div>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-semibold text-gray-300">Total Uncompressed</span>
-                  <div className="text-xs font-mono font-bold text-amber-400 mt-0.5">
-                    {(selectedTotalBytes / (1024 * 1024)).toFixed(2)} MB
-                  </div>
+                  <span className="text-xs font-semibold text-gray-300">Total Size</span>
+                  <div className="text-xs font-mono font-bold text-amber-400 mt-0.5">{(selectedBytes/(1024*1024)).toFixed(2)} MB</div>
                 </div>
               </div>
-
-              {/* Destination Path Input */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-300 block">
-                  Archive Destination Absolute Path
-                </label>
+                <label className="text-xs font-semibold text-gray-300 block">Destination Path</label>
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={zipDestination}
-                    onChange={(e) => setZipDestination(e.target.value)}
+                  <input type="text" value={zipDestination} onChange={e => setZipDestination(e.target.value)}
                     placeholder="C:\Users\...\archive.zip"
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-gray-950 border border-gray-800 text-xs text-white font-mono focus:border-amber-500 focus:outline-none"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    icon={FolderOpen}
-                    onClick={handleBrowseZipDestination}
-                    className="text-xs shrink-0"
-                  >
-                    <span>Browse...</span>
+                    className="flex-1 px-3.5 py-2 rounded-xl bg-gray-950 border border-gray-800 text-xs text-white font-mono focus:border-amber-500 focus:outline-none" />
+                  <Button type="button" variant="secondary" size="sm" icon={FolderOpen}
+                    onClick={handleBrowseZipDestination} className="shrink-0">
+                    <span>Browse…</span>
                   </Button>
                 </div>
-                <p className="text-[11px] text-gray-500">
-                  Enter or browse to the full absolute path where the .zip archive should be written.
-                </p>
               </div>
-
-              {/* Compression Level */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-gray-300">Deflate Compression Level</span>
-                  <span className="font-mono text-amber-400 font-bold">Level {zipCompressionLevel} (Max)</span>
+                  <span className="font-semibold text-gray-300">Compression Level</span>
+                  <span className="font-mono text-amber-400 font-bold">Level {zipCompressionLevel}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: 'Store (0)', val: 0 },
-                    { label: 'Fast (6)', val: 6 },
-                    { label: 'Maximum (9)', val: 9 }
-                  ].map(lvl => (
-                    <button
-                      key={lvl.val}
-                      type="button"
-                      onClick={() => setZipCompressionLevel(lvl.val)}
-                      className={`py-2 px-3 rounded-lg text-xs font-medium border text-center transition-all cursor-pointer ${zipCompressionLevel === lvl.val
-                        ? 'bg-amber-600/20 border-amber-500 text-amber-300'
-                        : 'bg-gray-950 border-gray-800 text-gray-400 hover:bg-gray-900'
-                        }`}
-                    >
-                      {lvl.label}
+                  {[{label:'Store (0)',val:0},{label:'Fast (6)',val:6},{label:'Max (9)',val:9}].map(l => (
+                    <button key={l.val} type="button" onClick={() => setZipCompressionLevel(l.val)}
+                      className={`py-2 px-3 rounded-lg text-xs font-medium border text-center transition-all cursor-pointer ${zipCompressionLevel === l.val ? 'bg-amber-600/20 border-amber-500 text-amber-300' : 'bg-gray-950 border-gray-800 text-gray-400 hover:bg-gray-900'}`}>
+                      {l.label}
                     </button>
                   ))}
                 </div>
               </div>
-
-              {/* Overwrite Toggle */}
               <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/60 border border-gray-800">
                 <div className="text-xs">
-                  <span className="font-semibold text-gray-300 block">Overwrite Existing Archive</span>
-                  <span className="text-[11px] text-gray-500">Replace target archive if it already exists</span>
+                  <span className="font-semibold text-gray-300 block">Overwrite Existing</span>
+                  <span className="text-[11px] text-gray-500">Replace if archive already exists</span>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={zipOverwrite}
-                  onChange={(e) => setZipOverwrite(e.target.checked)}
-                  className="w-4 h-4 rounded bg-gray-900 border-gray-700 text-amber-600 focus:ring-0 cursor-pointer"
-                />
+                <input type="checkbox" checked={zipOverwrite} onChange={e => setZipOverwrite(e.target.checked)}
+                  className="w-4 h-4 rounded bg-gray-900 border-gray-700 text-amber-600 focus:ring-0 cursor-pointer" />
               </div>
             </>
           ) : (
             <div className="p-5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-center space-y-3">
               <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-              <h4 className="text-base font-bold text-white">ZIP Archive Created!</h4>
-              <p className="text-xs text-gray-300">
-                Successfully archived {zipResult.files_archived} files into:
-              </p>
-              <div className="p-2 rounded bg-gray-950/80 font-mono text-[11px] text-cyan-300 truncate">
-                {zipResult.destination_path}
-              </div>
+              <h4 className="text-base font-bold text-white">ZIP Created!</h4>
+              <p className="text-xs text-gray-300">Archived {zipResult.files_archived} files into:</p>
+              <div className="p-2 rounded bg-gray-950/80 font-mono text-[11px] text-cyan-300 truncate">{zipResult.destination_path}</div>
               <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
                 <div className="p-2 rounded bg-gray-900/60">
                   <span className="text-[10px] text-gray-400 uppercase block">Archive Size</span>
-                  <span className="font-mono font-bold text-white">
-                    {(zipResult.archive_size_bytes / (1024 * 1024)).toFixed(2)} MB
-                  </span>
+                  <span className="font-mono font-bold text-white">{(zipResult.archive_size_bytes/(1024*1024)).toFixed(2)} MB</span>
                 </div>
                 <div className="p-2 rounded bg-gray-900/60">
-                  <span className="text-[10px] text-gray-400 uppercase block">Compression Saved</span>
-                  <span className="font-mono font-bold text-emerald-400">
-                    {zipResult.percentage_saved}%
-                  </span>
+                  <span className="text-[10px] text-gray-400 uppercase block">Saved</span>
+                  <span className="font-mono font-bold text-emerald-400">{zipResult.percentage_saved}%</span>
                 </div>
               </div>
               {window.electronAPI?.showItemInFolder && (
                 <div className="pt-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    icon={FolderOpen}
-                    onClick={() => window.electronAPI.showItemInFolder(zipResult.destination_path)}
-                    className="text-xs"
-                  >
-                    <span>Show in File Explorer</span>
+                  <Button type="button" variant="secondary" size="sm" icon={FolderOpen}
+                    onClick={() => window.electronAPI.showItemInFolder(zipResult.destination_path)} className="text-xs">
+                    <span>Show in Explorer</span>
                   </Button>
                 </div>
               )}
@@ -1521,6 +936,7 @@ export const StorageOptimization = () => {
           )}
         </div>
       </Modal>
+
     </div>
   );
 };

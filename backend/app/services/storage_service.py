@@ -266,6 +266,64 @@ class StorageService:
         }
 
     # =========================================================================
+    # 2c. ALL INDEXED FILES (MANUAL SELECTION BY USER)
+    # =========================================================================
+
+    def get_all_files(
+        self,
+        db: Session,
+        limit: int = 500
+    ) -> Dict[str, Any]:
+        """
+        Retrieves ALL files currently indexed in the database so the user can
+        manually select them for optimization or ZIP packaging.
+
+        is_optimizable is TRUE only for extensions supported by Memora:
+        JPEG, PNG, BMP, PDF.  All other types get is_optimizable=False.
+        """
+        safe_limit = max(1, min(1000, limit))
+
+        query = db.query(File).order_by(desc(File.size))
+        total_count = query.count()
+        file_records = query.limit(safe_limit).all()
+
+        items = []
+        for f in file_records:
+            ext = (f.extension or "").lower()
+
+            if ext in MEDIA_EXTENSIONS:
+                cat = "Media"
+            elif ext in DOCUMENT_EXTENSIONS:
+                cat = "Documents"
+            elif ext in CODE_TEXT_EXTENSIONS:
+                cat = "Code & Text"
+            elif ext in ARCHIVE_EXTENSIONS:
+                cat = "Archives"
+            else:
+                cat = "Other"
+
+            is_opt = ext in OPTIMIZABLE_EXTENSIONS
+            opt_type = OPTIMIZABLE_EXTENSIONS.get(ext)
+
+            items.append({
+                "id": f.id,
+                "name": f.name,
+                "path": f.path,
+                "size_bytes": f.size,
+                "size_formatted": format_bytes(f.size),
+                "extension": ext,
+                "modified_at": f.modified_at,
+                "category": cat,
+                "is_optimizable": is_opt,
+                "optimization_type": opt_type
+            })
+
+        return {
+            "items": items,
+            "total_count": total_count
+        }
+
+    # =========================================================================
     # 3. CANDIDATE CREATION (SAME-DIRECTORY SANDBOX)
     # =========================================================================
 
