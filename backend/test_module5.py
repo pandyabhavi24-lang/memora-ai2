@@ -24,7 +24,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from backend.app.database import Base, DB_PATH, DATA_DIR, SessionLocal, engine
+from backend.app.database import Base, DB_PATH, DATA_DIR, SessionLocal, engine, init_db_schema
 from backend.app.models import (
     AuditLog, Chunk, ExcludedFolder, File, Folder, SecuritySettings,
     VectorMapping,
@@ -187,32 +187,35 @@ def test_excluded_folders_scanner():
     print("\n[5] Excluded Folders in Scanner")
     from backend.app.services.scanner import scan_directory
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Create structure: tmpdir/public/file.txt and tmpdir/private/secret.txt
-        pub = os.path.join(tmpdir, "public")
-        priv = os.path.join(tmpdir, "private")
-        os.makedirs(pub)
-        os.makedirs(priv)
+    test_dir = os.path.join(ROOT, "test_scan_tmp")
+    os.makedirs(test_dir, exist_ok=True)
+    try:
+        pub = os.path.join(test_dir, "public")
+        priv = os.path.join(test_dir, "private")
+        os.makedirs(pub, exist_ok=True)
+        os.makedirs(priv, exist_ok=True)
 
         open(os.path.join(pub, "visible.txt"), "w").close()
         open(os.path.join(priv, "secret.txt"), "w").close()
 
         # Scan without exclusions
-        all_files = scan_directory(tmpdir)
+        all_files = scan_directory(test_dir)
         all_names = [f["name"] for f in all_files]
         check("Both files found without exclusions",
               "visible.txt" in all_names and "secret.txt" in all_names)
 
         # Scan with private excluded
         excluded = {os.path.realpath(priv)}
-        filtered = scan_directory(tmpdir, excluded_paths=excluded)
+        filtered = scan_directory(test_dir, excluded_paths=excluded)
         filt_names = [f["name"] for f in filtered]
         check("Public file found with exclusion", "visible.txt" in filt_names)
         check("Private file excluded", "secret.txt" not in filt_names)
 
         # Excluding the root itself
-        nothing = scan_directory(tmpdir, excluded_paths={os.path.realpath(tmpdir)})
+        nothing = scan_directory(test_dir, excluded_paths={os.path.realpath(test_dir)})
         check("Root exclusion yields no files", len(nothing) == 0)
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -530,6 +533,156 @@ def test_email_recovery():
         email_service.send_reset_code = original_send
 
 
+def test_file_and_folder_exclusion():
+    print("\n[12] File and Folder Exclusion (Granular Privacy)")
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    db.query(ExcludedFolder).delete()
+    db.commit()
+    svc = security_service
+
+    tmp_dir = os.path.join(ROOT, "test_excl_tmp")
+    os.makedirs(tmp_dir, exist_ok=True)
+    try:
+        norm_file = os.path.join(tmp_dir, "normal.pdf")
+        priv_file = os.path.join(tmp_dir, "private.pdf")
+        priv_dir = os.path.join(tmp_dir, "PrivateFolder")
+        os.makedirs(priv_dir, exist_ok=True)
+        sec_doc = os.path.join(priv_dir, "secret.docx")
+
+        for fp in [norm_file, priv_file, sec_doc]:
+            with open(fp, "w") as f:
+                f.write("content")
+
+        real_priv_file = svc.resolve_path(priv_file)
+        excl_f = ExcludedFolder(path=real_priv_file, item_type="file")
+        db.add(excl_f)
+
+        real_priv_dir = svc.resolve_path(priv_dir)
+        excl_d = ExcludedFolder(path=real_priv_dir, item_type="folder")
+        db.add(excl_d)
+        db.commit()
+
+        excl_paths = svc.get_excluded_paths(db)
+        check("get_excluded_paths returns both file and folder", real_priv_file in excl_paths and real_priv_dir in excl_paths)
+
+        from backend.app.services.scanner import scan_directory
+        scanned = scan_directory(tmp_dir, excluded_paths=excl_paths)
+        scanned_paths = [s["path"] for s in scanned]
+
+        check("Normal file is scanned", any(svc.resolve_path(p) == svc.resolve_path(norm_file) for p in scanned_paths))
+        check("Excluded private file is NOT scanned", not any(svc.resolve_path(p) == real_priv_file for p in scanned_paths))
+        check("Files inside excluded folder are NOT scanned", not any(svc.resolve_path(p) == svc.resolve_path(sec_doc) for p in scanned_paths))
+
+        db.delete(excl_f)
+        db.delete(excl_d)
+        db.commit()
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        db.close()
+
+
+def test_local_aes256_gcm_encryption_and_decryption():
+    print("\n[13] Local AES-256-GCM Encryption & Decryption")
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    svc = security_service
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        folder_path = os.path.join(tmp_dir, "SecureDocs")
+        os.makedirs(folder_path, exist_ok=True)
+        file_path = os.path.join(folder_path, "confidential.txt")
+        original_text = "Top Secret Personal Data 123456"
+        with open(file_path, "w") as f:
+            f.write(original_text)
+
+        res_enc = svc.encrypt_file(db, file_path)
+        check("encrypt_file returns status success", res_enc["status"] == "success")
+        check("is_file_encrypted returns True", svc.is_file_encrypted(file_path))
+
+        with open(file_path, "rb") as f:
+            raw_data = f.read()
+        check("File content starts with magic header MEMORA_ENC_v1", raw_data.startswith(b"MEMORA_ENC_v1"))
+        check("Plaintext is NOT present in raw encrypted file", original_text.encode() not in raw_data)
+
+        res_dec = svc.decrypt_file(db, file_path)
+        check("decrypt_file returns status success", res_dec["status"] == "success")
+        check("is_file_encrypted returns False after decryption", not svc.is_file_encrypted(file_path))
+
+        with open(file_path, "r") as f:
+            restored_text = f.read()
+        check("Restored text matches original text exactly", restored_text == original_text)
+
+        sub_file = os.path.join(folder_path, "sub.txt")
+        with open(sub_file, "w") as f:
+            f.write("sub content")
+
+        f_enc = svc.encrypt_folder(db, folder_path)
+        check("encrypt_folder encrypts all files", f_enc["encrypted_count"] == 2)
+        check("All files in folder encrypted", svc.is_file_encrypted(file_path) and svc.is_file_encrypted(sub_file))
+
+        f_dec = svc.decrypt_folder(db, folder_path)
+        check("decrypt_folder decrypts all files", f_dec["decrypted_count"] == 2)
+
+        svc.encrypt_file(db, file_path)
+        with open(file_path, "r+b") as f:
+            f.seek(30)
+            f.write(b"X")
+
+        try:
+            svc.decrypt_file(db, file_path)
+            check("Corrupted file decryption fails", False, "Expected ValueError")
+        except ValueError as e:
+            check("Corrupted file decryption rejected cleanly", "Corrupted encrypted data" in str(e) or "Decryption failed" in str(e))
+
+    db.close()
+
+
+def test_permanent_cascading_deletion_and_safety_checks():
+    print("\n[14] Permanent Cascading Deletion & Path Safety Checks")
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    svc = security_service
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        app_folder = Folder(path=svc.resolve_path(tmp_dir), name="TestApproved")
+        db.add(app_folder)
+        db.commit()
+
+        parent_dir = os.path.join(tmp_dir, "Parent")
+        os.makedirs(parent_dir, exist_ok=True)
+        f1 = os.path.join(parent_dir, "file1.pdf")
+        child_dir = os.path.join(parent_dir, "Child")
+        os.makedirs(child_dir, exist_ok=True)
+        f2 = os.path.join(child_dir, "doc.txt")
+
+        for fp in [f1, f2]:
+            with open(fp, "w") as f:
+                f.write("data")
+
+        info = svc.inspect_delete_path(db, parent_dir)
+        check("Inspect path returns folder info", info["is_folder"])
+        check("Child file count calculated correctly", info["child_file_count"] == 2)
+        check("Child folder count calculated correctly", info["child_folder_count"] == 1)
+        check("Inside approved folder is True", info["is_inside_approved"])
+
+        try:
+            svc.delete_permanently(db, os.path.abspath(os.sep), confirm=True)
+            check("System root deletion blocked", False, "Should have failed")
+        except ValueError as e:
+            check("System root deletion blocked with security policy error", "strictly prohibited" in str(e) or "protected" in str(e))
+
+        res = svc.delete_permanently(db, parent_dir, confirm=True)
+        check("Permanent deletion returned success", res["status"] == "success")
+        check("Parent directory removed from disk", not os.path.exists(parent_dir))
+        check("Child files removed from disk", not os.path.exists(f1) and not os.path.exists(f2))
+
+        db.delete(app_folder)
+        db.commit()
+
+    db.close()
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -537,6 +690,8 @@ def run_all():
     print("=" * 60)
     print("MEMORA AI - MODULE 5 SECURITY TEST SUITE")
     print("=" * 60)
+
+    init_db_schema()
 
     test_pin_hashing()
     test_lockout()
@@ -548,6 +703,9 @@ def run_all():
     test_backup()
     test_api_endpoints()
     test_email_recovery()
+    test_file_and_folder_exclusion()
+    test_local_aes256_gcm_encryption_and_decryption()
+    test_permanent_cascading_deletion_and_safety_checks()
     test_regression()
 
     print("\n" + "=" * 60)

@@ -272,7 +272,7 @@ class SecurityService:
         return result
 
     def get_excluded_paths(self, db: Session) -> Set[str]:
-        """Returns the set of resolved canonical excluded-folder paths."""
+        """Returns the set of resolved canonical excluded-folder and excluded-file paths."""
         from ..models import ExcludedFolder
         rows = db.query(ExcludedFolder).all()
         result = set()
@@ -282,6 +282,406 @@ class SecurityService:
             except Exception:
                 pass
         return result
+
+    # -----------------------------------------------------------------------
+    # Encryption & Key Management (AES-256-GCM)
+    # -----------------------------------------------------------------------
+
+    def _get_master_encryption_key(self) -> bytes:
+        """
+        Returns the 256-bit Master Encryption Key (MEK).
+        Key is stored in a local restricted keyfile in backend/data/memora_sec.key.
+        Key is NEVER stored in database, NEVER hardcoded, NEVER sent over network.
+        """
+        from ..database import DATA_DIR
+        os.makedirs(DATA_DIR, exist_ok=True)
+        key_file = os.path.join(DATA_DIR, "memora_sec.key")
+        if os.path.exists(key_file):
+            with open(key_file, "rb") as f:
+                key = f.read()
+                if len(key) == 32:
+                    return key
+
+        new_key = secrets.token_bytes(32)
+        tmp_path = key_file + ".tmp"
+        with open(tmp_path, "wb") as f:
+            f.write(new_key)
+        os.replace(tmp_path, key_file)
+        return new_key
+
+    def is_file_encrypted(self, file_path: str) -> bool:
+        """Checks if a file starts with the Memora AES-GCM magic header."""
+        try:
+            real_path = self.resolve_path(file_path)
+            if not os.path.isfile(real_path):
+                return False
+            with open(real_path, "rb") as f:
+                header = f.read(13)
+                return header == b"MEMORA_ENC_v1"
+        except Exception:
+            return False
+
+    def encrypt_file(self, db: Session, file_path: str) -> dict:
+        """
+        Encrypts a file locally using AES-256-GCM with atomic replacement.
+        Removes search index records from Memora DB/FAISS so plaintext is not searchable.
+        """
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        real_path = self.resolve_path(file_path)
+        if not os.path.isfile(real_path):
+            raise ValueError(f"File not found: {file_path}")
+
+        if self.is_file_encrypted(real_path):
+            return {"status": "already_encrypted", "path": real_path}
+
+        key = self._get_master_encryption_key()
+        aesgcm = AESGCM(key)
+        nonce = secrets.token_bytes(12)
+
+        with open(real_path, "rb") as f:
+            plaintext = f.read()
+
+        ciphertext = aesgcm.encrypt(nonce, plaintext, None)
+        enc_payload = b"MEMORA_ENC_v1" + nonce + ciphertext
+
+        dir_name = os.path.dirname(real_path)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix=".memora_enc_", suffix=".tmp")
+        try:
+            with open(tmp_fd, "wb") as f:
+                f.write(enc_payload)
+
+            # Verification roundtrip test before replacing original file
+            with open(tmp_path, "rb") as f:
+                test_data = f.read()
+            if not test_data.startswith(b"MEMORA_ENC_v1"):
+                raise ValueError("Encrypted file header verification failed.")
+            test_nonce = test_data[13:25]
+            test_cipher = test_data[25:]
+            test_plain = aesgcm.decrypt(test_nonce, test_cipher, None)
+            if test_plain != plaintext:
+                raise ValueError("Encrypted output roundtrip verification failed.")
+
+            os.replace(tmp_path, real_path)
+        except Exception as e:
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+            self.audit(db, "failed_encryption", "failure", resource=os.path.basename(real_path), error=str(e))
+            raise ValueError(f"Encryption failed for '{os.path.basename(real_path)}': {str(e)}")
+
+        self.remove_index_metadata_for_path(db, real_path)
+        self.audit(db, "file_encrypted", "success", resource=os.path.basename(real_path))
+        return {"status": "success", "path": real_path}
+
+    def encrypt_folder(self, db: Session, folder_path: str) -> dict:
+        """Recursively encrypts all files in a folder structure."""
+        real_path = self.resolve_path(folder_path)
+        if not os.path.isdir(real_path):
+            raise ValueError(f"Directory not found: {folder_path}")
+
+        encrypted_count = 0
+        skipped_count = 0
+        errors = []
+
+        for root, dirs, files in os.walk(real_path):
+            for file in files:
+                full_p = os.path.join(root, file)
+                try:
+                    if self.is_file_encrypted(full_p):
+                        skipped_count += 1
+                    else:
+                        self.encrypt_file(db, full_p)
+                        encrypted_count += 1
+                except Exception as e:
+                    errors.append(f"{file}: {str(e)}")
+
+        if errors:
+            self.audit(db, "failed_encryption", "failure", resource=os.path.basename(real_path),
+                       details={"encrypted_count": encrypted_count, "errors": errors})
+            if encrypted_count == 0:
+                raise ValueError(f"Folder encryption failed: {'; '.join(errors[:3])}")
+        else:
+            self.audit(db, "folder_encrypted", "success", resource=os.path.basename(real_path),
+                       details={"encrypted_files": encrypted_count, "skipped_files": skipped_count})
+
+        return {
+            "status": "success" if not errors else "partial_success",
+            "folder_path": real_path,
+            "encrypted_count": encrypted_count,
+            "skipped_count": skipped_count,
+            "errors": errors
+        }
+
+    def decrypt_file(self, db: Session, file_path: str) -> dict:
+        """Decrypts a file locally after authentication and tag verification."""
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from cryptography.exceptions import InvalidTag
+
+        real_path = self.resolve_path(file_path)
+        if not os.path.isfile(real_path):
+            raise ValueError(f"File not found: {file_path}")
+
+        if not self.is_file_encrypted(real_path):
+            return {"status": "not_encrypted", "path": real_path}
+
+        key = self._get_master_encryption_key()
+        aesgcm = AESGCM(key)
+
+        try:
+            with open(real_path, "rb") as f:
+                enc_data = f.read()
+
+            if not enc_data.startswith(b"MEMORA_ENC_v1"):
+                raise ValueError("Invalid encrypted file header.")
+
+            nonce = enc_data[13:25]
+            ciphertext = enc_data[25:]
+
+            plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+
+            dir_name = os.path.dirname(real_path)
+            tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix=".memora_dec_", suffix=".tmp")
+            with open(tmp_fd, "wb") as f:
+                f.write(plaintext)
+
+            os.replace(tmp_path, real_path)
+            self.audit(db, "file_decrypted", "success", resource=os.path.basename(real_path))
+            return {"status": "success", "path": real_path}
+
+        except InvalidTag:
+            self.audit(db, "failed_decryption", "failure", resource=os.path.basename(real_path),
+                       error="Corrupted data or invalid key authentication tag.")
+            raise ValueError("Decryption failed: Corrupted encrypted data or invalid key authentication tag.")
+        except Exception as e:
+            self.audit(db, "failed_decryption", "failure", resource=os.path.basename(real_path), error=str(e))
+            raise ValueError(f"Decryption failed: {str(e)}")
+
+    def decrypt_folder(self, db: Session, folder_path: str) -> dict:
+        """Recursively decrypts all encrypted files in a folder structure."""
+        real_path = self.resolve_path(folder_path)
+        if not os.path.isdir(real_path):
+            raise ValueError(f"Directory not found: {folder_path}")
+
+        decrypted_count = 0
+        skipped_count = 0
+        errors = []
+
+        for root, dirs, files in os.walk(real_path):
+            for file in files:
+                full_p = os.path.join(root, file)
+                try:
+                    if self.is_file_encrypted(full_p):
+                        self.decrypt_file(db, full_p)
+                        decrypted_count += 1
+                    else:
+                        skipped_count += 1
+                except Exception as e:
+                    errors.append(f"{file}: {str(e)}")
+
+        if errors:
+            self.audit(db, "failed_decryption", "failure", resource=os.path.basename(real_path),
+                       details={"decrypted_count": decrypted_count, "errors": errors})
+            if decrypted_count == 0:
+                raise ValueError(f"Folder decryption failed: {'; '.join(errors[:3])}")
+        else:
+            self.audit(db, "folder_decrypted", "success", resource=os.path.basename(real_path),
+                       details={"decrypted_files": decrypted_count, "skipped_files": skipped_count})
+
+        return {
+            "status": "success" if not errors else "partial_success",
+            "folder_path": real_path,
+            "decrypted_count": decrypted_count,
+            "skipped_count": skipped_count,
+            "errors": errors
+        }
+
+    # -----------------------------------------------------------------------
+    # Delete Path Safety & Permanent Cascading Deletion
+    # -----------------------------------------------------------------------
+
+    def inspect_delete_path(self, db: Session, target_path: str) -> dict:
+        """Inspects target path and returns pre-deletion details and safety check results."""
+        real_path = self.resolve_path(target_path)
+        if not os.path.exists(real_path):
+            raise ValueError(f"Path does not exist on disk: {target_path}")
+
+        is_folder = os.path.isdir(real_path)
+        approved_paths = self.get_approved_paths(db)
+        is_approved = any(self.is_inside(real_path, ap) for ap in approved_paths)
+        is_protected = self._is_system_protected_path(real_path)
+
+        child_file_count = 0
+        child_folder_count = 0
+        total_size_bytes = 0
+
+        if is_folder and is_approved and not is_protected:
+            for root, dirs, files in os.walk(real_path):
+                child_folder_count += len(dirs)
+                for f in files:
+                    child_file_count += 1
+                    try:
+                        total_size_bytes += os.path.getsize(os.path.join(root, f))
+                    except Exception:
+                        pass
+        elif not is_folder:
+            try:
+                total_size_bytes = os.path.getsize(real_path)
+            except Exception:
+                pass
+
+        return {
+            "path": real_path,
+            "name": os.path.basename(real_path),
+            "is_folder": is_folder,
+            "item_type": "folder" if is_folder else "file",
+            "child_file_count": child_file_count,
+            "child_folder_count": child_folder_count,
+            "total_size_bytes": total_size_bytes,
+            "is_inside_approved": is_approved,
+            "is_protected": is_protected,
+            "can_delete": is_approved and not is_protected,
+        }
+
+    def _is_system_protected_path(self, real_path: str) -> bool:
+        """Returns True if real_path is a protected system or application directory."""
+        from ..database import DATA_DIR
+        real_path_lower = real_path.lower().rstrip(os.sep)
+
+        root_paths = [os.path.abspath(os.sep).lower().rstrip(os.sep)]
+        if os.name == "nt":
+            sys_root = os.environ.get("SystemRoot", "C:\\Windows").lower().rstrip(os.sep)
+            prog_files = os.environ.get("ProgramFiles", "C:\\Program Files").lower().rstrip(os.sep)
+            user_profile = os.environ.get("USERPROFILE", "").lower().rstrip(os.sep)
+            root_paths.extend([sys_root, prog_files, user_profile])
+
+        for rp in root_paths:
+            if rp and real_path_lower == rp:
+                return True
+
+        project_root = os.path.realpath(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))).lower().rstrip(os.sep)
+        data_dir_real = os.path.realpath(os.path.abspath(DATA_DIR)).lower().rstrip(os.sep)
+
+        if real_path_lower == project_root or real_path_lower == data_dir_real or self.is_inside(real_path, data_dir_real):
+            return True
+
+        return False
+
+    def delete_permanently(self, db: Session, target_path: str, confirm: bool = True) -> dict:
+        """
+        Permanently deletes a file or folder tree from disk with strict safety validation,
+        DB metadata purging, FAISS resync, and audit logging.
+        """
+        if not confirm:
+            raise ValueError("Permanent deletion requires explicit confirmation.")
+
+        real_path = self.resolve_path(target_path)
+        info = self.inspect_delete_path(db, real_path)
+
+        if not info["is_inside_approved"]:
+            self.audit(db, "failed_deletion", "failure", resource=os.path.basename(real_path),
+                       error="Deletion outside approved folders is strictly prohibited.")
+            raise ValueError(f"Security Policy: Deletion of '{target_path}' outside approved folders is strictly prohibited.")
+
+        if info["is_protected"]:
+            self.audit(db, "failed_deletion", "failure", resource=os.path.basename(real_path),
+                       error="Cannot delete protected system or application paths.")
+            raise ValueError("Security Policy: Cannot delete protected system or application directories.")
+
+        self.remove_index_metadata_for_path(db, real_path)
+
+        is_folder = info["is_folder"]
+        failed_items = []
+
+        if is_folder:
+            try:
+                shutil.rmtree(real_path)
+            except Exception as e:
+                for root, dirs, files in os.walk(real_path, topdown=False):
+                    for f in files:
+                        fp = os.path.join(root, f)
+                        try:
+                            os.remove(fp)
+                        except Exception as fe:
+                            failed_items.append(f"{fp}: {str(fe)}")
+                    for d in dirs:
+                        dp = os.path.join(root, d)
+                        try:
+                            os.rmdir(dp)
+                        except Exception as de:
+                            failed_items.append(f"{dp}: {str(de)}")
+                try:
+                    if os.path.exists(real_path):
+                        os.rmdir(real_path)
+                except Exception as e2:
+                    failed_items.append(f"{real_path}: {str(e2)}")
+        else:
+            try:
+                os.remove(real_path)
+            except Exception as e:
+                failed_items.append(f"{real_path}: {str(e)}")
+
+        if failed_items:
+            self.audit(db, "failed_deletion", "failure", resource=os.path.basename(real_path),
+                       details={"failed_items": failed_items})
+            raise RuntimeError(f"Permanent deletion partially failed: {'; '.join(failed_items[:3])}")
+
+        action_type = "permanent_folder_deletion" if is_folder else "permanent_file_deletion"
+        self.audit(db, action_type, "success", resource=os.path.basename(real_path),
+                   details={
+                       "cascading_deletion": is_folder,
+                       "child_file_count": info["child_file_count"],
+                       "child_folder_count": info["child_folder_count"]
+                   })
+
+        if is_folder:
+            self.audit(db, "recursive_deletion", "success", resource=os.path.basename(real_path))
+
+        return {
+            "status": "success",
+            "path": real_path,
+            "is_folder": is_folder,
+            "info": info
+        }
+
+    def remove_index_metadata_for_path(self, db: Session, target_path: str):
+        """Purges indexed metadata and FAISS mappings for a file or folder path."""
+        from ..models import File, Chunk, VectorMapping, PDFDocument, FileExpiry, OrganizationSuggestion
+        from ..ai.faiss_manager import faiss_manager
+
+        try:
+            real_path = self.resolve_path(target_path)
+            all_files = db.query(File).all()
+            target_file_ids = []
+            for f in all_files:
+                try:
+                    rf = self.resolve_path(f.path)
+                    if rf == real_path or self.is_inside(rf, real_path):
+                        target_file_ids.append(f.id)
+                except Exception:
+                    pass
+
+            if not target_file_ids:
+                return
+
+            chunk_ids = [c.id for c in db.query(Chunk).filter(Chunk.file_id.in_(target_file_ids)).all()]
+            if chunk_ids:
+                faiss_manager.remove_chunks(set(chunk_ids))
+
+            db.query(VectorMapping).filter(VectorMapping.chunk_id.in_(chunk_ids)).delete(synchronize_session=False)
+            db.query(Chunk).filter(Chunk.file_id.in_(target_file_ids)).delete(synchronize_session=False)
+            db.query(PDFDocument).filter(PDFDocument.file_id.in_(target_file_ids)).delete(synchronize_session=False)
+            db.query(FileExpiry).filter(FileExpiry.file_id.in_(target_file_ids)).delete(synchronize_session=False)
+            db.query(OrganizationSuggestion).filter(OrganizationSuggestion.file_id.in_(target_file_ids)).delete(synchronize_session=False)
+            db.query(File).filter(File.id.in_(target_file_ids)).delete(synchronize_session=False)
+
+            db.commit()
+            self._sync_vector_mappings(db)
+        except Exception as e:
+            db.rollback()
+            logger.error("remove_index_metadata_for_path failed: %s", e)
 
     # -----------------------------------------------------------------------
     # Audit log

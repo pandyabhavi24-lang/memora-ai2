@@ -203,7 +203,7 @@ def scan_directory(
                     os.path.join(root, file)
                 )
 
-                if is_temp_or_test_path(full_path):
+                if is_temp_or_test_path(full_path) or _is_excluded(full_path):
                     continue
 
                 try:

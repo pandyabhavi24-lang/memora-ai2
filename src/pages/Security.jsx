@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  ShieldCheck, Lock, Unlock, Eye, EyeOff, FolderLock, FolderPlus,
+  ShieldCheck, Lock, Unlock, Eye, EyeOff, FolderLock, FolderPlus, FilePlus,
   Trash2, RefreshCw, ClipboardList, HardDrive, Download, Upload,
   CheckCircle2, AlertTriangle, XCircle, Info, Filter, ChevronDown,
-  Database, Cpu, Globe
+  Database, Cpu, Globe, Key, FileText, Folder, AlertCircle
 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/common/Button';
@@ -38,7 +38,7 @@ const StatusBadge = ({ ok, label }) => (
 // ---------------------------------------------------------------------------
 // Tab: Overview
 // ---------------------------------------------------------------------------
-const OverviewTab = ({ settings, onRefresh }) => (
+const OverviewTab = ({ settings }) => (
   <div className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 space-y-2">
@@ -63,24 +63,32 @@ const OverviewTab = ({ settings, onRefresh }) => (
 
     <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20 space-y-2">
       <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
-        <Cpu className="w-3.5 h-3.5" /> Local Processing Guarantee
+        <Cpu className="w-3.5 h-3.5" /> Local Processing & AES-256-GCM Encryption Guarantee
       </div>
       <p className="text-[11px] text-emerald-300/80 leading-relaxed">
-        All document indexing, OCR, semantic embeddings (all-MiniLM-L6-v2), FAISS vector search, and
-        AI classification run exclusively on your local hardware. No file contents, OCR text, embeddings,
-        metadata, or audit logs are ever transmitted to any external service.
+        All document indexing, OCR, vector embeddings, local file/folder encryption (AES-256-GCM), and audit logs execute exclusively on your computer.
+        No file contents, encryption keys, OCR text, or search queries leave your local machine.
       </p>
     </div>
 
     <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/20 space-y-1">
       <div className="flex items-center gap-2 text-xs font-semibold text-blue-400">
-        <Info className="w-3.5 h-3.5" /> Backup Encryption Note
+        <Info className="w-3.5 h-3.5" /> Core Security Action Distinctions
       </div>
-      <p className="text-[11px] text-blue-300/70 leading-relaxed">
-        Backup ZIP files are <strong>not encrypted</strong>. Store backups in a secure location you control.
-        The backup contains hashed PIN data and indexed metadata — but never original user files.
-        Encryption support can be added in a future update when a secure key-storage mechanism is available.
-      </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 text-[11px]">
+        <div className="p-2.5 rounded-lg bg-gray-900/50 border border-gray-800">
+          <strong className="text-yellow-400 block mb-1">1. Exclude</strong>
+          Stops scanning and indexing. Does NOT delete or encrypt the file on disk.
+        </div>
+        <div className="p-2.5 rounded-lg bg-gray-900/50 border border-gray-800">
+          <strong className="text-purple-400 block mb-1">2. Encrypt</strong>
+          Protects actual file contents locally with AES-256-GCM. Unreadable without decryption.
+        </div>
+        <div className="p-2.5 rounded-lg bg-gray-900/50 border border-gray-800">
+          <strong className="text-red-400 block mb-1">3. Delete Permanently</strong>
+          Permanently removes original file/folder from computer disk with confirmation modal.
+        </div>
+      </div>
     </div>
   </div>
 );
@@ -96,7 +104,6 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
   const [loading, setLoading] = useState(false);
   const [lockLoading, setLockLoading] = useState(false);
 
-  // Recovery email change modal
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailCurrentPin, setEmailCurrentPin] = useState('');
   const [newRecoveryEmail, setNewRecoveryEmail] = useState('');
@@ -162,7 +169,6 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
 
   return (
     <div className="space-y-5">
-      {/* Lock toggle */}
       <SettingRow
         label="Application Lock"
         description={
@@ -185,7 +191,6 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
         </button>
       </SettingRow>
 
-      {/* PIN Row */}
       <SettingRow
         label="PIN"
         description="Stored as a secure PBKDF2-HMAC-SHA256 hash. Never stored as plaintext."
@@ -193,7 +198,6 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
         <span className="font-mono text-gray-400 text-xs tracking-widest mr-3">••••••••</span>
       </SettingRow>
 
-      {/* Recovery Email Row */}
       <SettingRow
         label="Recovery Email"
         description="Used to send a 10-minute reset code if you forget your PIN."
@@ -202,17 +206,12 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
           <span className="font-mono text-blue-300 text-xs">
             {settings?.masked_recovery_email || 'Not configured'}
           </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowEmailModal(true)}
-          >
+          <Button variant="secondary" size="sm" onClick={() => setShowEmailModal(true)}>
             Change Recovery Email
           </Button>
         </div>
       </SettingRow>
 
-      {/* Lock Now */}
       {settings?.lock_enabled && isAuthenticated && (
         <div className="flex items-center justify-between p-4 rounded-xl bg-yellow-950/20 border border-yellow-500/20">
           <div>
@@ -223,7 +222,6 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
         </div>
       )}
 
-      {/* Change PIN form */}
       <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-4">
         <h3 className="text-xs font-bold text-white">{settings?.has_pin ? 'Change PIN' : 'Set PIN'}</h3>
         <p className="text-[11px] text-gray-400 leading-relaxed">
@@ -280,7 +278,6 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
         </form>
       </div>
 
-      {/* Change Recovery Email Modal */}
       <Modal
         isOpen={showEmailModal}
         onClose={() => setShowEmailModal(false)}
@@ -330,10 +327,10 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
 };
 
 // ---------------------------------------------------------------------------
-// Tab: Excluded Folders
+// Tab: Excluded Folders & Files
 // ---------------------------------------------------------------------------
-const ExcludedFoldersTab = ({ sessionToken, addToast }) => {
-  const [folders, setFolders] = useState([]);
+const ExcludedTab = ({ sessionToken, addToast }) => {
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [customPath, setCustomPath] = useState('');
@@ -342,9 +339,9 @@ const ExcludedFoldersTab = ({ sessionToken, addToast }) => {
     setLoading(true);
     try {
       const data = await securityService.getExcludedFolders(sessionToken);
-      setFolders(data);
+      setItems(data);
     } catch (err) {
-      addToast('Could not load excluded folders.', 'error');
+      addToast('Could not load excluded items.', 'error');
     } finally {
       setLoading(false);
     }
@@ -359,16 +356,16 @@ const ExcludedFoldersTab = ({ sessionToken, addToast }) => {
     try {
       await securityService.addExcludedFolder(path, sessionToken);
       setCustomPath('');
-      addToast('Folder added to exclusion list.', 'success');
+      addToast('Item added to exclusion list.', 'success');
       load();
     } catch (err) {
-      addToast(err.message || 'Failed to add excluded folder.', 'error');
+      addToast(err.message || 'Failed to add excluded item.', 'error');
     } finally {
       setAdding(false);
     }
   };
 
-  const handleAddNative = async () => {
+  const handleAddNativeDir = async () => {
     if (window.electronAPI?.openDirectory) {
       const result = await window.electronAPI.openDirectory();
       if (!result.canceled && result.filePaths?.[0]) {
@@ -380,7 +377,7 @@ const ExcludedFoldersTab = ({ sessionToken, addToast }) => {
   const handleRemove = async (id, path) => {
     try {
       await securityService.removeExcludedFolder(id, sessionToken);
-      addToast('Folder removed from exclusion list.', 'info');
+      addToast('Item removed from exclusion list.', 'info');
       load();
     } catch (err) {
       addToast(err.message || 'Failed to remove exclusion.', 'error');
@@ -389,57 +386,453 @@ const ExcludedFoldersTab = ({ sessionToken, addToast }) => {
 
   return (
     <div className="space-y-5">
-      <div className="p-4 rounded-xl bg-gray-900/40 border border-gray-800 text-xs text-gray-400 leading-relaxed">
-        <strong className="text-gray-300">Private / Excluded Folders</strong><br />
-        Files inside excluded folders are skipped during scanning and indexing.
-        Existing indexed data from a folder you exclude is <em>not automatically removed</em> —
-        use Data Management to remove it explicitly. Original user files are never deleted.
+      <div className="p-4 rounded-xl bg-yellow-950/20 border border-yellow-500/20 text-xs text-yellow-300 leading-relaxed space-y-1">
+        <div className="font-bold flex items-center gap-2 text-yellow-400">
+          <Info className="w-4 h-4" /> Understanding Excluded Items
+        </div>
+        <p className="text-gray-300 text-[11px]">
+          • <strong>Exclusion means:</strong> Memora will NOT scan, index, or show this file/folder in search or indexed results.<br />
+          • <strong>Original file safety:</strong> The original file/folder remains intact on your computer.<br />
+          • <strong>Exclusion is NOT Encryption:</strong> Excluding an item stops indexing; it does not encrypt file contents on disk.
+        </p>
       </div>
 
-      {/* Add new exclusion */}
       <div className="flex gap-2">
         <input
           value={customPath}
           onChange={e => setCustomPath(e.target.value)}
-          placeholder="Absolute folder path to exclude…"
+          placeholder="Enter absolute file or folder path to exclude…"
           className="flex-1 px-3 py-2 rounded-xl bg-gray-900/80 border border-gray-700/80 text-xs text-white placeholder-gray-500 outline-none focus:border-blue-500/60"
         />
         {window.electronAPI?.openDirectory && (
-          <Button variant="secondary" size="sm" icon={FolderPlus} onClick={handleAddNative}>Browse</Button>
+          <Button variant="secondary" size="sm" icon={FolderPlus} onClick={handleAddNativeDir}>Browse Directory</Button>
         )}
         <Button variant="primary" size="sm" onClick={handleAdd} disabled={adding || !customPath.trim()}>
-          {adding ? 'Adding…' : 'Exclude'}
+          {adding ? 'Adding…' : 'Exclude Item'}
         </Button>
       </div>
 
-      {/* Folder list */}
       {loading ? (
-        <div className="text-xs text-gray-500 animate-pulse">Loading…</div>
-      ) : folders.length === 0 ? (
-        <div className="text-xs text-gray-500 text-center py-8">No folders excluded. All approved folders are scanned.</div>
+        <div className="text-xs text-gray-500 animate-pulse">Loading excluded items…</div>
+      ) : items.length === 0 ? (
+        <div className="text-xs text-gray-500 text-center py-8">No files or folders excluded. All approved items are scanned.</div>
       ) : (
         <div className="space-y-2">
-          {folders.map(f => (
-            <div key={f.id} className="flex items-center justify-between p-3.5 rounded-xl bg-gray-900/60 border border-gray-800">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <FolderLock className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
-                  <p className="text-xs font-mono text-gray-200 truncate">{f.path}</p>
+          {items.map(item => {
+            const isFolder = (item.item_type || 'folder') === 'folder';
+            return (
+              <div key={item.id} className="flex items-center justify-between p-3.5 rounded-xl bg-gray-900/60 border border-gray-800">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    {isFolder ? (
+                      <FolderLock className="w-4 h-4 text-yellow-400 shrink-0" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-yellow-400 shrink-0" />
+                    )}
+                    <span className="text-xs font-mono text-gray-200 truncate">{item.path}</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                      Excluded from Memora indexing
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 ml-6 mt-0.5">
+                    {isFolder ? 'Folder' : 'Individual File'} • Added {new Date(item.created_at).toLocaleDateString()}
+                  </p>
                 </div>
-                <p className="text-[11px] text-gray-500 ml-6 mt-0.5">
-                  Excluded since {new Date(f.created_at).toLocaleDateString()}
-                </p>
+                <button
+                  onClick={() => handleRemove(item.id, item.path)}
+                  title="Remove from exclusion list"
+                  className="ml-3 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => handleRemove(f.id, f.path)}
-                className="ml-3 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Tab: File & Folder Encryption (AES-256-GCM)
+// ---------------------------------------------------------------------------
+const EncryptionTab = ({ sessionToken, addToast }) => {
+  const [targetPath, setTargetPath] = useState('');
+  const [statusInfo, setStatusInfo] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const handleCheckStatus = async () => {
+    const p = targetPath.trim();
+    if (!p) return;
+    setLoading(true);
+    try {
+      const res = await securityService.getEncryptionStatus(p, sessionToken);
+      setStatusInfo(res);
+    } catch (err) {
+      setStatusInfo(null);
+      addToast(err.message || 'Failed to inspect encryption status.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEncrypt = async () => {
+    const p = targetPath.trim();
+    if (!p) return;
+    setActionLoading(true);
+    try {
+      const res = await securityService.encryptItem(p, sessionToken);
+      addToast(
+        res.is_folder
+          ? `Folder encrypted: ${res.encrypted_count} files encrypted.`
+          : 'File encrypted successfully with AES-256-GCM.',
+        'success'
+      );
+      handleCheckStatus();
+    } catch (err) {
+      addToast(err.message || 'Encryption failed.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDecrypt = async () => {
+    const p = targetPath.trim();
+    if (!p) return;
+    setActionLoading(true);
+    try {
+      const res = await securityService.decryptItem(p, sessionToken);
+      addToast(
+        res.is_folder
+          ? `Folder decrypted: ${res.decrypted_count} files decrypted.`
+          : 'File decrypted successfully.',
+        'success'
+      );
+      handleCheckStatus();
+    } catch (err) {
+      addToast(err.message || 'Decryption failed.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/20 text-xs text-purple-300 leading-relaxed">
+        <strong className="text-purple-400 font-semibold block mb-1">Local Authenticated AES-256-GCM Encryption</strong>
+        Encrypting a file or folder protects its actual disk contents with a 256-bit key.
+        Search index records are atomically purged so plaintext content cannot be queried while encrypted.
+        Decryption requires a valid application session. Encryption keys never leave your machine.
+      </div>
+
+      <div className="space-y-3 glass-panel p-5 rounded-2xl border-gray-800/80">
+        <h3 className="text-xs font-bold text-white">Select Target File or Folder</h3>
+        <div className="flex gap-2">
+          <input
+            value={targetPath}
+            onChange={e => { setTargetPath(e.target.value); setStatusInfo(null); }}
+            placeholder="Absolute file or folder path to encrypt/decrypt…"
+            className="flex-1 px-3 py-2 rounded-xl bg-gray-900/80 border border-gray-700/80 text-xs text-white placeholder-gray-500 outline-none focus:border-blue-500/60"
+          />
+          <Button variant="secondary" size="sm" onClick={handleCheckStatus} disabled={loading || !targetPath.trim()}>
+            {loading ? 'Inspecting…' : 'Inspect Status'}
+          </Button>
+        </div>
+
+        {statusInfo && (
+          <div className="p-3.5 rounded-xl bg-gray-900/80 border border-gray-700/80 space-y-1 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-gray-300">Path:</span>
+              <span className="font-mono text-gray-400 truncate">{statusInfo.path}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-gray-300">Status:</span>
+              {statusInfo.is_encrypted ? (
+                <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5" /> Encrypted (AES-256-GCM)
+                </span>
+              ) : statusInfo.partially_encrypted ? (
+                <span className="text-yellow-400 font-semibold flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" /> Partially Encrypted ({statusInfo.encrypted_files}/{statusInfo.total_files} files)
+                </span>
+              ) : (
+                <span className="text-gray-400 font-semibold flex items-center gap-1">
+                  <Unlock className="w-3.5 h-3.5" /> Plaintext (Unencrypted)
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <Button
+            variant="primary"
+            size="sm"
+            icon={Lock}
+            onClick={handleEncrypt}
+            disabled={actionLoading || !targetPath.trim()}
+          >
+            {actionLoading ? 'Encrypting…' : '🔒 Encrypt File / Folder'}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Unlock}
+            onClick={handleDecrypt}
+            disabled={actionLoading || !targetPath.trim()}
+          >
+            {actionLoading ? 'Decrypting…' : '🔓 Decrypt File / Folder'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Tab: Data Management
+// ---------------------------------------------------------------------------
+const DataManagementTab = ({ sessionToken, folders, addToast }) => {
+  const [confirmRemoveIndex, setConfirmRemoveIndex] = useState(null); // { scope, folderId, label }
+  const [indexLoading, setIndexLoading] = useState(false);
+
+  // Permanent Delete state
+  const [deletePath, setDeletePath] = useState('');
+  const [inspectInfo, setInspectInfo] = useState(null);
+  const [inspectLoading, setInspectLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleRemoveIndex = async () => {
+    if (!confirmRemoveIndex) return;
+    setIndexLoading(true);
+    try {
+      const result = await securityService.removeIndexData(
+        { scope: confirmRemoveIndex.scope, folderId: confirmRemoveIndex.folderId },
+        sessionToken
+      );
+      addToast(`Removed: ${result.files_removed ?? 0} files, ${result.chunks_removed ?? 0} chunks, ${result.vector_mappings_removed ?? 0} vectors.`, 'success');
+      setConfirmRemoveIndex(null);
+    } catch (err) {
+      addToast(err.message || 'Data removal failed.', 'error');
+    } finally {
+      setIndexLoading(false);
+    }
+  };
+
+  const handleInspectDelete = async () => {
+    const p = deletePath.trim();
+    if (!p) return;
+    setInspectLoading(true);
+    try {
+      const info = await securityService.inspectDelete(p, sessionToken);
+      setInspectInfo(info);
+      setShowDeleteModal(true);
+    } catch (err) {
+      addToast(err.message || 'Path inspection failed.', 'error');
+    } finally {
+      setInspectLoading(false);
+    }
+  };
+
+  const handleConfirmDeletePermanently = async () => {
+    if (!inspectInfo) return;
+    setDeleteLoading(true);
+    try {
+      await securityService.deletePermanently(inspectInfo.path, true, sessionToken);
+      addToast(`Permanently deleted: ${inspectInfo.name}`, 'success');
+      setShowDeleteModal(false);
+      setInspectInfo(null);
+      setDeletePath('');
+    } catch (err) {
+      addToast(err.message || 'Permanent deletion failed.', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* SECTION A: REMOVE FROM MEMORA */}
+      <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-4">
+        <div className="flex items-center gap-2">
+          <Database className="w-4 h-4 text-blue-400" />
+          <h3 className="text-xs font-bold text-white uppercase tracking-wider">A) Remove from Memora</h3>
+        </div>
+        <p className="text-[11px] text-gray-400 leading-relaxed">
+          Removes Memora's indexed metadata, search records, and vector embeddings.
+          <strong className="text-emerald-400"> Your original files remain untouched on your computer.</strong>
+        </p>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800">
+            <div>
+              <h4 className="text-xs font-semibold text-gray-200">Remove All Indexed Metadata</h4>
+              <p className="text-[11px] text-gray-400">Removes all File, Chunk, and Vector records from Memora's database and FAISS index. Original files untouched.</p>
+            </div>
+            <Button variant="danger" size="sm" icon={Database}
+              onClick={() => setConfirmRemoveIndex({ scope: 'metadata', folderId: null, label: 'all indexed metadata' })}>
+              Remove
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800">
+            <div>
+              <h4 className="text-xs font-semibold text-gray-200">Reset Vector Index Only</h4>
+              <p className="text-[11px] text-gray-400">Clears the FAISS vector index and VectorMapping table. Chunk text and file records are preserved. Re-index to restore search.</p>
+            </div>
+            <Button variant="secondary" size="sm" icon={Cpu}
+              onClick={() => setConfirmRemoveIndex({ scope: 'vectors', folderId: null, label: 'vector index (FAISS + mappings)' })}>
+              Reset Vectors
+            </Button>
+          </div>
+
+          {folders.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <p className="text-xs text-gray-400 font-semibold">Remove indexed metadata for a specific folder:</p>
+              {folders.map(f => (
+                <div key={f.id} className="flex items-center justify-between p-3.5 rounded-xl bg-gray-900/60 border border-gray-800">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-200 truncate">{f.name}</p>
+                    <p className="text-[11px] text-gray-500 font-mono truncate">{f.path}</p>
+                  </div>
+                  <Button variant="danger" size="sm" icon={Trash2}
+                    onClick={() => setConfirmRemoveIndex({ scope: 'metadata', folderId: f.id, label: `indexed data for "${f.name}"` })}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SECTION B: DELETE PERMANENTLY */}
+      <div className="glass-panel p-5 rounded-2xl border-red-500/30 bg-red-950/10 space-y-4">
+        <div className="flex items-center gap-2">
+          <Trash2 className="w-4 h-4 text-red-400" />
+          <h3 className="text-xs font-bold text-red-300 uppercase tracking-wider">B) Delete Permanently from Computer</h3>
+        </div>
+        <div className="p-3.5 rounded-xl bg-red-950/30 border border-red-500/30 text-xs text-red-300 leading-relaxed font-semibold">
+          WARNING: This permanently deletes the selected file or folder tree from your computer disk. This action cannot be undone.
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <input
+              value={deletePath}
+              onChange={e => setDeletePath(e.target.value)}
+              placeholder="Absolute path of file or folder to permanently delete…"
+              className="flex-1 px-3 py-2 rounded-xl bg-gray-900/80 border border-red-900/60 text-xs text-white placeholder-gray-500 outline-none focus:border-red-500/80"
+            />
+            <Button
+              variant="danger"
+              size="sm"
+              icon={Trash2}
+              onClick={handleInspectDelete}
+              disabled={inspectLoading || !deletePath.trim()}
+            >
+              {inspectLoading ? 'Inspecting…' : 'Inspect & Delete'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal A: Confirm Remove Index */}
+      <Modal
+        isOpen={!!confirmRemoveIndex}
+        onClose={() => setConfirmRemoveIndex(null)}
+        title="Confirm Index Data Removal"
+        subtitle="This removes Memora's indexed search records only — original files are safe."
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmRemoveIndex(null)}>Cancel</Button>
+            <Button variant="danger" size="sm" icon={Trash2} onClick={handleRemoveIndex} disabled={indexLoading}>
+              {indexLoading ? 'Removing…' : 'Yes, Remove Index Data'}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-300">
+          You are about to remove <strong className="text-white">{confirmRemoveIndex?.label}</strong> from Memora's database.
+        </p>
+        <p className="text-xs text-yellow-400 mt-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+          Original user files on disk will NOT be deleted. Only Memora's indexed metadata will be removed.
+        </p>
+      </Modal>
+
+      {/* Modal B: Confirm Permanent Disk Deletion */}
+      <Modal
+        isOpen={showDeleteModal && !!inspectInfo}
+        onClose={() => setShowDeleteModal(false)}
+        title="⚠️ Confirm Permanent File/Folder Deletion"
+        subtitle="This action CANNOT be undone."
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
+            <Button
+              variant="danger"
+              size="sm"
+              icon={Trash2}
+              onClick={handleConfirmDeletePermanently}
+              disabled={deleteLoading || !inspectInfo?.can_delete}
+            >
+              {deleteLoading ? 'Deleting…' : 'Delete Permanently'}
+            </Button>
+          </>
+        }
+      >
+        {inspectInfo && (
+          <div className="space-y-4 pt-1">
+            <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs leading-relaxed font-semibold">
+              WARNING: You are about to PERMANENTLY DELETE this {inspectInfo.is_folder ? 'folder tree' : 'file'} from your computer disk!
+            </div>
+
+            <div className="space-y-2 text-xs bg-gray-900/80 p-4 rounded-xl border border-gray-800">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Target Name:</span>
+                <span className="font-semibold text-white">{inspectInfo.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Full Path:</span>
+                <span className="font-mono text-gray-300 text-[11px] truncate max-w-xs">{inspectInfo.path}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Item Type:</span>
+                <span className="font-semibold text-blue-400 capitalize">{inspectInfo.item_type}</span>
+              </div>
+              {inspectInfo.is_folder && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Child Files:</span>
+                    <span className="font-semibold text-yellow-300">{inspectInfo.child_file_count}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Child Subfolders:</span>
+                    <span className="font-semibold text-yellow-300">{inspectInfo.child_folder_count}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between">
+                <span className="text-gray-400">Total Size:</span>
+                <span className="font-mono text-gray-300">{(inspectInfo.total_size_bytes / 1024).toFixed(1)} KB</span>
+              </div>
+            </div>
+
+            {!inspectInfo.is_inside_approved ? (
+              <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/40 text-red-400 text-xs font-semibold">
+                🚫 Deletion Blocked: Target path is outside approved/user-selected folders. Deletion outside approved folders is strictly prohibited.
+              </div>
+            ) : inspectInfo.is_protected ? (
+              <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/40 text-red-400 text-xs font-semibold">
+                🚫 Deletion Blocked: Target path is a protected system or application directory.
+              </div>
+            ) : null}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
@@ -488,7 +881,6 @@ const AuditLogTab = ({ sessionToken, addToast }) => {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <input
           value={actionFilter}
@@ -512,7 +904,6 @@ const AuditLogTab = ({ sessionToken, addToast }) => {
         </Button>
       </div>
 
-      {/* Log table */}
       {loading ? (
         <div className="text-xs text-gray-500 animate-pulse py-4">Loading audit logs…</div>
       ) : logs.length === 0 ? (
@@ -539,7 +930,6 @@ const AuditLogTab = ({ sessionToken, addToast }) => {
         </div>
       )}
 
-      {/* Clear confirmation modal */}
       <Modal
         isOpen={showClearModal}
         onClose={() => setShowClearModal(false)}
@@ -556,110 +946,6 @@ const AuditLogTab = ({ sessionToken, addToast }) => {
           All audit log entries will be deleted. A single record of this clearing event will be retained.
         </p>
         <p className="text-xs text-gray-500 mt-2">Original user files are not affected.</p>
-      </Modal>
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// Tab: Data Management
-// ---------------------------------------------------------------------------
-const DataManagementTab = ({ sessionToken, folders, addToast }) => {
-  const [confirm, setConfirm] = useState(null); // { scope, folderId, label }
-  const [loading, setLoading] = useState(false);
-
-  const handleRemove = async () => {
-    if (!confirm) return;
-    setLoading(true);
-    try {
-      const result = await securityService.removeIndexData(
-        { scope: confirm.scope, folderId: confirm.folderId },
-        sessionToken
-      );
-      addToast(`Removed: ${result.files_removed ?? 0} files, ${result.chunks_removed ?? 0} chunks, ${result.vector_mappings_removed ?? 0} vectors.`, 'success');
-      setConfirm(null);
-    } catch (err) {
-      addToast(err.message || 'Data removal failed.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="p-4 rounded-xl bg-yellow-950/20 border border-yellow-500/20 text-xs text-yellow-300 leading-relaxed">
-        <strong>Important distinctions:</strong><br />
-        • <em>Remove indexed metadata</em> — deletes Memora's File/Chunk/Vector records from SQLite and FAISS. Original user files on disk are <strong>NOT deleted</strong>.<br />
-        • <em>Remove vector data only</em> — resets the FAISS vector index and VectorMapping table. Chunk text and file records are kept; you can re-index later.<br />
-        • <em>Delete original files</em> — Memora does NOT have this feature; never deletes user files automatically.
-      </div>
-
-      <div className="space-y-3">
-        {/* Remove all indexed metadata */}
-        <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800">
-          <div>
-            <h4 className="text-xs font-semibold text-gray-200">Remove All Indexed Metadata</h4>
-            <p className="text-[11px] text-gray-400">Removes all File, Chunk, and Vector records from Memora's database and FAISS index. Original files untouched.</p>
-          </div>
-          <Button variant="danger" size="sm" icon={Database}
-            onClick={() => setConfirm({ scope: 'metadata', folderId: null, label: 'all indexed metadata' })}>
-            Remove
-          </Button>
-        </div>
-
-        {/* Remove vectors only */}
-        <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800">
-          <div>
-            <h4 className="text-xs font-semibold text-gray-200">Reset Vector Index Only</h4>
-            <p className="text-[11px] text-gray-400">Clears the FAISS vector index and VectorMapping table. Chunk text and file records are preserved. Re-index to restore search.</p>
-          </div>
-          <Button variant="secondary" size="sm" icon={Cpu}
-            onClick={() => setConfirm({ scope: 'vectors', folderId: null, label: 'vector index (FAISS + mappings)' })}>
-            Reset Vectors
-          </Button>
-        </div>
-
-        {/* Per-folder removal */}
-        {folders.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-gray-400 font-semibold">Remove indexed data for a specific folder:</p>
-            {folders.map(f => (
-              <div key={f.id} className="flex items-center justify-between p-3.5 rounded-xl bg-gray-900/60 border border-gray-800">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-gray-200 truncate">{f.name}</p>
-                  <p className="text-[11px] text-gray-500 font-mono truncate">{f.path}</p>
-                </div>
-                <Button variant="danger" size="sm" icon={Trash2}
-                  onClick={() => setConfirm({ scope: 'metadata', folderId: f.id, label: `indexed data for "${f.name}"` })}>
-                  Remove
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Confirmation modal */}
-      <Modal
-        isOpen={!!confirm}
-        onClose={() => setConfirm(null)}
-        title="Confirm Data Removal"
-        subtitle="This removes Memora's indexed data only — original files are safe."
-        actions={
-          <>
-            <Button variant="secondary" size="sm" onClick={() => setConfirm(null)}>Cancel</Button>
-            <Button variant="danger" size="sm" icon={Trash2} onClick={handleRemove} disabled={loading}>
-              {loading ? 'Removing…' : 'Yes, Remove'}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-gray-300">
-          You are about to remove <strong className="text-white">{confirm?.label}</strong> from Memora's database.
-        </p>
-        <p className="text-xs text-yellow-400 mt-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
-          Original user files on disk will NOT be deleted. Only Memora's indexed metadata will be removed.
-        </p>
       </Modal>
     </div>
   );
@@ -729,7 +1015,6 @@ const BackupRestoreTab = ({ sessionToken, addToast }) => {
         Backups are <strong className="text-yellow-300">not encrypted</strong> — store in a secure location you control.
       </div>
 
-      {/* Create backup */}
       <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-3">
         <h3 className="text-xs font-bold text-white">Create Backup</h3>
         <div className="flex gap-2">
@@ -749,7 +1034,6 @@ const BackupRestoreTab = ({ sessionToken, addToast }) => {
         </Button>
       </div>
 
-      {/* Restore */}
       <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-3">
         <h3 className="text-xs font-bold text-white">Restore from Backup</h3>
         <div className="flex gap-2">
@@ -786,7 +1070,6 @@ const BackupRestoreTab = ({ sessionToken, addToast }) => {
         </Button>
       </div>
 
-      {/* Restore confirmation modal */}
       <Modal
         isOpen={showRestoreModal}
         onClose={() => setShowRestoreModal(false)}
@@ -817,12 +1100,13 @@ const BackupRestoreTab = ({ sessionToken, addToast }) => {
 // Main Security page
 // ---------------------------------------------------------------------------
 const TABS = [
-  { id: 'overview',   label: 'Overview',          icon: ShieldCheck  },
-  { id: 'lock',       label: 'Application Lock',  icon: Lock         },
-  { id: 'excluded',   label: 'Excluded Folders',  icon: FolderLock   },
-  { id: 'audit',      label: 'Audit Log',         icon: ClipboardList },
-  { id: 'data',       label: 'Data Management',   icon: Database     },
-  { id: 'backup',     label: 'Backup & Restore',  icon: HardDrive    },
+  { id: 'overview',   label: 'Overview',                icon: ShieldCheck  },
+  { id: 'lock',       label: 'Application Lock',        icon: Lock         },
+  { id: 'excluded',   label: 'Excluded Folders & Files',icon: FolderLock   },
+  { id: 'encryption', label: 'File & Folder Encryption',icon: Key          },
+  { id: 'data',       label: 'Data Management',         icon: Database     },
+  { id: 'audit',      label: 'Audit Log',               icon: ClipboardList },
+  { id: 'backup',     label: 'Backup & Restore',        icon: HardDrive    },
 ];
 
 export const Security = () => {
@@ -849,12 +1133,11 @@ export const Security = () => {
   return (
     <div className="space-y-6 select-none">
       <PageHeader
-        title="Security & Privacy"
-        subtitle="Application lock, access control, audit log, data management, and backup."
+        title="Security, Privacy & Data Management"
+        subtitle="Application lock, excluded items, AES-256-GCM local encryption, permanent deletion, audit trail, and backups."
         badge={<Badge variant="blue">Module 5</Badge>}
       />
 
-      {/* Tab navigation */}
       <div className="flex items-center gap-2 border-b border-gray-800 pb-3 overflow-x-auto custom-scrollbar flex-nowrap">
         {TABS.map(tab => {
           const Icon = tab.icon;
@@ -877,14 +1160,14 @@ export const Security = () => {
         })}
       </div>
 
-      {/* Tab content */}
       <div className="glass-panel p-6 rounded-2xl border-gray-800/80">
-        {activeTab === 'overview'  && <OverviewTab settings={settings} onRefresh={handleRefresh} />}
-        {activeTab === 'lock'      && <LockTab settings={settings} sessionToken={sessionToken} onRefresh={handleRefresh} addToast={addToast} />}
-        {activeTab === 'excluded'  && <ExcludedFoldersTab sessionToken={sessionToken} addToast={addToast} />}
-        {activeTab === 'audit'     && <AuditLogTab sessionToken={sessionToken} addToast={addToast} />}
-        {activeTab === 'data'      && <DataManagementTab sessionToken={sessionToken} folders={folders} addToast={addToast} />}
-        {activeTab === 'backup'    && <BackupRestoreTab sessionToken={sessionToken} addToast={addToast} />}
+        {activeTab === 'overview'   && <OverviewTab settings={settings} />}
+        {activeTab === 'lock'       && <LockTab settings={settings} sessionToken={sessionToken} onRefresh={handleRefresh} addToast={addToast} />}
+        {activeTab === 'excluded'   && <ExcludedTab sessionToken={sessionToken} addToast={addToast} />}
+        {activeTab === 'encryption' && <EncryptionTab sessionToken={sessionToken} addToast={addToast} />}
+        {activeTab === 'data'       && <DataManagementTab sessionToken={sessionToken} folders={folders} addToast={addToast} />}
+        {activeTab === 'audit'      && <AuditLogTab sessionToken={sessionToken} addToast={addToast} />}
+        {activeTab === 'backup'     && <BackupRestoreTab sessionToken={sessionToken} addToast={addToast} />}
       </div>
     </div>
   );

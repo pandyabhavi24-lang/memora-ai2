@@ -126,3 +126,4 @@ backend/data/media_cache/
 # Generated/test PDF files
 test_text.pdf
 text.pdf
+backend/data/memora_sec.key

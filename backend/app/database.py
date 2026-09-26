@@ -98,6 +98,13 @@ def init_db_schema():
                 cursor.execute("ALTER TABLE security_settings ADD COLUMN reset_code_used_at TIMESTAMP;")
             conn.commit()
 
+        # --- excluded_folders table ---
+        cursor.execute("PRAGMA table_info(excluded_folders);")
+        excl_cols = [row[1] for row in cursor.fetchall()]
+        if excl_cols and "item_type" not in excl_cols:
+            cursor.execute("ALTER TABLE excluded_folders ADD COLUMN item_type TEXT DEFAULT 'folder';")
+            conn.commit()
+
         # Ensure the singleton settings row exists
         cursor.execute("SELECT COUNT(*) FROM security_settings WHERE id = 1;")
         if cursor.fetchone()[0] == 0:

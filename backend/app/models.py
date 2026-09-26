@@ -670,6 +670,7 @@ class ExcludedFolder(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     path = Column(String, unique=True, nullable=False, index=True)  # resolved/canonical path
+    item_type = Column(String, default="folder", nullable=False)  # "folder" or "file"
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

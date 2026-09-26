@@ -152,13 +152,48 @@ class SecurityService {
   }
 
   // --------------------------------------------------------------------------
-  // Data management
+  // Data management, Encryption & Permanent Deletion
   // --------------------------------------------------------------------------
 
   async removeIndexData({ scope = 'metadata', folderId = null } = {}, sessionToken = null) {
     return this._fetch('/api/security/data/remove-index', {
       method: 'POST',
       body: JSON.stringify({ scope, folder_id: folderId }),
+    }, sessionToken);
+  }
+
+  async inspectDelete(path, sessionToken = null) {
+    return this._fetch('/api/security/data/inspect-delete', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }, sessionToken);
+  }
+
+  async deletePermanently(path, confirm = true, sessionToken = null) {
+    return this._fetch('/api/security/data/delete-permanently', {
+      method: 'POST',
+      body: JSON.stringify({ path, confirm }),
+    }, sessionToken);
+  }
+
+  async encryptItem(path, sessionToken = null) {
+    return this._fetch('/api/security/encrypt', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }, sessionToken);
+  }
+
+  async decryptItem(path, sessionToken = null) {
+    return this._fetch('/api/security/decrypt', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }, sessionToken);
+  }
+
+  async getEncryptionStatus(path, sessionToken = null) {
+    return this._fetch('/api/security/encryption-status', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
     }, sessionToken);
   }
 

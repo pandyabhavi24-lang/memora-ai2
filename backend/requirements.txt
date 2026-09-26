@@ -18,3 +18,5 @@ sentence-transformers
 reportlab
 pillow
 ollama==0.6.2
+cryptography
+

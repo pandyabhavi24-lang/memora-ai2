@@ -130,6 +130,7 @@ class LockToggleRequest(BaseModel):
 class ExcludedFolderResponse(BaseModel):
     id: int
     path: str
+    item_type: str = "folder"
     created_at: datetime
 
     class Config:
@@ -138,6 +139,23 @@ class ExcludedFolderResponse(BaseModel):
 
 class AddExcludedFolderRequest(BaseModel):
     path: str
+
+
+class EncryptPathRequest(BaseModel):
+    path: str
+
+
+class DecryptPathRequest(BaseModel):
+    path: str
+
+
+class InspectDeleteRequest(BaseModel):
+    path: str
+
+
+class DeletePermanentlyRequest(BaseModel):
+    path: str
+    confirm: bool = True
 
 
 class AuditLogResponse(BaseModel):
@@ -577,13 +595,12 @@ def add_excluded_folder(
     _=Depends(require_session),
 ):
     """
-    Adds a folder to the exclusion list.
+    Adds a folder or file to the exclusion list.
 
     Validation:
-      - Resolves the canonical path (realpath → prevents traversal).
+      - Resolves canonical path (realpath → prevents traversal).
       - Path must exist on disk.
-      - Warns (but does not block) if path is outside all approved folders
-        (exclusions only affect Memora-managed locations).
+      - Stores item_type ('folder' or 'file').
       - Prevents duplicates.
     """
     try:
@@ -594,31 +611,31 @@ def add_excluded_folder(
     if not os.path.exists(real_path):
         raise HTTPException(status_code=400, detail="Path does not exist on disk.")
 
-    if not os.path.isdir(real_path):
-        raise HTTPException(status_code=400, detail="Path must be a directory.")
+    item_type = "folder" if os.path.isdir(real_path) else "file"
 
-    # Check for duplicate
     existing = db.query(ExcludedFolder).filter(ExcludedFolder.path == real_path).first()
     if existing:
-        raise HTTPException(status_code=409, detail="Folder is already in the exclusion list.")
+        raise HTTPException(status_code=409, detail=f"This {item_type} is already in the exclusion list.")
 
     approved = security_service.get_approved_paths(db)
     inside_approved = any(security_service.is_inside(real_path, ap) for ap in approved)
 
-    new_excl = ExcludedFolder(path=real_path)
+    new_excl = ExcludedFolder(path=real_path, item_type=item_type)
     db.add(new_excl)
     db.commit()
     db.refresh(new_excl)
 
+    action_name = "folder_excluded" if item_type == "folder" else "file_excluded"
     security_service.audit(
-        db, "folder_excluded", "success",
+        db, action_name, "success",
         resource=os.path.basename(real_path),
         details={
+            "item_type": item_type,
             "inside_approved_folder": inside_approved,
-            "note": "Files in this folder will be skipped during future scans.",
+            "note": "Skipped during future scans and search results.",
         },
     )
-    logger.info("Excluded folder added: %s", real_path)
+    logger.info("Excluded item added (%s): %s", item_type, real_path)
     return new_excl
 
 
@@ -630,14 +647,127 @@ def remove_excluded_folder(
 ):
     excl = db.query(ExcludedFolder).filter(ExcludedFolder.id == folder_id).first()
     if not excl:
-        raise HTTPException(status_code=404, detail="Excluded folder not found.")
+        raise HTTPException(status_code=404, detail="Excluded item not found.")
 
     path_name = os.path.basename(excl.path)
+    item_type = getattr(excl, "item_type", "folder")
     db.delete(excl)
     db.commit()
 
-    security_service.audit(db, "folder_exclusion_removed", "success", resource=path_name)
-    return {"message": "Folder removed from exclusion list."}
+    action_name = "folder_exclusion_removed" if item_type == "folder" else "file_exclusion_removed"
+    security_service.audit(db, action_name, "success", resource=path_name)
+    return {"message": f"{item_type.capitalize()} removed from exclusion list."}
+
+
+# ---------------------------------------------------------------------------
+# File & Folder Encryption (AES-256-GCM)
+# ---------------------------------------------------------------------------
+
+@router.post("/encrypt")
+def encrypt_item(
+    req: EncryptPathRequest,
+    db: Session = Depends(get_db),
+    _=Depends(require_session),
+):
+    """Encrypts a file or folder locally using AES-256-GCM with atomic verification."""
+    try:
+        real_path = security_service.resolve_path(req.path)
+        if os.path.isdir(real_path):
+            return security_service.encrypt_folder(db, real_path)
+        elif os.path.isfile(real_path):
+            return security_service.encrypt_file(db, real_path)
+        else:
+            raise HTTPException(status_code=400, detail="Path does not exist on disk.")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Encryption failed: {str(e)}")
+
+
+@router.post("/decrypt")
+def decrypt_item(
+    req: DecryptPathRequest,
+    db: Session = Depends(get_db),
+    _=Depends(require_session),
+):
+    """Decrypts a file or folder locally after authentication and tag verification."""
+    try:
+        real_path = security_service.resolve_path(req.path)
+        if os.path.isdir(real_path):
+            return security_service.decrypt_folder(db, real_path)
+        elif os.path.isfile(real_path):
+            return security_service.decrypt_file(db, real_path)
+        else:
+            raise HTTPException(status_code=400, detail="Path does not exist on disk.")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Decryption failed: {str(e)}")
+
+
+@router.post("/encryption-status")
+def get_encryption_status(
+    req: EncryptPathRequest,
+    db: Session = Depends(get_db),
+    _=Depends(require_session),
+):
+    """Returns local encryption status for a file or folder."""
+    try:
+        real_path = security_service.resolve_path(req.path)
+        if os.path.isfile(real_path):
+            is_enc = security_service.is_file_encrypted(real_path)
+            return {"path": real_path, "is_folder": False, "is_encrypted": is_enc}
+        elif os.path.isdir(real_path):
+            total_files = 0
+            enc_files = 0
+            for root, dirs, files in os.walk(real_path):
+                for f in files:
+                    total_files += 1
+                    if security_service.is_file_encrypted(os.path.join(root, f)):
+                        enc_files += 1
+            return {
+                "path": real_path,
+                "is_folder": True,
+                "total_files": total_files,
+                "encrypted_files": enc_files,
+                "is_encrypted": total_files > 0 and enc_files == total_files,
+                "partially_encrypted": enc_files > 0 and enc_files < total_files,
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Path not found.")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/data/inspect-delete")
+def inspect_delete(
+    req: InspectDeleteRequest,
+    db: Session = Depends(get_db),
+    _=Depends(require_session),
+):
+    """Returns pre-deletion metadata and safety checks for a path."""
+    try:
+        return security_service.inspect_delete_path(db, req.path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/data/delete-permanently")
+def delete_permanently(
+    req: DeletePermanentlyRequest,
+    db: Session = Depends(get_db),
+    _=Depends(require_session),
+):
+    """
+    Permanently deletes a file or folder from disk with strict safety checks,
+    metadata purging, FAISS resync, and audit logging.
+    """
+    try:
+        return security_service.delete_permanently(db, req.path, confirm=req.confirm)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------------------------------------------------------------------
