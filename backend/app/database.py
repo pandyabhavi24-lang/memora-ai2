@@ -36,8 +36,11 @@ def init_db_schema():
         # --- files table (existing) ---
         cursor.execute("PRAGMA table_info(files);")
         file_cols = [row[1] for row in cursor.fetchall()]
-        if file_cols and "smart_tags" not in file_cols:
-            cursor.execute("ALTER TABLE files ADD COLUMN smart_tags TEXT;")
+        if file_cols:
+            if "smart_tags" not in file_cols:
+                cursor.execute("ALTER TABLE files ADD COLUMN smart_tags TEXT;")
+            if "is_encrypted" not in file_cols:
+                cursor.execute("ALTER TABLE files ADD COLUMN is_encrypted INTEGER DEFAULT 0;")
             conn.commit()
 
         # --- organization_suggestions table (existing) ---

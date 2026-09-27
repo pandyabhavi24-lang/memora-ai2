@@ -551,11 +551,11 @@ const EncryptionTab = ({ sessionToken, addToast }) => {
               <span className="font-semibold text-gray-300">Status:</span>
               {statusInfo.is_encrypted ? (
                 <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5" /> Encrypted (AES-256-GCM)
+                  <Lock className="w-3.5 h-3.5" /> 🔒 ENCRYPTED (AES-256-GCM)
                 </span>
               ) : statusInfo.partially_encrypted ? (
                 <span className="text-yellow-400 font-semibold flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5" /> Partially Encrypted ({statusInfo.encrypted_files}/{statusInfo.total_files} files)
+                  <AlertTriangle className="w-3.5 h-3.5" /> 🔒 Partially Encrypted ({statusInfo.encrypted_files}/{statusInfo.total_files} files)
                 </span>
               ) : (
                 <span className="text-gray-400 font-semibold flex items-center gap-1">

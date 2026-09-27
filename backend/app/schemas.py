@@ -36,6 +36,7 @@ class FileResponse(BaseModel):
     file_hash: str
     mime_type: Optional[str] = None
     extraction_status: str
+    is_encrypted: bool = False
     smart_tags: List[str] = []
     created_at: datetime
     updated_at: datetime

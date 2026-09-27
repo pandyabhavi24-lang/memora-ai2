@@ -372,7 +372,52 @@ class SecurityService:
             self.audit(db, "failed_encryption", "failure", resource=os.path.basename(real_path), error=str(e))
             raise ValueError(f"Encryption failed for '{os.path.basename(real_path)}': {str(e)}")
 
-        self.remove_index_metadata_for_path(db, real_path)
+        self.remove_index_metadata_for_path(db, real_path, delete_file_record=False)
+
+        from ..models import File, Folder
+        all_files = db.query(File).all()
+        target_file = None
+        for f in all_files:
+            try:
+                if self.resolve_path(f.path) == real_path:
+                    target_file = f
+                    break
+            except Exception:
+                pass
+
+        if target_file:
+            target_file.is_encrypted = True
+            target_file.extraction_status = "encrypted"
+            target_file.extracted_text = None
+        else:
+            folders = db.query(Folder).filter(Folder.is_active == True).all()
+            matched_folder = None
+            for fld in folders:
+                try:
+                    if self.is_inside(real_path, self.resolve_path(fld.path)):
+                        matched_folder = fld
+                        break
+                except Exception:
+                    pass
+            if matched_folder:
+                filename = os.path.basename(real_path)
+                ext = os.path.splitext(filename)[1].lower()
+                stat = os.stat(real_path)
+                from .scanner import calculate_sha256
+                target_file = File(
+                    folder_id=matched_folder.id,
+                    path=real_path,
+                    name=filename,
+                    extension=ext,
+                    size=stat.st_size,
+                    modified_at=datetime.fromtimestamp(stat.st_mtime),
+                    file_hash=calculate_sha256(real_path),
+                    extraction_status="encrypted",
+                    is_encrypted=True
+                )
+                db.add(target_file)
+
+        db.commit()
         self.audit(db, "file_encrypted", "success", resource=os.path.basename(real_path))
         return {"status": "success", "path": real_path}
 
@@ -448,6 +493,18 @@ class SecurityService:
                 f.write(plaintext)
 
             os.replace(tmp_path, real_path)
+
+            from ..models import File
+            all_files = db.query(File).all()
+            for f in all_files:
+                try:
+                    if self.resolve_path(f.path) == real_path:
+                        f.is_encrypted = False
+                        f.extraction_status = "pending"
+                except Exception:
+                    pass
+            db.commit()
+
             self.audit(db, "file_decrypted", "success", resource=os.path.basename(real_path))
             return {"status": "success", "path": real_path}
 
@@ -646,7 +703,7 @@ class SecurityService:
             "info": info
         }
 
-    def remove_index_metadata_for_path(self, db: Session, target_path: str):
+    def remove_index_metadata_for_path(self, db: Session, target_path: str, delete_file_record: bool = True):
         """Purges indexed metadata and FAISS mappings for a file or folder path."""
         from ..models import File, Chunk, VectorMapping, PDFDocument, FileExpiry, OrganizationSuggestion
         from ..ai.faiss_manager import faiss_manager
@@ -654,11 +711,13 @@ class SecurityService:
         try:
             real_path = self.resolve_path(target_path)
             all_files = db.query(File).all()
+            target_files = []
             target_file_ids = []
             for f in all_files:
                 try:
                     rf = self.resolve_path(f.path)
                     if rf == real_path or self.is_inside(rf, real_path):
+                        target_files.append(f)
                         target_file_ids.append(f.id)
                 except Exception:
                     pass
@@ -675,7 +734,14 @@ class SecurityService:
             db.query(PDFDocument).filter(PDFDocument.file_id.in_(target_file_ids)).delete(synchronize_session=False)
             db.query(FileExpiry).filter(FileExpiry.file_id.in_(target_file_ids)).delete(synchronize_session=False)
             db.query(OrganizationSuggestion).filter(OrganizationSuggestion.file_id.in_(target_file_ids)).delete(synchronize_session=False)
-            db.query(File).filter(File.id.in_(target_file_ids)).delete(synchronize_session=False)
+
+            if delete_file_record:
+                db.query(File).filter(File.id.in_(target_file_ids)).delete(synchronize_session=False)
+            else:
+                for f in target_files:
+                    f.is_encrypted = True
+                    f.extraction_status = "encrypted"
+                    f.extracted_text = None
 
             db.commit()
             self._sync_vector_mappings(db)

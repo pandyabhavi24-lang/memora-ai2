@@ -176,6 +176,9 @@ class IndexingService:
                         processed += 1
                         continue
 
+                    from .security_service import security_service
+                    is_enc_disk = security_service.is_file_encrypted(file_path)
+
                     self.state["current_file"] = item_meta["name"]
                     folder_id_val = item_meta["folder_id"]
 
@@ -184,6 +187,30 @@ class IndexingService:
                         existing_file = db.query(File).filter(File.path == file_path).first()
                         if not existing_file:
                             existing_file = db.query(File).filter(func.lower(File.path) == func.lower(file_path)).first()
+
+                        if is_enc_disk or (existing_file and getattr(existing_file, "is_encrypted", False)):
+                            if existing_file:
+                                existing_file.is_encrypted = True
+                                existing_file.extraction_status = "encrypted"
+                                existing_file.extracted_text = None
+                                db.commit()
+                            else:
+                                target_file = File(
+                                    folder_id=folder_id_val,
+                                    path=file_path,
+                                    name=item_meta["name"],
+                                    extension=item_meta["extension"],
+                                    size=item_meta["size"],
+                                    modified_at=item_meta["modified_at"],
+                                    file_hash=item_meta["file_hash"],
+                                    extraction_status="encrypted",
+                                    is_encrypted=True
+                                )
+                                db.add(target_file)
+                                db.commit()
+                            processed += 1
+                            self._update_progress(processed, failed, chunks_total, vectors_total, len(all_found_scans))
+                            continue
 
                         if existing_file:
                             # Safely update folder_id if needed

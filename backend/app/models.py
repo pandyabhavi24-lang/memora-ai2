@@ -29,7 +29,8 @@ class File(Base):
     file_hash = Column(String, nullable=False, index=True)
     mime_type = Column(String, nullable=True)
     extracted_text = Column(Text, nullable=True)
-    extraction_status = Column(String, default="pending")  # pending, success, failed, skipped
+    extraction_status = Column(String, default="pending")  # pending, success, failed, skipped, encrypted
+    is_encrypted = Column(Boolean, default=False, nullable=False)
     smart_tags = Column(Text, nullable=True)  # JSON-encoded list of strings
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

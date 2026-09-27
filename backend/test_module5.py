@@ -18,6 +18,7 @@ import sys
 import tempfile
 import time
 import zipfile
+from datetime import datetime
 
 # Ensure project root is on path
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -596,18 +597,53 @@ def test_local_aes256_gcm_encryption_and_decryption():
         with open(file_path, "w") as f:
             f.write(original_text)
 
+        # Create initial Folder and File DB record
+        folder_rec = Folder(path=svc.resolve_path(folder_path), name="SecureDocs")
+        db.add(folder_rec)
+        db.commit()
+        db.refresh(folder_rec)
+
+        file_rec = File(
+            folder_id=folder_rec.id,
+            path=svc.resolve_path(file_path),
+            name="confidential.txt",
+            extension=".txt",
+            size=len(original_text),
+            modified_at=datetime.utcnow(),
+            file_hash="hash123",
+            extraction_status="success",
+            is_encrypted=False
+        )
+        db.add(file_rec)
+        db.commit()
+        db.refresh(file_rec)
+        original_db_id = file_rec.id
+
         res_enc = svc.encrypt_file(db, file_path)
         check("encrypt_file returns status success", res_enc["status"] == "success")
         check("is_file_encrypted returns True", svc.is_file_encrypted(file_path))
 
+        # Verify DB record still exists and state is ENCRYPTED
+        db_file_after_enc = db.query(File).filter(File.path == svc.resolve_path(file_path)).first()
+        check("DB record still exists after encryption", db_file_after_enc is not None)
+        check("DB record ID unchanged after encryption", db_file_after_enc is not None and db_file_after_enc.id == original_db_id)
+        check("DB record state marked as ENCRYPTED", db_file_after_enc is not None and db_file_after_enc.is_encrypted is True and db_file_after_enc.extraction_status == "encrypted")
+
         with open(file_path, "rb") as f:
             raw_data = f.read()
         check("File content starts with magic header MEMORA_ENC_v1", raw_data.startswith(b"MEMORA_ENC_v1"))
-        check("Plaintext is NOT present in raw encrypted file", original_text.encode() not in raw_data)
+        check("Plaintext is NOT present in raw encrypted file (cannot be read as normal plaintext)", original_text.encode() not in raw_data)
 
         res_dec = svc.decrypt_file(db, file_path)
         check("decrypt_file returns status success", res_dec["status"] == "success")
         check("is_file_encrypted returns False after decryption", not svc.is_file_encrypted(file_path))
+
+        # Verify same DB record still exists and state is normal/plaintext with no duplicate records
+        file_count_after_dec = db.query(File).filter(File.path == svc.resolve_path(file_path)).count()
+        db_file_after_dec = db.query(File).filter(File.path == svc.resolve_path(file_path)).first()
+        check("Decrypt does not create a duplicate DB record", file_count_after_dec == 1)
+        check("Same DB record still exists after decryption", db_file_after_dec is not None and db_file_after_dec.id == original_db_id)
+        check("DB record state returned to normal/pending after decryption", db_file_after_dec is not None and db_file_after_dec.is_encrypted is False and db_file_after_dec.extraction_status == "pending")
 
         with open(file_path, "r") as f:
             restored_text = f.read()
