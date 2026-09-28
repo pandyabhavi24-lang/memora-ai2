@@ -9,7 +9,8 @@ from .services.embedding_service import embedding_service
 from .services.organization_service import organization_service
 
 from .services.security_service import security_service
-from .routes import health, folders, files, scan, search, statistics, organization, media, pdf, expiry
+# from .routes import health, folders, files, scan, search, statistics, organization, media, pdf, expiry
+from .routes import health, folders, files, scan, search, statistics, organization, media, pdf, expiry, storage
 from .routes import security
 
 # Configure logging
@@ -82,6 +83,7 @@ app.include_router(organization.router)
 app.include_router(media.router)
 app.include_router(pdf.router)
 app.include_router(expiry.router)
+app.include_router(storage.router)
 app.include_router(security.router)   # Module 5
 
 from .schemas import SearchRequest, SearchResponse

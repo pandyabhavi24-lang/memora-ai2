@@ -1,6 +1,6 @@
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import datetime
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 # Folder Schemas
 class FolderBase(BaseModel):
@@ -89,7 +89,7 @@ class SearchRequest(BaseModel):
     filters: Optional[SearchFilters] = None
     sort_by: Optional[str] = "relevant"
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Literal, Dict, Any
 
 class SearchResultItem(BaseModel):
     document_id: Optional[int] = None
@@ -766,8 +766,132 @@ class ExpiryScanResponse(BaseModel):
     expiries_detected: int
     summary: ExpirySummaryResponse
 
+class StorageCategoryBreakdown(BaseModel):
+    category: str
+    bytes: int
+    formatted: str
+    count: int
+    percentage: float
+
+class StorageSummaryResponse(BaseModel):
+    total_files: int
+    total_size_bytes: int
+    total_size_formatted: str
+    category_breakdown: List[StorageCategoryBreakdown]
+    optimizable_candidates_count: int
 
 
+class LargeFileItem(BaseModel):
+    id: int
+    name: str
+    path: str
+    size_bytes: int
+    size_formatted: str
+    extension: str
+    modified_at: datetime
+    category: str
+    is_optimizable: bool
+    optimization_type: Optional[str] = None
 
+
+class LargeFilesQuery(BaseModel):
+    limit: Optional[int] = Field(50, ge=1, le=500)
+    min_size_mb: Optional[float] = Field(5.0, ge=0.0)
+
+
+class LargeFilesResponse(BaseModel):
+    items: List[LargeFileItem]
+    total_count: int
+
+
+class AllFilesResponse(BaseModel):
+    items: List[LargeFileItem]
+    total_count: int
+
+
+class OptimizeCandidateRequest(BaseModel):
+    file_id: int = Field(..., gt=0)
+    mode: Literal["lossless", "lossy"] = "lossless"
+    lossy_quality: Optional[int] = Field(82, ge=50, le=100)
+    bmp_target_format: Optional[Literal["png", "webp"]] = "png"
+    max_dimension: Optional[int] = Field(None, ge=128, le=16384, description="Optional maximum dimension (width or height) in pixels")
+    pdf_image_quality: Optional[int] = Field(75, ge=50, le=95, description="JPEG re-encode quality for embedded PDF images (lossy mode only)")
+
+
+class OptimizeCandidateResponse(BaseModel):
+    status: str
+    file_id: int
+    original_size: Optional[int] = None
+    original_size_formatted: Optional[str] = None
+    candidate_size: Optional[int] = None
+    candidate_size_formatted: Optional[str] = None
+    bytes_saved: Optional[int] = None
+    bytes_saved_formatted: Optional[str] = None
+    percentage_saved: Optional[float] = None
+    is_lossless: Optional[bool] = True
+    candidate_token: Optional[str] = None
+    strategy_used: Optional[str] = None
+    execution_time_ms: Optional[float] = None
+    original_dimensions: Optional[str] = None
+    candidate_dimensions: Optional[str] = None
+    original_width: Optional[int] = None
+    original_height: Optional[int] = None
+    candidate_width: Optional[int] = None
+    candidate_height: Optional[int] = None
+    page_count: Optional[int] = None
+    images_count: Optional[int] = None
+    images_optimized: Optional[int] = None
+    images_downsampled: Optional[int] = None
+    streams_compressed: Optional[int] = None
+    preview_url: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class OptimizeApplyRequest(BaseModel):
+    file_id: int = Field(..., gt=0)
+    candidate_token: str = Field(..., min_length=1, pattern=r"^[a-zA-Z0-9_\-]+$")
+    replace_original: bool = True
+
+
+class OptimizeApplyResponse(BaseModel):
+    status: str
+    file_id: int
+    new_file_id: Optional[int] = None
+    original_path: Optional[str] = None
+    final_path: Optional[str] = None
+    original_size: Optional[int] = None
+    optimized_size: Optional[int] = None
+    final_size_bytes: Optional[int] = None
+    bytes_saved: Optional[int] = None
+    percentage_saved: Optional[float] = None
+    is_format_conversion: Optional[bool] = False
+    new_format: Optional[str] = None
+    message: str
+
+
+class ZipArchiveRequest(BaseModel):
+    file_ids: List[int] = Field(..., min_length=1)
+    destination_path: str = Field(..., min_length=1)
+    compression_level: int = Field(9, ge=0, le=9)
+    overwrite: bool = False
+
+
+class ZipArchiveResponse(BaseModel):
+    status: str
+    destination_path: str
+    files_archived: int
+    total_original_bytes: int
+    archive_size_bytes: int
+    percentage_saved: float
+    execution_time_ms: float
+
+
+# ==============================================================================
+# MODULE 5 SCHEMAS - FILE EXPIRY & RENEWAL REMINDERS
+# ==============================================================================
+
+class ExpiryRecordResponse(BaseModel):
+    id: int
+    file_id: int
 
 
