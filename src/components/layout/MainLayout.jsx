@@ -1,12 +1,15 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
 import { ToastContainer } from '../common/Toast';
 import { FilePreviewModal } from '../../pages/FilePreview';
 import { useApp } from '../../context/AppContext';
 
-export const MainLayout = ({ children }) => {
+export const MainLayout = ({ children, hideTopNav = false }) => {
   const { previewFile, setPreviewFile } = useApp();
+  const location = useLocation();
+  const shouldHideTopNav = hideTopNav || location.pathname === '/storage-optimization';
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0b0f19] text-gray-100">
@@ -15,7 +18,7 @@ export const MainLayout = ({ children }) => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <TopNav />
+        {!shouldHideTopNav && <TopNav />}
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
           <div className="w-full max-w-[1360px] mx-auto px-1 sm:px-2">

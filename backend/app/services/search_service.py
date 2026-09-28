@@ -344,7 +344,7 @@ class SearchService:
 
             # Smart Tag relevance calculation & hybrid score boosting
             q_clean = query_expansion_service.clean_search_intent(raw_query).lower()
-            q_tokens = [t for t in re.findall(r"\b[\w#+.-]{2,}\b", q_clean) if len(t) > 1 and t not in ["file", "files", "doc", "notes", "show", "find"]]
+            q_tokens = [t for t in re.findall(r"\b[\w#+.-]{2,}\b", q_clean) if len(t) > 1 and t not in ["file", "files", "doc", "notes", "show", "find", "image", "photo"]]
             has_smart_tag_match = False
             tag_boost = 0.0
 
@@ -365,6 +365,19 @@ class SearchService:
             if tag_boost > 0:
                 doc_semantic_score = min(1.0, max(doc_semantic_score, doc_semantic_score + (tag_boost * 0.4)))
                 doc_lexical_score = min(1.0, max(doc_lexical_score, doc_lexical_score + tag_boost))
+
+            # Filename matching detection
+            has_filename_match = False
+            raw_q_lower = raw_query.lower().strip()
+            fname_lower = file.name.lower()
+            if raw_q_lower in fname_lower or (q_clean and q_clean in fname_lower):
+                has_filename_match = True
+            elif q_tokens and any(qt in fname_lower for qt in q_tokens):
+                has_filename_match = True
+
+            if has_filename_match:
+                doc_lexical_score = max(doc_lexical_score, 0.95)
+                doc_semantic_score = max(doc_semantic_score, 0.85)
 
             # Strict 85% Semantic + 15% Lexical formula
             final_score = (SEMANTIC_WEIGHT * doc_semantic_score) + (LEXICAL_WEIGHT * doc_lexical_score)
@@ -391,6 +404,7 @@ class SearchService:
                 "smart_tags": f_tags,
                 "labels": f_tags,
                 "has_smart_tag_match": has_smart_tag_match,
+                "has_filename_match": has_filename_match,
                 "semantic_score": round(doc_semantic_score, 4),
                 "lexical_score": round(doc_lexical_score, 4),
                 "final_score": round(final_score, 5),
@@ -399,10 +413,10 @@ class SearchService:
                 "chunk_id": best_chunk.id,
                 "modified_at": file.modified_at,
                 "size_bytes": file.size,
-                "concept_agreed": agreed or has_smart_tag_match,
+                "concept_agreed": agreed or has_smart_tag_match or has_filename_match,
                 "matched_concepts": matched_concepts,
-                "agreement_reason": agreement_reason if not has_smart_tag_match else "Smart Tag relevance match",
-                "match_source": "OCR" if category_str == "image" else ("TEXT" if category_str != "video" else "VISUAL"),
+                "agreement_reason": agreement_reason if not (has_smart_tag_match or has_filename_match) else ("Filename match" if has_filename_match else "Smart Tag relevance match"),
+                "match_source": "FILENAME" if has_filename_match else ("OCR" if category_str == "image" else ("TEXT" if category_str != "video" else "VISUAL")),
                 "thumbnail_url": f"/api/media/{file.id}/thumbnail" if category_str in ["image", "video"] else None,
                 "preview_url": f"/api/media/{file.id}/preview" if category_str in ["image", "video"] else None
             })
@@ -422,6 +436,23 @@ class SearchService:
                     smart_tags=f_tags,
                     file_path=file.path
                 )
+
+                # Filename matching detection
+                has_filename_match = False
+                raw_q_lower = raw_query.lower().strip()
+                fname_lower = file.name.lower()
+                if raw_q_lower in fname_lower or (q_clean and q_clean in fname_lower):
+                    has_filename_match = True
+                elif q_tokens and any(qt in fname_lower for qt in q_tokens):
+                    has_filename_match = True
+
+                if has_filename_match:
+                    doc_lexical_score = max(doc_lexical_score, 0.95)
+                    doc_semantic_score = max(doc_semantic_score, 0.85)
+                elif doc_content and any(term.lower() in doc_content.lower() for term in all_query_terms):
+                    doc_lexical_score = max(doc_lexical_score, 0.75)
+                    doc_semantic_score = max(doc_semantic_score, 0.60)
+
                 final_score = (SEMANTIC_WEIGHT * doc_semantic_score) + (LEXICAL_WEIGHT * doc_lexical_score)
 
                 agreed, matched_concepts, agreement_reason = query_expansion_service.verify_concept_agreement(
@@ -444,6 +475,7 @@ class SearchService:
                     "org_category": suggestions_by_file_id.get(file.id, ""),
                     "smart_tags": f_tags,
                     "labels": f_tags,
+                    "has_filename_match": has_filename_match,
                     "semantic_score": round(doc_semantic_score, 4),
                     "lexical_score": round(doc_lexical_score, 4),
                     "final_score": round(final_score, 5),
@@ -452,10 +484,10 @@ class SearchService:
                     "chunk_id": 0,
                     "modified_at": file.modified_at,
                     "size_bytes": file.size,
-                    "concept_agreed": agreed,
+                    "concept_agreed": agreed or has_filename_match,
                     "matched_concepts": matched_concepts,
-                    "agreement_reason": agreement_reason,
-                    "match_source": "TEXT" if category_str not in ["image", "video"] else "OCR",
+                    "agreement_reason": "Filename match" if has_filename_match else agreement_reason,
+                    "match_source": "FILENAME" if has_filename_match else ("TEXT" if category_str not in ["image", "video"] else "OCR"),
                     "thumbnail_url": f"/api/media/{file.id}/thumbnail" if category_str in ["image", "video"] else None,
                     "preview_url": f"/api/media/{file.id}/preview" if category_str in ["image", "video"] else None
                 })
@@ -472,107 +504,125 @@ class SearchService:
 
             cand_by_file_id = {c["file_id"]: c for c in all_candidates}
 
-            for sc, file, folder, analysis in visual_search_items:
-                try:
-                    v_vec = embedding_service.embed_text(sc.search_text)
-                    if v_vec is None or v_vec.size == 0:
-                        continue
+            if visual_search_items:
+                q_words = [w.lower() for w in re.findall(r"\b[\w#+.-]{2,}\b", raw_query) if len(w) > 1]
+                # Filter to items that have textual/keyword relevance, visual concept match, or are in candidate set
+                relevant_visual_items = []
+                for sc, file, folder, analysis in visual_search_items:
+                    objs = [str(o).lower() for o in (analysis.get_detected_objects() if analysis else [])]
+                    scenes = [str(s).lower() for s in (analysis.get_detected_scenes() if analysis else [])]
+                    st_low = (sc.search_text or "").lower()
+                    has_kw = any(qw in st_low or any(qw in o for o in objs) or any(qw in s for s in scenes) for qw in q_words)
+                    if has_kw or file.id in cand_by_file_id:
+                        relevant_visual_items.append((sc, file, folder, analysis))
 
-                    cos_sim = float(np.dot(query_vector, v_vec))
-                    visual_semantic_score = max(0.0, min(1.0, cos_sim))
-
-                    objs = analysis.get_detected_objects() if analysis else []
-                    scenes = analysis.get_detected_scenes() if analysis else []
-                    cat = analysis.visual_category if analysis else "photo"
-
-                    q_words = [w.lower() for w in re.findall(r"\b[\w#+.-]{2,}\b", raw_query) if len(w) > 1]
-                    matched_visual_objs = [o for o in objs if any(qw in o.lower() or o.lower() in qw for qw in q_words)]
-                    matched_visual_scenes = [s for s in scenes if any(qw in s.lower() or s.lower() in qw for qw in q_words)]
-
-                    # If query explicitly seeks a detected object/scene (e.g. tree, sky, nature, mountain, person)
-                    if matched_visual_objs or matched_visual_scenes:
-                        visual_semantic_score = max(visual_semantic_score, 0.72)
-
-                    f_tags = labels_by_file_id.get(file.id, [])
-                    category_str = map_category_from_extension(file.extension)
-                    visual_lexical_score = query_expansion_service.calculate_field_aware_lexical_score(
-                        concept_groups=concept_groups,
-                        content_text=sc.search_text,
-                        filename=file.name,
-                        smart_tags=f_tags + objs + scenes,
-                        file_path=file.path
-                    )
-
-                    if file.id in cand_by_file_id:
-                        # Merge with existing text/OCR candidate into HYBRID
-                        existing_c = cand_by_file_id[file.id]
-                        old_sem = existing_c.get("semantic_score", 0.0)
-                        merged_sem = max(old_sem, visual_semantic_score)
-                        merged_lex = max(existing_c.get("lexical_score", 0.0), visual_lexical_score)
-                        merged_final = (SEMANTIC_WEIGHT * merged_sem) + (LEXICAL_WEIGHT * merged_lex)
-
-                        existing_c["semantic_score"] = round(merged_sem, 4)
-                        existing_c["lexical_score"] = round(merged_lex, 4)
-                        existing_c["final_score"] = round(merged_final, 5)
-                        existing_c["score"] = round(merged_final * 100, 1)
-
-                        if old_sem >= SEMANTIC_SIMILARITY_THRESHOLD and visual_semantic_score >= SEMANTIC_SIMILARITY_THRESHOLD:
-                            existing_c["match_source"] = "HYBRID"
-                        elif visual_semantic_score > old_sem:
-                            existing_c["match_source"] = "VISUAL"
-
-                        existing_c["visual_match_details"] = {
-                            "objects": objs,
-                            "scenes": scenes,
-                            "description": sc.visual_description
-                        }
-                        existing_c["thumbnail_url"] = f"/api/media/{file.id}/thumbnail"
-                        existing_c["preview_url"] = f"/api/media/{file.id}/preview"
-                        if matched_visual_objs or matched_visual_scenes:
-                            existing_c["matched_concepts"] = list(set(existing_c.get("matched_concepts", []) + matched_visual_objs + matched_visual_scenes))
-
+                if relevant_visual_items:
+                    search_texts = [sc.search_text or "" for sc, _, _, _ in relevant_visual_items]
+                    v_vecs = embedding_service.embed_documents(search_texts)
+                    if len(v_vecs) == len(relevant_visual_items):
+                        cos_sims = np.dot(v_vecs, query_vector)
                     else:
-                        final_score = (SEMANTIC_WEIGHT * visual_semantic_score) + (LEXICAL_WEIGHT * visual_lexical_score)
-                        matched_visual_concepts = matched_visual_objs + matched_visual_scenes
+                        cos_sims = np.zeros((len(relevant_visual_items),), dtype=np.float32)
 
-                        cand_entry = {
-                            "document_id": file.id,
-                            "file_id": file.id,
-                            "filename": file.name,
-                            "file_name": file.name,
-                            "file_path": file.path,
-                            "folder_name": folder.name,
-                            "folder_id": folder.id,
-                            "extension": file.extension,
-                            "category": category_str,
-                            "org_category": suggestions_by_file_id.get(file.id, ""),
-                            "smart_tags": f_tags,
-                            "labels": f_tags,
-                            "semantic_score": round(visual_semantic_score, 4),
-                            "lexical_score": round(visual_lexical_score, 4),
-                            "final_score": round(final_score, 5),
-                            "score": round(final_score * 100, 1),
-                            "matched_snippet": sc.visual_description or sc.search_text[:260],
-                            "chunk_id": 0,
-                            "modified_at": file.modified_at,
-                            "size_bytes": file.size,
-                            "concept_agreed": bool(matched_visual_concepts) or visual_semantic_score >= SEMANTIC_SIMILARITY_THRESHOLD,
-                            "matched_concepts": matched_visual_concepts,
-                            "agreement_reason": "Visual object and scene detection match",
-                            "match_source": "VISUAL",
-                            "visual_match_details": {
-                                "objects": objs,
-                                "scenes": scenes,
-                                "description": sc.visual_description
-                            },
-                            "thumbnail_url": f"/api/media/{file.id}/thumbnail",
-                            "preview_url": f"/api/media/{file.id}/preview"
-                        }
-                        all_candidates.append(cand_entry)
-                        cand_by_file_id[file.id] = cand_entry
+                    for idx, (sc, file, folder, analysis) in enumerate(relevant_visual_items):
+                        try:
+                            cos_sim = float(cos_sims[idx])
+                            visual_semantic_score = max(0.0, min(1.0, cos_sim))
 
-                except Exception as item_err:
-                    logger.debug(f"Error computing visual search candidate for file {file.id}: {item_err}")
+                            objs = analysis.get_detected_objects() if analysis else []
+                            scenes = analysis.get_detected_scenes() if analysis else []
+                            cat = analysis.visual_category if analysis else "photo"
+
+                            q_words = [w.lower() for w in re.findall(r"\b[\w#+.-]{2,}\b", raw_query) if len(w) > 1]
+                            matched_visual_objs = [o for o in objs if any(qw in o.lower() or o.lower() in qw for qw in q_words)]
+                            matched_visual_scenes = [s for s in scenes if any(qw in s.lower() or s.lower() in qw for qw in q_words)]
+
+                            # If query explicitly seeks a detected object/scene (e.g. tree, sky, nature, mountain, person)
+                            if matched_visual_objs or matched_visual_scenes:
+                                visual_semantic_score = max(visual_semantic_score, 0.72)
+
+                            f_tags = labels_by_file_id.get(file.id, [])
+                            category_str = map_category_from_extension(file.extension)
+                            visual_lexical_score = query_expansion_service.calculate_field_aware_lexical_score(
+                                concept_groups=concept_groups,
+                                content_text=sc.search_text,
+                                filename=file.name,
+                                smart_tags=f_tags + objs + scenes,
+                                file_path=file.path
+                            )
+
+                            if file.id in cand_by_file_id:
+                                # Merge with existing candidate into HYBRID
+                                existing_c = cand_by_file_id[file.id]
+                                old_sem = existing_c.get("semantic_score", 0.0)
+                                merged_sem = max(old_sem, visual_semantic_score)
+                                merged_lex = max(existing_c.get("lexical_score", 0.0), visual_lexical_score)
+                                merged_final = (SEMANTIC_WEIGHT * merged_sem) + (LEXICAL_WEIGHT * merged_lex)
+
+                                existing_c["semantic_score"] = round(merged_sem, 4)
+                                existing_c["lexical_score"] = round(merged_lex, 4)
+                                existing_c["final_score"] = round(merged_final, 5)
+                                existing_c["score"] = round(merged_final * 100, 1)
+
+                                if existing_c.get("has_filename_match"):
+                                    existing_c["match_source"] = "FILENAME"
+                                elif old_sem >= SEMANTIC_SIMILARITY_THRESHOLD and visual_semantic_score >= SEMANTIC_SIMILARITY_THRESHOLD:
+                                    existing_c["match_source"] = "HYBRID"
+                                elif visual_semantic_score > old_sem:
+                                    existing_c["match_source"] = "VISUAL"
+
+                                existing_c["visual_match_details"] = {
+                                    "objects": objs,
+                                    "scenes": scenes,
+                                    "description": sc.visual_description
+                                }
+                                existing_c["thumbnail_url"] = f"/api/media/{file.id}/thumbnail"
+                                existing_c["preview_url"] = f"/api/media/{file.id}/preview"
+                                if matched_visual_objs or matched_visual_scenes:
+                                    existing_c["matched_concepts"] = list(set(existing_c.get("matched_concepts", []) + matched_visual_objs + matched_visual_scenes))
+
+                            else:
+                                final_score = (SEMANTIC_WEIGHT * visual_semantic_score) + (LEXICAL_WEIGHT * visual_lexical_score)
+                                matched_visual_concepts = matched_visual_objs + matched_visual_scenes
+
+                                cand_entry = {
+                                    "document_id": file.id,
+                                    "file_id": file.id,
+                                    "filename": file.name,
+                                    "file_name": file.name,
+                                    "file_path": file.path,
+                                    "folder_name": folder.name,
+                                    "folder_id": folder.id,
+                                    "extension": file.extension,
+                                    "category": category_str,
+                                    "org_category": suggestions_by_file_id.get(file.id, ""),
+                                    "smart_tags": f_tags,
+                                    "labels": f_tags,
+                                    "semantic_score": round(visual_semantic_score, 4),
+                                    "lexical_score": round(visual_lexical_score, 4),
+                                    "final_score": round(final_score, 5),
+                                    "score": round(final_score * 100, 1),
+                                    "matched_snippet": sc.visual_description or sc.search_text[:260],
+                                    "chunk_id": 0,
+                                    "modified_at": file.modified_at,
+                                    "size_bytes": file.size,
+                                    "concept_agreed": bool(matched_visual_concepts) or visual_semantic_score >= SEMANTIC_SIMILARITY_THRESHOLD,
+                                    "matched_concepts": matched_visual_concepts,
+                                    "agreement_reason": "Visual object and scene detection match",
+                                    "match_source": "VISUAL",
+                                    "visual_match_details": {
+                                        "objects": objs,
+                                        "scenes": scenes,
+                                        "description": sc.visual_description
+                                    },
+                                    "thumbnail_url": f"/api/media/{file.id}/thumbnail" if category_str in ["image", "video"] else None,
+                                    "preview_url": f"/api/media/{file.id}/preview" if category_str in ["image", "video"] else None
+                                }
+                                all_candidates.append(cand_entry)
+                                cand_by_file_id[file.id] = cand_entry
+
+                        except Exception as item_err:
+                            logger.debug(f"Error computing visual search candidate for file {file.id}: {item_err}")
 
         except Exception as e:
             logger.warning(f"Could not process visual search candidates: {e}")
@@ -582,14 +632,14 @@ class SearchService:
 
         # 6. Strict Hard Semantic Gate & Secondary Relevance Ranking
         # Step A: HARD SEMANTIC THRESHOLD GATE & HYBRID SMART TAG MATCHER
-        # Candidates must satisfy cosine similarity >= SEMANTIC_SIMILARITY_THRESHOLD or have a Smart Tag/lexical match.
-        # For pictorial images, OCR text alone MUST NOT override visual grounding unless visually present.
+        # Candidates must satisfy cosine similarity >= SEMANTIC_SIMILARITY_THRESHOLD or have a Smart Tag/lexical/filename match.
+        # For pictorial images, OCR text alone MUST NOT override visual grounding unless visually present or directly matching filename.
         target_tags_check = (filters.smart_tags if filters else None) or (filters.labels if filters else None) or (getattr(filters, 'tags', None) if filters else None)
 
         after_threshold_candidates = []
         for c in all_candidates:
-            # For pictorial images, OCR match alone without visual semantic evidence (< 0.50) is excluded
-            if c.get("category") == "image" and c.get("match_source") == "OCR":
+            # For pictorial images, OCR match alone without visual semantic evidence (< 0.50) is excluded, unless matching filename
+            if c.get("category") == "image" and c.get("match_source") == "OCR" and not c.get("has_filename_match"):
                 v_details = c.get("visual_match_details", {})
                 v_objs = [str(o).lower() for o in (v_details.get("objects") or [])]
                 v_scenes = [str(s).lower() for s in (v_details.get("scenes") or [])]
@@ -602,7 +652,13 @@ class SearchService:
                 if not has_visual and c["semantic_score"] < SEMANTIC_SIMILARITY_THRESHOLD:
                     continue
 
-            if c["semantic_score"] >= SEMANTIC_SIMILARITY_THRESHOLD or c.get("has_smart_tag_match") or c["lexical_score"] >= 0.40 or bool(target_tags_check):
+            if (
+                c["semantic_score"] >= SEMANTIC_SIMILARITY_THRESHOLD 
+                or c.get("has_smart_tag_match") 
+                or c.get("has_filename_match")
+                or c["lexical_score"] >= 0.40 
+                or bool(target_tags_check)
+            ):
                 after_threshold_candidates.append(c)
 
         after_threshold_count = len(after_threshold_candidates)
@@ -619,7 +675,7 @@ class SearchService:
             for c in after_threshold_candidates:
                 # Check semantic gap drop-off
                 relative_drop = top_score - c["final_score"]
-                if top_score >= 0.75 and relative_drop > MAX_RELATIVE_DROP_FROM_TOP and c["lexical_score"] < 0.50 and not c.get("has_smart_tag_match"):
+                if top_score >= 0.75 and relative_drop > MAX_RELATIVE_DROP_FROM_TOP and c["lexical_score"] < 0.50 and not c.get("has_smart_tag_match") and not c.get("has_filename_match"):
                     rejected_diagnostics.append({
                         "filename": c["file_name"],
                         "cosine": c["semantic_score"],
@@ -712,7 +768,9 @@ class SearchService:
             matched_scns = vis_details.get("scenes", [])
 
             q_low = raw_query.lower()
-            if match_source == "HYBRID":
+            if match_source == "FILENAME" or r.get("has_filename_match"):
+                explanation = f"Matches your search query in file name '{r['file_name']}'."
+            elif match_source == "HYBRID":
                 vis_elements = matched_objs + matched_scns
                 vis_str = f" ({', '.join(vis_elements[:3])})" if vis_elements else ""
                 explanation = f"Hybrid match: OCR text & visual content{vis_str}."

@@ -216,7 +216,8 @@ export const AppProvider = ({ children }) => {
       setSearchResults(payload.results);
       setSearchTotal(payload.total);
       setSearchExecutionTime(payload.executionTimeMs);
-      await refreshSearchHistory();
+      setSearchError(null);
+      refreshSearchHistory().catch(e => console.warn('Could not refresh search history:', e));
     } catch (err) {
       console.error('Semantic search service error:', err);
       setSearchError('An error occurred while querying the local vector database.');
