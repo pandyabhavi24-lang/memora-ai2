@@ -131,7 +131,7 @@ class IndexingService:
                         self.state["status"] = "idle"
                         self.state["current_file"] = "Scan cancelled"
                         return
-                    return
+                    
 
                 all_found_scans = []
                 for folder in folders:

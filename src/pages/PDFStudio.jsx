@@ -15,6 +15,7 @@ import { PDFPreviewModal } from '../components/pdfStudio/PDFPreviewModal';
 import { PDFPageContextMenu } from '../components/pdfStudio/PDFPageContextMenu';
 import { PDFDraftsModal } from '../components/pdfStudio/PDFDraftsModal';
 import { CameraCaptureModal } from '../components/pdfStudio/CameraCaptureModal';
+import { SaveShareMenuModal } from '../components/pdfStudio/SaveShareMenuModal';
 import { FileText } from 'lucide-react';
 
 import { apiService } from '../services/apiService';
@@ -116,6 +117,7 @@ export const PDFStudio = () => {
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isDraftsModalOpen, setIsDraftsModalOpen] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [isSaveShareMenuOpen, setIsSaveShareMenuOpen] = useState(false);
   const [exportedPdfPath, setExportedPdfPath] = useState(null);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, pageIndex }
   const [isExporting, setIsExporting] = useState(false);
@@ -1721,6 +1723,14 @@ export const PDFStudio = () => {
           isOpen={isCameraModalOpen}
           onClose={() => setIsCameraModalOpen(false)}
           onCaptureImage={handleCaptureFromCamera}
+        />
+
+        {/* Save / Share PDF Options Modal */}
+        <SaveShareMenuModal
+          isOpen={isSaveShareMenuOpen}
+          onClose={() => setIsSaveShareMenuOpen(false)}
+          pdfPath={exportedPdfPath}
+          pdfTitle={exportFileName}
         />
       </div>
     </PDFStudioErrorBoundary>
