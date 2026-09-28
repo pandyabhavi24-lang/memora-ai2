@@ -1,7 +1,13 @@
 import os
 import re
 import logging
-import requests
+try:
+    import requests  # type: ignore[reportMissingImports]
+except ImportError as exc:
+    raise ImportError(
+        "The 'requests' package is required by WhatsAppService. "
+        "Install it with: python -m pip install requests"
+    ) from exc
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("memora.whatsapp_service")

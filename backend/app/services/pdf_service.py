@@ -1,4 +1,5 @@
 import os
+import uuid
 import logging
 from typing import List, Dict, Any, Optional
 from PIL import Image
@@ -480,6 +481,28 @@ class PdfService:
             "message": f"Successfully extracted {len(valid_indices)} page(s) into {os.path.basename(abs_output)}."
         }
 
+    def normalize_source_to_pdf_path(self, path: str) -> str:
+        """
+        Normalizes a PDF or image file into a verified PDF path.
+        If the file is an image (jpg, png, webp, bmp, tiff), converts it to an A4 PDF page.
+        """
+        if not path or not isinstance(path, str):
+            raise ValueError("File path must be a non-empty string.")
+
+        abs_path = os.path.abspath(path)
+        if not os.path.exists(abs_path):
+            raise FileNotFoundError(f"File not found: {abs_path}")
+
+        ext = os.path.splitext(abs_path)[1].lower()
+        if ext == ".pdf":
+            return self.validate_pdf_path(abs_path)
+        elif ext in (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif"):
+            temp_pdf = os.path.join(self.storage_dir, f"img_conv_{uuid.uuid4().hex[:8]}.pdf")
+            self.images_to_pdf(image_paths=[abs_path], output_path=temp_pdf, page_size="A4", fit_to_page=True, register_in_db=False)
+            return temp_pdf
+        else:
+            raise ValueError(f"Unsupported file format for PDF operations: '{ext}'. Supported: PDF, PNG, JPG, JPEG, WEBP, BMP, TIFF.")
+
     def merge_pdfs(
         self,
         source_paths: List[str],
@@ -489,14 +512,13 @@ class PdfService:
         register_in_db: bool = True
     ) -> Dict[str, Any]:
         """
-        Merges multiple PDF files in user-defined order into a single target output PDF.
-        Validates path existence, PDF header readability, output directory writability,
-        and registers the output file in Memora DB. Source files are preserved intact.
+        Merges multiple PDF or Image files in user-defined order into a single target output PDF.
+        Supports PDF+PDF, PDF+Image, Image+Image, and mixed sources.
         """
         if not source_paths or not isinstance(source_paths, list) or len(source_paths) < 2:
-            raise ValueError("At least two source PDF paths are required for merging.")
+            raise ValueError("At least two source paths (PDFs or Images) are required for merging.")
 
-        validated_paths = [self.validate_pdf_path(p) for p in source_paths]
+        validated_paths = [self.normalize_source_to_pdf_path(p) for p in source_paths]
 
         abs_output = os.path.abspath(output_path)
         output_dir = os.path.dirname(abs_output)
@@ -539,7 +561,7 @@ class PdfService:
             "file_size_bytes": os.path.getsize(abs_output),
             "file_id": file_id,
             "pdf_document_id": pdf_doc_id,
-            "message": f"Successfully merged {len(source_paths)} PDF files into {os.path.basename(abs_output)}."
+            "message": f"Successfully merged {len(source_paths)} files into {os.path.basename(abs_output)} ({final_page_count} pages)."
         }
 
     def alternate_pages(
@@ -553,21 +575,21 @@ class PdfService:
         register_in_db: bool = True
     ) -> Dict[str, Any]:
         """
-        Interleaves pages from two PDF files into a single output PDF.
+        Interleaves pages from two sources (PDF+PDF, Image+Image, PDF+Image) into a single output PDF.
         Supports:
         - A -> B -> A -> B (start_with == 'pdf1')
         - B -> A -> B -> A (start_with == 'pdf2')
         - Unequal page counts (never discards remaining pages)
         """
         if not pdf1_path or not pdf2_path:
-            raise ValueError("Both pdf1_path and pdf2_path must be provided.")
+            raise ValueError("Both source A and source B paths must be provided.")
 
-        abs_p1 = self.validate_pdf_path(pdf1_path)
-        abs_p2 = self.validate_pdf_path(pdf2_path)
+        abs_p1 = self.normalize_source_to_pdf_path(pdf1_path)
+        abs_p2 = self.normalize_source_to_pdf_path(pdf2_path)
 
         abs_output = os.path.abspath(output_path)
         if abs_output == abs_p1 or abs_output == abs_p2:
-            raise ValueError("Output path cannot be the same as any source PDF path.")
+            raise ValueError("Output path cannot be the same as any source path.")
 
         start_mode = (start_with or "pdf1").lower().strip()
         if start_mode not in ("pdf1", "pdf2"):
@@ -580,9 +602,9 @@ class PdfService:
         p2_pages = list(reader2.pages)
 
         if len(p1_pages) == 0:
-            raise ValueError(f"PDF 1 '{os.path.basename(abs_p1)}' contains no pages.")
+            raise ValueError(f"Source 1 contains no pages.")
         if len(p2_pages) == 0:
-            raise ValueError(f"PDF 2 '{os.path.basename(abs_p2)}' contains no pages.")
+            raise ValueError(f"Source 2 contains no pages.")
 
         writer = pypdf.PdfWriter()
         max_len = max(len(p1_pages), len(p2_pages))
@@ -633,7 +655,7 @@ class PdfService:
             "file_id": file_id,
             "pdf_document_id": pdf_doc_id,
             "verified": True,
-            "message": f"Successfully alternated pages ({start_mode}) between '{os.path.basename(abs_p1)}' ({len(p1_pages)} pgs) and '{os.path.basename(abs_p2)}' ({len(p2_pages)} pgs) into {os.path.basename(abs_output)} ({final_page_count} pages)."
+            "message": f"Successfully alternated pages ({start_mode}) between '{os.path.basename(pdf1_path)}' ({len(p1_pages)} pgs) and '{os.path.basename(pdf2_path)}' ({len(p2_pages)} pgs) into {os.path.basename(abs_output)} ({final_page_count} pages)."
         }
 
     def preview_alternate_pages(
@@ -644,12 +666,13 @@ class PdfService:
     ) -> Dict[str, Any]:
         """
         Generates preview sequence of page ordering before executing alternate pages export.
+        Works universally for PDFs and Images.
         """
         if not pdf1_path or not pdf2_path:
-            raise ValueError("Both pdf1_path and pdf2_path must be provided.")
+            raise ValueError("Both source A and source B paths must be provided.")
 
-        abs_p1 = self.validate_pdf_path(pdf1_path)
-        abs_p2 = self.validate_pdf_path(pdf2_path)
+        abs_p1 = self.normalize_source_to_pdf_path(pdf1_path)
+        abs_p2 = self.normalize_source_to_pdf_path(pdf2_path)
 
         start_mode = (start_with or "pdf1").lower().strip()
         if start_mode not in ("pdf1", "pdf2"):
@@ -2392,6 +2415,7 @@ class PdfService:
         Supports filtering by file_type (pdf, image, scanned, all), folder_id, and query search string.
         """
         from ..models import File
+        from sqlalchemy import func
 
         db_query = db.query(File)
 
@@ -2400,11 +2424,16 @@ class PdfService:
 
         ft_clean = (file_type or "all").lower().strip()
         if ft_clean == "pdf":
-            db_query = db_query.filter(File.extension == ".pdf")
+            db_query = db_query.filter(func.lower(File.extension).in_([".pdf", "pdf"]))
         elif ft_clean == "image":
-            db_query = db_query.filter(File.extension.in_([".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"]))
+            db_query = db_query.filter(func.lower(File.extension).in_([
+                ".png", "png", ".jpg", "jpg", ".jpeg", "jpeg",
+                ".webp", "webp", ".bmp", "bmp", ".tiff", "tiff", ".gif", "gif"
+            ]))
         elif ft_clean == "scanned":
-            db_query = db_query.filter(File.extension.in_([".pdf", ".png", ".jpg", ".jpeg", ".tiff"]))
+            db_query = db_query.filter(func.lower(File.extension).in_([
+                ".pdf", "pdf", ".png", "png", ".jpg", "jpg", ".jpeg", "jpeg", ".tiff", "tiff"
+            ]))
 
         if query and query.strip():
             search_str = f"%{query.strip()}%"

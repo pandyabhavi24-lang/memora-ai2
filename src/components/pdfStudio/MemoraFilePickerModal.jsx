@@ -314,17 +314,20 @@ export const MemoraFilePickerModal = ({
           {isLoading ? (
             <div className="py-12 text-center space-y-3 glass-panel rounded-xl border border-gray-800/80">
               <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto" />
-              <p className="text-xs text-gray-400 font-medium">Searching Memora vector database...</p>
+              <p className="text-xs text-gray-400 font-medium">Loading Memora documents & media files...</p>
             </div>
           ) : filteredResults.length > 0 ? (
             filteredResults.map((fileObj) => {
               const fileId = fileObj.id || fileObj.file_id || fileObj.path;
               const fileName = fileObj.name || fileObj.filename || fileObj.file_name || 'Document.pdf';
               const filePath = fileObj.path || fileObj.filePath || fileObj.folderName || 'Indexed Store';
-              const ext = (fileObj.extension || fileObj.fileExtension || fileName.split('.').pop() || 'pdf').toLowerCase();
+              const ext = (fileObj.extension || fileObj.fileExtension || fileName.split('.').pop() || 'pdf').toLowerCase().replace(/^\./, '');
               const isPdf = ext === 'pdf';
+              const isImage = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff', 'gif'].includes(ext);
               const isSelected = !!selectedFilesMap[fileId];
               const selectedConfig = selectedFilesMap[fileId];
+              const sizeInKb = fileObj.size ? (fileObj.size > 1048576 ? `${(fileObj.size / 1048576).toFixed(1)} MB` : `${Math.round(fileObj.size / 1024)} KB`) : null;
+              const previewSrc = fileObj.previewUrl || fileObj.thumbnailUrl || (isImage && filePath ? `file://${filePath.replace(/\\/g, '/')}` : null);
 
               return (
                 <div
@@ -349,22 +352,41 @@ export const MemoraFilePickerModal = ({
                         )}
                       </div>
 
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-                        {isPdf ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4 text-emerald-400" />}
+                      {/* File Icon or Thumbnail Preview */}
+                      <div className="w-10 h-10 rounded-lg bg-gray-950 border border-gray-800 overflow-hidden flex items-center justify-center text-blue-400 shrink-0 relative">
+                        {isImage && previewSrc ? (
+                          <img 
+                            src={previewSrc} 
+                            alt={fileName} 
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        ) : isPdf ? (
+                          <FileText className="w-5 h-5 text-blue-400" />
+                        ) : (
+                          <ImageIcon className="w-5 h-5 text-emerald-400" />
+                        )}
                       </div>
 
                       <div className="truncate flex-1">
                         <h4 className="text-xs font-semibold text-white truncate">{fileName}</h4>
-                        <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
-                          <Folder className="w-3 h-3 text-gray-500 shrink-0" />
-                          <span>{filePath}</span>
-                        </p>
+                        <div className="flex items-center gap-2 text-[11px] text-gray-400 truncate">
+                          <span className="truncate flex items-center gap-1">
+                            <Folder className="w-3 h-3 text-gray-500 shrink-0" />
+                            <span className="truncate">{filePath}</span>
+                          </span>
+                          {sizeInKb && (
+                            <span className="text-[10px] bg-gray-800/80 px-1.5 py-0.2 rounded text-gray-400 font-mono shrink-0">
+                              {sizeInKb}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
                     {/* File Extension Badge */}
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant={isPdf ? 'blue' : 'emerald'} size="sm">
+                      <Badge variant={isPdf ? 'blue' : isImage ? 'emerald' : 'purple'} size="sm">
                         {ext.toUpperCase()}
                       </Badge>
                     </div>
@@ -405,9 +427,9 @@ export const MemoraFilePickerModal = ({
           ) : (
             <div className="p-8 text-center glass-panel rounded-xl border border-dashed border-gray-800 space-y-2">
               <Layers className="w-8 h-8 text-gray-500 mx-auto mb-1" />
-              <h4 className="text-xs font-semibold text-gray-300">No Indexed Documents Found</h4>
+              <h4 className="text-xs font-semibold text-gray-300">No Files Found</h4>
               <p className="text-[11px] text-gray-500 max-w-xs mx-auto">
-                No files match your filter settings. Ensure your local document folders are added and scanned in Module 2.
+                No indexed files or images match the current filter. Add document folders or upload images to see them here.
               </p>
             </div>
           )}

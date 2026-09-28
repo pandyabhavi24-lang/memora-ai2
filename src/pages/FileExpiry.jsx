@@ -185,6 +185,33 @@ export const FileExpiry = () => {
     }
   };
 
+  // Re-analyze specific record using Ollama AI
+  const handleReanalyzeRecord = async (e, recordId) => {
+    if (e) e.stopPropagation();
+    try {
+      setModalSaving(true);
+      const updated = await apiService.reanalyzeExpiryRecord(recordId);
+      if (updated && isModalOpen) {
+        setSelectedRecord(updated);
+        const dateFormatted = updated.extracted_date ? new Date(updated.extracted_date).toISOString().split('T')[0] : '';
+        setEditForm({
+          document_type: updated.document_type || 'Other',
+          date_type: updated.date_type || 'Expiry',
+          extracted_date: dateFormatted,
+          reminder_enabled: updated.reminder_enabled ?? true,
+          reminder_days_before: updated.reminder_days_before || 30,
+          user_confirmed: updated.user_confirmed || false
+        });
+      }
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to re-analyze record:', err);
+      alert('Re-analysis failed. Please check backend log or Ollama status.');
+    } finally {
+      setModalSaving(false);
+    }
+  };
+
   // Launch File in Native Application / Shell
   const handleOpenFile = (e, filePath) => {
     e.stopPropagation();
@@ -551,6 +578,10 @@ export const FileExpiry = () => {
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                               <Sparkles className="w-3 h-3" /> Ollama AI
                             </span>
+                          ) : record.extraction_method === 'hybrid' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                              <Sparkles className="w-3 h-3" /> Hybrid AI
+                            </span>
                           ) : record.extraction_method === 'user_manual' ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
                               Manual
@@ -787,6 +818,15 @@ export const FileExpiry = () => {
               </button>
 
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => handleReanalyzeRecord(e, selectedRecord.id)}
+                  disabled={modalSaving}
+                  title="Re-run Ollama AI + Rule-based detection"
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${modalSaving ? 'animate-spin' : ''}`} /> Re-analyze AI
+                </button>
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}

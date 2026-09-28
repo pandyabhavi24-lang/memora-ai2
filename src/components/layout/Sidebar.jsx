@@ -60,6 +60,7 @@ export const Sidebar = () => {
     { label: 'PDF Studio', path: '/pdf-studio', icon: FileText },
     { label: 'Storage Optimization', path: '/storage-optimization', icon: HardDrive },
     { label: 'Expiry & Reminders', path: '/expiry', icon: CalendarClock },
+    { label: 'Security & Privacy', path: '/security', icon: ShieldCheck },
     { label: 'Analytics', path: '#', icon: BarChart3, disabled: true, badge: 'Coming soon' },
     { label: 'Events', path: '#', icon: Calendar, disabled: true, badge: 'Coming soon' },
     { label: 'Settings', path: '/settings', icon: Settings },
@@ -189,4 +190,3 @@ export const Sidebar = () => {
     </aside>
   );
 };
-

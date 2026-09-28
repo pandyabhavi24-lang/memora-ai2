@@ -19,6 +19,15 @@ __pycache__/
 .env
 .env.*
 !.env.example
+credentials.json
+client_secret*.json
+token.json
+gmail_tokens.json
+*.token
+backend/credentials.json
+backend/client_secret*.json
+backend/token.json
+backend/gmail_tokens.json
 
 # ==============================
 # IDE / Editor
@@ -117,3 +126,4 @@ backend/data/media_cache/
 # Generated/test PDF files
 test_text.pdf
 text.pdf
+backend/data/memora_sec.key

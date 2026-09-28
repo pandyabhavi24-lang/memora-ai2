@@ -1,3 +1,4 @@
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Eye, 
   Edit3, 
@@ -31,7 +32,9 @@ export const PDFWorkspace = ({
   onDeleteText
 }) => {
   const rotation = activePage?.rotation || 0;
+  const workspaceContainerRef = useRef(null);
   const pageContainerRef = useRef(null);
+  const [containerSize, setContainerSize] = useState({ width: 900, height: 700 });
 
   // Active selection ID fallback
   const activeSelectedId = selectedElementId || selectedTextId;
@@ -57,15 +60,58 @@ export const PDFWorkspace = ({
     Legal: orientation === 'portrait' ? { width: 612, height: 1008 } : { width: 1008, height: 612 }
   }[pageSize] || { width: 595, height: 842 };
 
+  // Observe container size to calculate dynamic fit-to-page without cropping
+  useEffect(() => {
+    if (!workspaceContainerRef.current) return;
+    const updateSize = () => {
+      if (workspaceContainerRef.current) {
+        const rect = workspaceContainerRef.current.getBoundingClientRect();
+        setContainerSize({
+          width: Math.max(300, rect.width),
+          height: Math.max(300, rect.height)
+        });
+      }
+    };
+    updateSize();
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect) {
+          setContainerSize({
+            width: Math.max(300, entry.contentRect.width),
+            height: Math.max(300, entry.contentRect.height)
+          });
+        }
+      }
+    });
+    observer.observe(workspaceContainerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // Compute exact scale dynamically
+  const computedScale = useMemo(() => {
+    const padW = 48;
+    const padH = 80;
+    const availW = Math.max(200, containerSize.width - padW);
+    const availH = Math.max(200, containerSize.height - padH);
+
+    if (zoomMode === 'fit-page') {
+      const scaleW = availW / dimensions.width;
+      const scaleH = availH / dimensions.height;
+      return Math.min(scaleW, scaleH);
+    }
+    if (zoomMode === 'fit-width') {
+      return availW / dimensions.width;
+    }
+    return Math.max(0.25, Math.min(3.0, (zoomLevel || 100) / 100));
+  }, [containerSize, dimensions.width, dimensions.height, zoomMode, zoomLevel]);
+
   // Calculate style transformation for zoom modes
   const getScaleStyle = () => {
-    if (zoomMode === 'fit-width') {
-      return { transform: 'scale(1.1)', transformOrigin: 'top center' };
-    }
-    if (zoomMode === 'fit-page') {
-      return { transform: 'scale(0.82)', transformOrigin: 'top center' };
-    }
-    return { transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' };
+    return {
+      transform: `scale(${computedScale})`,
+      transformOrigin: 'center center'
+    };
   };
 
   // Collect unified elements array (elements or converted textOverlays)
@@ -131,9 +177,8 @@ export const PDFWorkspace = ({
     if (viewMode !== 'edit') return;
     if (pageContainerRef.current) {
       const rect = pageContainerRef.current.getBoundingClientRect();
-      const scale = (zoomMode === 'fit-page' ? 0.82 : zoomMode === 'fit-width' ? 1.1 : zoomLevel / 100);
-      const clickX = (e.clientX - rect.left) / scale;
-      const clickY = (e.clientY - rect.top) / scale;
+      const clickX = (e.clientX - rect.left) / computedScale;
+      const clickY = (e.clientY - rect.top) / computedScale;
 
       const clampedX = Math.max(36, Math.min(dimensions.width - 200, clickX));
       const clampedY = Math.max(36, Math.min(dimensions.height - 80, clickY));
@@ -156,9 +201,8 @@ export const PDFWorkspace = ({
       const file = e.dataTransfer.files[0];
       if (file.type.startsWith('image/')) {
         const rect = pageContainerRef.current.getBoundingClientRect();
-        const scale = (zoomMode === 'fit-page' ? 0.82 : zoomMode === 'fit-width' ? 1.1 : zoomLevel / 100);
-        const dropX = (e.clientX - rect.left) / scale;
-        const dropY = (e.clientY - rect.top) / scale;
+        const dropX = (e.clientX - rect.left) / computedScale;
+        const dropY = (e.clientY - rect.top) / computedScale;
 
         if (onAddImageAtPosition) {
           onAddImageAtPosition(file, { x: dropX, y: dropY });
@@ -170,13 +214,11 @@ export const PDFWorkspace = ({
   // Mouse Move / Up Listeners for Dragging & Resizing
   useEffect(() => {
     const handleMouseMove = (e) => {
-      const scale = (zoomMode === 'fit-page' ? 0.82 : zoomMode === 'fit-width' ? 1.1 : zoomLevel / 100);
-
       // Handle Element Dragging
       if (draggingId && pageContainerRef.current) {
         const rect = pageContainerRef.current.getBoundingClientRect();
-        const mouseX = (e.clientX - rect.left) / scale;
-        const mouseY = (e.clientY - rect.top) / scale;
+        const mouseX = (e.clientX - rect.left) / computedScale;
+        const mouseY = (e.clientY - rect.top) / computedScale;
 
         const newX = Math.max(0, Math.min(dimensions.width - 20, mouseX - dragOffset.x));
         const newY = Math.max(0, Math.min(dimensions.height - 20, mouseY - dragOffset.y));
@@ -186,8 +228,8 @@ export const PDFWorkspace = ({
 
       // Handle Element Resizing (8-way Word-like resizing)
       if (resizingInfo && pageContainerRef.current) {
-        const deltaX = (e.clientX - resizingInfo.startX) / scale;
-        const deltaY = (e.clientY - resizingInfo.startY) / scale;
+        const deltaX = (e.clientX - resizingInfo.startX) / computedScale;
+        const deltaY = (e.clientY - resizingInfo.startY) / computedScale;
         const { handle, startX, startY, startWidth, startHeight, aspectRatio } = resizingInfo;
 
         let newWidth = startWidth;
@@ -247,7 +289,7 @@ export const PDFWorkspace = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingId, resizingInfo, dragOffset, dimensions.width, dimensions.height, zoomLevel, zoomMode, handleUpdate]);
+  }, [draggingId, resizingInfo, dragOffset, dimensions.width, dimensions.height, computedScale, handleUpdate]);
 
   // Keyboard Delete / Duplicate Handler
   useEffect(() => {
@@ -266,7 +308,7 @@ export const PDFWorkspace = ({
   }, [activeSelectedId, editingTextId, handleDelete]);
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-start glass-panel rounded-2xl p-6 border border-gray-800/80 bg-gray-950/90 backdrop-blur-md overflow-auto relative custom-scrollbar select-none">
+    <main ref={workspaceContainerRef} className="flex-1 flex flex-col items-center justify-start glass-panel rounded-2xl p-6 border border-gray-800/80 bg-gray-950/90 backdrop-blur-md overflow-auto relative custom-scrollbar select-none">
       {/* Viewport Top Info Bar */}
       <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-900/90 border border-gray-800/80 backdrop-blur-md text-xs text-gray-300 font-mono shadow-lg">
         <span className="flex items-center gap-1.5 text-blue-400 font-semibold">
@@ -355,12 +397,11 @@ export const PDFWorkspace = ({
                     onMouseDown={(e) => {
                       e.stopPropagation();
                       if (pageContainerRef.current) {
-                        const scale = (zoomMode === 'fit-page' ? 0.82 : zoomMode === 'fit-width' ? 1.1 : zoomLevel / 100);
                         const rect = pageContainerRef.current.getBoundingClientRect();
                         setDraggingId(elem.id);
                         setDragOffset({
-                          x: (e.clientX - rect.left) / scale - elem.x,
-                          y: (e.clientY - rect.top) / scale - elem.y
+                          x: (e.clientX - rect.left) / computedScale - elem.x,
+                          y: (e.clientY - rect.top) / computedScale - elem.y
                         });
                       }
                     }}
@@ -420,14 +461,13 @@ export const PDFWorkspace = ({
                   <div 
                     onMouseDown={(e) => {
                       // Allow dragging by clicking image body if selected
-                      if (isSelected && !resizingInfo) {
+                      if (isSelected && !resizingInfo && pageContainerRef.current) {
                         e.stopPropagation();
-                        const scale = (zoomMode === 'fit-page' ? 0.82 : zoomMode === 'fit-width' ? 1.1 : zoomLevel / 100);
                         const rect = pageContainerRef.current.getBoundingClientRect();
                         setDraggingId(elem.id);
                         setDragOffset({
-                          x: (e.clientX - rect.left) / scale - elem.x,
-                          y: (e.clientY - rect.top) / scale - elem.y
+                          x: (e.clientX - rect.left) / computedScale - elem.x,
+                          y: (e.clientY - rect.top) / computedScale - elem.y
                         });
                       }
                     }}

@@ -45,6 +45,10 @@ DATE_TYPE_PATTERNS = [
     ]),
     ("Start", [
         r"\bstart\s+date\b", r"\beffective\s+from\b", r"\bfrom\s+date\b", r"\bpolicy\s+start\b"
+    ]),
+    ("Unrelated", [
+        r"\bcreated\s+date\b", r"\bcreated\s+on\b", r"\bcreated\b", r"\bmeeting\s+date\b", r"\bmeeting\b",
+        r"\bevent\s+date\b", r"\badded\s+entry\b", r"\bupdated\b", r"\bmodified\b", r"\bprinted\b", r"\bslide\b"
     ])
 ]
 
@@ -178,19 +182,23 @@ class ExpiryService:
             "   - 'dob': Date of birth, birth date\n"
             "   - 'unrelated': Invoice date, printed date, application date, purchase date, or non-validity date\n"
             "4. Format every date strictly as YYYY-MM-DD. Reconstruct full 4-digit year.\n"
-            "5. Evidence MUST be an exact short quote from the document text surrounding the date.\n\n"
+            "5. Evidence MUST be an exact short quote from the document text surrounding the date.\n"
+            "6. requires_renewal: true if document requires periodic renewal/extension, false otherwise.\n"
+            "7. summary: A short 1-2 sentence explanation of the document's validity context.\n\n"
             "Return ONLY valid JSON matching this schema:\n"
             "{\n"
-            '  "document_type": "Driving Licence",\n'
+            '  "document_type": "Insurance",\n'
             '  "dates": [\n'
             '    {\n'
             '      "date": "2027-03-15",\n'
             '      "date_type": "expiry",\n'
             '      "confidence": 0.95,\n'
             '      "evidence": "Valid Till: 15/03/2027",\n'
-            '      "reason": "The date is explicitly associated with the document validity period."\n'
+            '      "reason": "The policy validity ends on this date."\n'
             '    }\n'
-            '  ]\n'
+            '  ],\n'
+            '  "requires_renewal": true,\n'
+            '  "summary": "Insurance policy requiring renewal before expiry date."\n'
             "}"
         )
 
@@ -226,6 +234,9 @@ class ExpiryService:
             if doc_type not in DOCUMENT_TYPE_KEYWORDS and doc_type != "Other":
                 doc_type = self.classify_document_type(filename, text)
 
+            ai_summary = str(parsed_json.get("summary", "")).strip()
+            requires_renewal = bool(parsed_json.get("requires_renewal", False))
+
             raw_dates = parsed_json.get("dates", [])
             if not isinstance(raw_dates, list):
                 return None
@@ -250,7 +261,12 @@ class ExpiryService:
                 d_type_raw = str(item.get("date_type", "")).strip().lower()
                 conf = float(item.get("confidence", 0.90))
                 evidence = str(item.get("evidence", "")).strip() or d_str
-                reason = str(item.get("reason", "")).strip() or f"AI classified date as {d_type_raw}."
+                item_reason = str(item.get("reason", "")).strip()
+
+                if ai_summary and item_reason and ai_summary.lower() not in item_reason.lower():
+                    reason = f"{ai_summary} {item_reason}"
+                else:
+                    reason = item_reason or ai_summary or f"AI classified date as {d_type_raw}."
 
                 parsed_dt = self.parse_date_string(d_str)
                 if not parsed_dt:
@@ -276,14 +292,17 @@ class ExpiryService:
                     "original_text": evidence,
                     "confidence": conf,
                     "extraction_method": "ollama",
-                    "reason": reason
+                    "reason": reason,
+                    "requires_renewal": requires_renewal
                 })
 
             if valid_candidates:
                 return {
                     "document_type": doc_type,
                     "candidates": valid_candidates,
-                    "extraction_method": "ollama"
+                    "extraction_method": "ollama",
+                    "requires_renewal": requires_renewal,
+                    "summary": ai_summary
                 }
 
             return None
@@ -558,28 +577,54 @@ class ExpiryService:
 
         # Try Ollama AI Date Extraction First
         ollama_res = self.extract_dates_with_ollama(text_content or "", file_rec.name)
-        extraction_method = "ollama" if ollama_res else "rule_based"
+        rule_candidates = self.extract_dates_from_text(text_content or "", file_rec.name)
 
         if ollama_res and ollama_res.get("candidates"):
-            candidates = ollama_res["candidates"]
+            ai_cands = ollama_res["candidates"]
+            extraction_method = "ollama"
+            
+            # Cross-validate Ollama candidates against rule-based candidates
+            rule_dates = {rc["parsed_date"].strftime("%Y-%m-%d"): rc for rc in rule_candidates}
+            valid_cands = []
+            for c in ai_cands:
+                cand_d_str = c["parsed_date"].strftime("%Y-%m-%d")
+                if cand_d_str in rule_dates:
+                    rule_match = rule_dates[cand_d_str]
+                    if rule_match["date_type"] in ["Unrelated", "DOB", "Issue", "Start"]:
+                        logger.info(f"Cross-validation rejected AI date '{cand_d_str}' in '{file_rec.name}' (rule match classified as {rule_match['date_type']}).")
+                        continue
+                    c["confidence"] = max(c.get("confidence", 0.90), 0.95)
+                    c["extraction_method"] = "hybrid"
+                elif c.get("confidence", 0.90) < 0.75:
+                    c["confidence"] = 0.70
+                valid_cands.append(c)
+            candidates = valid_cands
         else:
-            candidates = self.extract_dates_from_text(text_content or "", file_rec.name)
+            candidates = rule_candidates
+            extraction_method = "rule_based"
             for c in candidates:
                 c["extraction_method"] = "rule_based"
 
         if not candidates:
             if existing_records:
-                logger.info(f"No new date candidates found for '{file_rec.name}'. Preserving {len(existing_records)} existing valid expiry record(s).")
-                for rec in existing_records:
-                    rec.status = self.calculate_status(
-                        extracted_date=rec.extracted_date,
-                        reminder_days_before=rec.reminder_days_before,
-                        reminder_enabled=rec.reminder_enabled,
-                        user_confirmed=rec.user_confirmed,
-                        confidence=rec.confidence
-                    )
-                db.commit()
-                return existing_records[0]
+                if reanalyze:
+                    for rec in existing_records:
+                        if not rec.user_confirmed:
+                            db.delete(rec)
+                    db.commit()
+                    return None
+                else:
+                    logger.info(f"No new date candidates found for '{file_rec.name}'. Preserving {len(existing_records)} existing valid expiry record(s).")
+                    for rec in existing_records:
+                        rec.status = self.calculate_status(
+                            extracted_date=rec.extracted_date,
+                            reminder_days_before=rec.reminder_days_before,
+                            reminder_enabled=rec.reminder_enabled,
+                            user_confirmed=rec.user_confirmed,
+                            confidence=rec.confidence
+                        )
+                    db.commit()
+                    return existing_records[0]
             return None
 
         now = datetime.utcnow()
@@ -617,10 +662,17 @@ class ExpiryService:
                     issue_date_val = c["parsed_date"]
                     break
 
-        # Process valid Expiry/Renewal/Due candidates (supporting multiple date records per document)
+        # Process valid Expiry/Renewal/Due candidates ONLY
         primary_records = [c for c in candidates if c["date_type"] in ["Expiry", "Renewal", "Due"]]
         if not primary_records:
-            primary_records = [primary_cand]
+            # Document has no actual expiry, renewal, or due date.
+            # Delete any unconfirmed invalid expiry records created in past scans.
+            if existing_records:
+                for old_rec in existing_records:
+                    if not old_rec.user_confirmed:
+                        db.delete(old_rec)
+                db.commit()
+            return None
 
         created_or_updated = []
 
@@ -717,6 +769,7 @@ class ExpiryService:
         Also recalculates dynamic statuses relative to current date.
         """
         query = db.query(FileExpiry).join(File, FileExpiry.file_id == File.id)
+        query = query.filter((FileExpiry.date_type.in_(["Expiry", "Renewal", "Due"])) | (FileExpiry.user_confirmed == True))
 
         records = query.all()
         now = datetime.utcnow()

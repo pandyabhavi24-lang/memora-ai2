@@ -9,7 +9,9 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   Loader2, 
-  Phone 
+  Phone,
+  ExternalLink,
+  Share2
 } from 'lucide-react';
 import { apiService } from '../../services/apiService';
 
@@ -51,11 +53,31 @@ export const SendWhatsAppModal = ({
     }
   }, [isOpen, pdfTitle]);
 
+  const handleOpenWhatsAppManual = () => {
+    const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+    const encodedText = encodeURIComponent(`${caption}\n\n[Attachment: ${pdfTitle}]`);
+    const waUrl = cleanNumber 
+      ? `https://wa.me/${cleanNumber}?text=${encodedText}`
+      : `https://wa.me/?text=${encodedText}`;
+
+    if (window.electronAPI && window.electronAPI.openExternal) {
+      window.electronAPI.openExternal(waUrl);
+    } else {
+      window.open(waUrl, '_blank');
+    }
+    addToast('Opening WhatsApp in browser / application...', 'info');
+  };
+
   const handleSend = async (e) => {
     e.preventDefault();
 
     if (!phoneNumber || phoneNumber.trim().length < 10) {
       addToast('Please enter a valid phone number with country code (e.g. +919876543210).', 'warning');
+      return;
+    }
+
+    if (!waStatus.configured) {
+      addToast('WhatsApp direct Cloud API is not configured in backend .env. Use "Open in WhatsApp" below.', 'warning');
       return;
     }
 
@@ -113,18 +135,21 @@ export const SendWhatsAppModal = ({
           <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 text-emerald-300 font-medium">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>WhatsApp Business API Active</span>
+              <span>WhatsApp Business API Active (Mode B)</span>
             </div>
             <Badge variant="success" size="sm">Connected</Badge>
           </div>
         ) : (
           <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1.5 text-xs">
-            <div className="flex items-center gap-2 text-amber-300 font-semibold">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>WhatsApp Business API Unconfigured</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-300 font-semibold">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>WhatsApp Cloud API Unconfigured</span>
+              </div>
+              <Badge variant="amber" size="sm">Manual Mode A Ready</Badge>
             </div>
             <p className="text-[11px] text-amber-200/80 leading-relaxed">
-              WhatsApp is not connected. Please set WHATSAPP_ACCESS_TOKEN & WHATSAPP_PHONE_NUMBER_ID in backend .env file.
+              WhatsApp direct Cloud API is not configured in backend .env. You can use <strong>Mode A: Open in WhatsApp</strong> below to share manually without API credentials.
             </p>
           </div>
         )}
@@ -133,13 +158,12 @@ export const SendWhatsAppModal = ({
         <div className="space-y-3 text-xs">
           <div>
             <label className="block text-gray-300 font-semibold mb-1">
-              Recipient Phone Number (with Country Code) <span className="text-red-400">*</span>
+              Recipient Phone Number (with Country Code)
             </label>
             <div className="relative">
               <Phone className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
               <input
                 type="text"
-                required
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 placeholder="+919876543210"
@@ -174,21 +198,36 @@ export const SendWhatsAppModal = ({
         </div>
 
         {/* Modal Actions */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-800/60">
-          <Button variant="secondary" size="md" onClick={onClose} type="button">
-            Cancel
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-800/60">
+          {/* Mode A: Open in WhatsApp Button */}
+          <Button
+            variant="secondary"
+            size="md"
+            icon={ExternalLink}
+            type="button"
+            onClick={handleOpenWhatsAppManual}
+            className="text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+          >
+            Open in WhatsApp (Mode A)
           </Button>
 
-          <Button
-            variant="primary"
-            size="md"
-            icon={isSending ? Loader2 : Send}
-            type="submit"
-            disabled={isSending}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white"
-          >
-            {isSending ? 'Sending...' : 'Send PDF'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="md" onClick={onClose} type="button">
+              Cancel
+            </Button>
+
+            {/* Mode B: Direct Cloud API Send Button */}
+            <Button
+              variant="primary"
+              size="md"
+              icon={isSending ? Loader2 : Send}
+              type="submit"
+              disabled={isSending || !waStatus.configured}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
+            >
+              {isSending ? 'Sending...' : 'Direct Send (Mode B)'}
+            </Button>
+          </div>
         </div>
       </form>
     </Modal>

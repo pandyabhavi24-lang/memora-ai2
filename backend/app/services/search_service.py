@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from .embedding_service import embedding_service
 from .query_expansion import query_expansion_service
+from .security_service import security_service
 from ..ai.faiss_manager import faiss_manager
 from ..models import Chunk, File, Folder, SearchHistory, OrganizationSuggestion, OrganizationCategory, VectorMapping, MediaSearchContent, MediaAnalysis
 from ..schemas import SearchFilters
@@ -640,6 +641,21 @@ class SearchService:
 
         # 7. Apply User Filters across dimensions
         results = accepted_results
+
+        # Enforce Excluded Items (folders & files) exclusion from search results
+        excluded_paths = security_service.get_excluded_paths(db)
+        if excluded_paths:
+            def _is_item_excluded(fp: str) -> bool:
+                try:
+                    rf = security_service.resolve_path(fp)
+                    for exc in excluded_paths:
+                        if rf == exc or security_service.is_inside(rf, exc):
+                            return True
+                except Exception:
+                    pass
+                return False
+            results = [r for r in results if not _is_item_excluded(r["file_path"])]
+
         if filters:
             if filters.file_type and filters.file_type != "all":
                 target_type = filters.file_type.lower()

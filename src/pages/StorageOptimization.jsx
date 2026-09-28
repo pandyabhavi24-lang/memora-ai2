@@ -428,29 +428,6 @@ export const StorageOptimization = () => {
         ))}
       </div>
 
-      {/* CATEGORY BAR */}
-      {summary?.category_breakdown && (
-        <div className="rounded-xl border border-gray-800/80 bg-gray-900/30 p-4 space-y-3">
-          <span className="text-xs font-semibold text-gray-400">Storage by type</span>
-          <div className="w-full h-2.5 bg-gray-950 rounded-full overflow-hidden flex border border-gray-800/60">
-            {summary.category_breakdown.map(cat => (
-              <div key={cat.category} style={{ width: `${Math.max(cat.percentage, 0)}%` }}
-                title={`${cat.category}: ${cat.formatted} (${cat.percentage}%)`}
-                className={`h-full bg-gradient-to-r ${getCategoryColor(cat.category)}`} />
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {summary.category_breakdown.map(cat => (
-              <div key={cat.category} className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full bg-gradient-to-tr ${getCategoryColor(cat.category)}`} />
-                <span className="text-[11px] text-gray-400">{cat.category}</span>
-                <span className="text-[11px] font-mono text-gray-300">{cat.formatted}</span>
-                <span className="text-[10px] text-gray-600">({cat.percentage}%)</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ─ SECTION 1: OPTIMIZE FILES ─ */}
       <div className="rounded-xl border border-gray-800/80 bg-gray-900/30 overflow-hidden">

@@ -268,34 +268,63 @@ export const PDFPageThumbnailList = ({
 
                 {/* Thumbnail Miniature Surface Frame */}
                 <div 
-                  className="w-full aspect-[1/1.3] bg-slate-900 rounded-lg border border-slate-800 flex flex-col justify-between p-2 shadow-inner overflow-hidden transition-transform duration-200"
+                  className="w-full aspect-[1/1.3] bg-slate-900 rounded-lg border border-slate-800 flex flex-col justify-between p-2 shadow-inner overflow-hidden transition-transform duration-200 relative"
                   style={{ transform: `rotate(${page.rotation || 0}deg)` }}
                 >
-                  {page.type === 'image' && page.previewUrl ? (
-                    <img
-                      src={page.previewUrl}
-                      alt={page.name || `Page ${idx + 1}`}
-                      className="w-full h-full object-contain rounded"
-                    />
-                  ) : (
-                    <>
-                      <div className="space-y-1.5 opacity-40">
-                        <div className="w-3/4 h-1.5 bg-slate-400 rounded-sm" />
-                        <div className="w-full h-1 bg-slate-600 rounded-sm" />
-                        <div className="w-5/6 h-1 bg-slate-600 rounded-sm" />
-                        <div className="w-4/5 h-1 bg-slate-600 rounded-sm" />
-                      </div>
+                  {(() => {
+                    const firstImg = page.elements?.find(e => e.type === 'image');
+                    const imgUrl = (page.type === 'image' && page.previewUrl) 
+                      ? page.previewUrl 
+                      : (firstImg?.previewUrl || firstImg?.imagePath || page.imagePath);
+                    const textElements = page.elements?.filter(e => e.type === 'text') || [];
+                    const firstText = textElements[0]?.text || page.textOverlays?.[0]?.text;
 
-                      <div className="text-[9px] text-slate-500 font-mono text-center my-auto">
-                        Blank Canvas
-                      </div>
+                    if (imgUrl) {
+                      return (
+                        <div className="w-full h-full flex flex-col items-center justify-center relative">
+                          <img
+                            src={imgUrl}
+                            alt={page.name || `Page ${idx + 1}`}
+                            className="w-full h-full object-contain rounded"
+                          />
+                          {firstText && (
+                            <div className="absolute bottom-1 left-1 right-1 bg-black/70 backdrop-blur-xs text-[8px] text-white px-1 py-0.5 rounded truncate font-sans">
+                              {firstText}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
 
-                      <div className="space-y-1 opacity-30">
-                        <div className="w-full h-1 bg-slate-600 rounded-sm" />
-                        <div className="w-2/3 h-1 bg-slate-600 rounded-sm" />
-                      </div>
-                    </>
-                  )}
+                    if (firstText) {
+                      return (
+                        <div className="w-full h-full flex flex-col justify-between p-1 text-[8px] text-slate-300 font-sans leading-tight overflow-hidden bg-slate-950/60 rounded">
+                          <p className="line-clamp-4 font-medium text-slate-200">{firstText}</p>
+                          <div className="text-[7px] text-blue-400 font-mono mt-auto">Text Page</div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <>
+                        <div className="space-y-1.5 opacity-40">
+                          <div className="w-3/4 h-1.5 bg-slate-400 rounded-sm" />
+                          <div className="w-full h-1 bg-slate-600 rounded-sm" />
+                          <div className="w-5/6 h-1 bg-slate-600 rounded-sm" />
+                          <div className="w-4/5 h-1 bg-slate-600 rounded-sm" />
+                        </div>
+
+                        <div className="text-[9px] text-slate-500 font-mono text-center my-auto">
+                          Blank Canvas
+                        </div>
+
+                        <div className="space-y-1 opacity-30">
+                          <div className="w-full h-1 bg-slate-600 rounded-sm" />
+                          <div className="w-2/3 h-1 bg-slate-600 rounded-sm" />
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Footer Page Label */}

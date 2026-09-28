@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -765,119 +766,77 @@ def delete_pdf_draft(draft_id: str, db: Session = Depends(get_db)):
 
 
 # ==========================================
-# EMAIL SHARING ENDPOINTS (GMAIL OAUTH 2.0)
+# MEMORA DATABASE & FILESYSTEM RETRIEVAL FOR PDF STUDIO
 # ==========================================
 
-from ..services.email_service import email_service
-
-
-@router.get("/email/status")
-def get_email_auth_status():
+@router.get("/memora-files")
+def get_memora_files_for_pdf_studio(
+    file_type: Optional[str] = "all",
+    query: Optional[str] = None,
+    limit: Optional[int] = 100,
+    offset: Optional[int] = 0,
+    db: Session = Depends(get_db)
+):
     """
-    Checks if Gmail OAuth is configured and connected.
+    Retrieves real stored and indexed files directly from the Memora database and filesystem.
+    Supports filtering by file_type ('all', 'pdf', 'image', 'scanned') and search queries.
     """
+    import os
+    from ..models import File
+
+    IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff"}
+    PDF_EXTS = {".pdf"}
+
+    db_query = db.query(File)
+
+    if query and query.strip():
+        search_term = f"%{query.strip().lower()}%"
+        db_query = db_query.filter(File.name.ilike(search_term) | File.path.ilike(search_term))
+
+    all_files = db_query.order_by(File.updated_at.desc()).all()
+
+    matched_files = []
+    for f in all_files:
+        ext = (f.extension or "").lower()
+        if not ext.startswith("."):
+            ext = f".{ext}"
+
+        if file_type == "pdf" and ext not in PDF_EXTS:
+            continue
+        elif file_type == "image" and ext not in IMAGE_EXTS:
+            continue
+        elif file_type == "scanned":
+            if ext not in PDF_EXTS and ext not in IMAGE_EXTS:
+                continue
+
+        exists = os.path.exists(f.path) if f.path else False
+
+        matched_files.append({
+            "id": f.id,
+            "name": f.name,
+            "filename": f.name,
+            "file_name": f.name,
+            "path": f.path,
+            "extension": f.extension or ext.replace(".", ""),
+            "size": f.size or (os.path.getsize(f.path) if exists else 0),
+            "file_size": f.size,
+            "mime_type": f.mime_type,
+            "is_image": ext in IMAGE_EXTS,
+            "is_pdf": ext in PDF_EXTS,
+            "preview_url": f"/api/media/{f.id}/preview" if ext in IMAGE_EXTS else None,
+            "thumbnail_url": f"/api/media/{f.id}/thumbnail" if ext in IMAGE_EXTS else None,
+            "exists": exists,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+            "updated_at": f.updated_at.isoformat() if f.updated_at else None,
+        })
+
+    paginated = matched_files[offset : offset + limit]
     return {
-        "configured": email_service.is_configured(),
-        "connected": email_service.is_connected()
+        "total": len(matched_files),
+        "files": paginated
     }
 
 
-@router.get("/email/auth-url")
-def get_email_auth_url(redirect_uri: Optional[str] = "http://localhost:8000/api/pdf/email/oauth-callback"):
-    """
-    Returns Google OAuth 2.0 authorization URL for gmail.send scope.
-    """
-    return email_service.get_auth_url(redirect_uri=redirect_uri or "http://localhost:8000/api/pdf/email/oauth-callback")
-
-
-@router.post("/email/oauth-callback")
-def handle_email_oauth_callback(payload: dict):
-    """
-    Exchanges OAuth authorization code for credentials token.
-    """
-    code = payload.get("code")
-    redirect_uri = payload.get("redirect_uri", "http://localhost:8000/api/pdf/email/oauth-callback")
-    if not code:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth authorization code is required.")
-    try:
-        return email_service.handle_oauth_callback(code=code, redirect_uri=redirect_uri)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post("/email/send")
-def send_pdf_via_email(payload: dict):
-    """
-    Sends verified PDF file to recipient via Gmail API.
-    """
-    to_email = payload.get("to")
-    subject = payload.get("subject", "Memora AI PDF Document")
-    message = payload.get("message", "")
-    pdf_path = payload.get("pdf_path")
-
-    if not to_email or not pdf_path:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Recipient email ('to') and 'pdf_path' are required.")
-
-    try:
-        return email_service.send_pdf_email(
-            to_email=to_email,
-            subject=subject,
-            message_body=message,
-            pdf_path=pdf_path
-        )
-    except FileNotFoundError as fnf:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
-    except ValueError as ve:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
-    except RuntimeError as re:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(re))
-    except Exception as e:
-        logger.error(f"Error sending PDF via Email: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to send email: {e}")
-
-
-# ==========================================
-# WHATSAPP SHARING ENDPOINTS (CLOUD API)
-# ==========================================
-
-from ..services.whatsapp_service import whatsapp_service
-
-
-@router.get("/whatsapp/status")
-def get_whatsapp_status():
-    """
-    Checks if WhatsApp Cloud API is configured in backend environment.
-    """
-    return whatsapp_service.get_status()
-
-
-@router.post("/whatsapp/send")
-def send_pdf_via_whatsapp(payload: dict):
-    """
-    Sends verified PDF file via official WhatsApp Business Cloud API.
-    """
-    phone_number = payload.get("phone_number")
-    pdf_path = payload.get("pdf_path")
-    caption = payload.get("caption")
-
-    if not phone_number or not pdf_path:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="'phone_number' and 'pdf_path' are required.")
-
-    try:
-        return whatsapp_service.send_pdf_document(
-            phone_number=phone_number,
-            pdf_path=pdf_path,
-            caption=caption
-        )
-    except FileNotFoundError as fnf:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
-    except ValueError as ve:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
-    except RuntimeError as re:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(re))
-    except Exception as e:
-        logger.error(f"Error sending PDF via WhatsApp: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to send WhatsApp message: {e}")
 
 
 
