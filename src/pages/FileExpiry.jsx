@@ -139,7 +139,8 @@ export const FileExpiry = () => {
   // Open Edit Modal
   const openEditModal = (record) => {
     setSelectedRecord(record);
-    const dateFormatted = record.extracted_date ? new Date(record.extracted_date).toISOString().split('T')[0] : '';
+    const dateObj = record.extracted_date ? new Date(record.extracted_date) : null;
+    const dateFormatted = dateObj && !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : '';
     setEditForm({
       document_type: record.document_type || 'Other',
       date_type: record.date_type || 'Expiry',
@@ -193,7 +194,8 @@ export const FileExpiry = () => {
       const updated = await apiService.reanalyzeExpiryRecord(recordId);
       if (updated && isModalOpen) {
         setSelectedRecord(updated);
-        const dateFormatted = updated.extracted_date ? new Date(updated.extracted_date).toISOString().split('T')[0] : '';
+        const dateObj = updated.extracted_date ? new Date(updated.extracted_date) : null;
+        const dateFormatted = dateObj && !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : '';
         setEditForm({
           document_type: updated.document_type || 'Other',
           date_type: updated.date_type || 'Expiry',
@@ -227,6 +229,7 @@ export const FileExpiry = () => {
   const getDaysRemainingText = (dateStr) => {
     if (!dateStr) return '';
     const target = new Date(dateStr);
+    if (isNaN(target.getTime())) return '';
     const now = new Date();
     const targetDateOnly = new Date(target.getFullYear(), target.getMonth(), target.getDate());
     const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -520,13 +523,16 @@ export const FileExpiry = () => {
               </thead>
               <tbody className="divide-y divide-gray-800/60 text-sm">
                 {expiries.map((record) => {
-                  const dateObj = new Date(record.extracted_date);
-                  const dateFormatted = dateObj.toLocaleDateString('en-GB', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric'
-                  });
-                  const remainingText = getDaysRemainingText(record.extracted_date);
+                  const dateObj = record.extracted_date ? new Date(record.extracted_date) : null;
+                  const isValidDate = dateObj && !isNaN(dateObj.getTime());
+                  const dateFormatted = isValidDate
+                    ? dateObj.toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric'
+                      })
+                    : 'N/A';
+                  const remainingText = isValidDate ? getDaysRemainingText(record.extracted_date) : '';
 
                   return (
                     <tr

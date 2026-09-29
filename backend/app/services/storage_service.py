@@ -14,6 +14,7 @@ from .scanner import calculate_sha256
 from .indexing_service import indexing_service
 from .image_optimizer import image_optimizer, ImageOptimizationError
 from .pdf_optimizer import pdf_optimizer, PdfOptimizationError
+from .security_service import security_service
 
 logger = logging.getLogger("memora.storage_service")
 
@@ -21,6 +22,21 @@ logger = logging.getLogger("memora.storage_service")
 class StorageServiceError(Exception):
     """Raised when a storage analysis, candidate generation, or replacement error occurs."""
     pass
+
+
+def _is_file_excluded(file_path: str, excluded_paths: set) -> bool:
+    """Checks if a file path falls inside any canonical Security-excluded folder/file path."""
+    if not excluded_paths or not file_path:
+        return False
+    try:
+        real_path = os.path.realpath(os.path.abspath(file_path))
+        for exc in excluded_paths:
+            if real_path == exc or security_service.is_inside(real_path, exc):
+                return True
+    except Exception:
+        pass
+    return False
+
 
 
 @dataclass
@@ -97,8 +113,12 @@ class StorageService:
     def get_storage_summary(self, db: Session) -> Dict[str, Any]:
         """
         Calculates total indexed files, size, and category distribution from SQLite.
+        Excludes files inside Security-excluded paths.
         """
-        files = db.query(File).all()
+        excluded_paths = security_service.get_excluded_paths(db)
+        all_files = db.query(File).all()
+        files = [f for f in all_files if not _is_file_excluded(f.path, excluded_paths)]
+
         total_files = len(files)
         total_size = sum(f.size for f in files) if files else 0
 
@@ -132,7 +152,7 @@ class StorageService:
                 categories["Other"]["bytes"] += size
                 categories["Other"]["count"] += 1
 
-            if ext in OPTIMIZABLE_EXTENSIONS:
+            if (ext in OPTIMIZABLE_EXTENSIONS) and not getattr(f, "is_encrypted", False):
                 optimizable_count += 1
 
         breakdown = []
@@ -166,13 +186,17 @@ class StorageService:
     ) -> Dict[str, Any]:
         """
         Retrieves top largest files indexed in SQLite matching minimum size threshold.
+        Excludes files inside Security-excluded paths.
         """
         min_bytes = int(max(0.0, min_size_mb) * 1024 * 1024)
         safe_limit = max(1, min(500, limit))
+        excluded_paths = security_service.get_excluded_paths(db)
 
         query = db.query(File).filter(File.size >= min_bytes).order_by(desc(File.size))
-        total_count = query.count()
-        file_records = query.limit(safe_limit).all()
+        all_file_records = query.all()
+        valid_file_records = [f for f in all_file_records if not _is_file_excluded(f.path, excluded_paths)]
+        total_count = len(valid_file_records)
+        file_records = valid_file_records[:safe_limit]
 
         items = []
         for f in file_records:
@@ -189,8 +213,8 @@ class StorageService:
             else:
                 cat = "Other"
 
-            is_opt = ext in OPTIMIZABLE_EXTENSIONS
-            opt_type = OPTIMIZABLE_EXTENSIONS.get(ext)
+            is_opt = (ext in OPTIMIZABLE_EXTENSIONS) and not getattr(f, "is_encrypted", False)
+            opt_type = OPTIMIZABLE_EXTENSIONS.get(ext) if is_opt else None
 
             items.append({
                 "id": f.id,
@@ -222,15 +246,22 @@ class StorageService:
         """
         Retrieves files supporting individual in-place optimization (JPEG, PNG, BMP, PDF),
         independent of any minimum file size threshold.
+        Excludes encrypted files and files inside Security-excluded paths.
         """
         safe_limit = max(1, min(500, limit))
+        excluded_paths = security_service.get_excluded_paths(db)
         optimizable_exts = list(OPTIMIZABLE_EXTENSIONS.keys())
         optimizable_exts_upper = [e.upper() for e in optimizable_exts]
         all_exts = list(set(optimizable_exts + optimizable_exts_upper))
 
-        query = db.query(File).filter(File.extension.in_(all_exts)).order_by(desc(File.size))
-        total_count = query.count()
-        file_records = query.limit(safe_limit).all()
+        query = db.query(File).filter(
+            File.extension.in_(all_exts),
+            File.is_encrypted == False
+        ).order_by(desc(File.size))
+        all_records = query.all()
+        valid_records = [f for f in all_records if not _is_file_excluded(f.path, excluded_paths)]
+        total_count = len(valid_records)
+        file_records = valid_records[:safe_limit]
 
         items = []
         for f in file_records:
@@ -280,12 +311,16 @@ class StorageService:
 
         is_optimizable is TRUE only for extensions supported by Memora:
         JPEG, PNG, BMP, PDF.  All other types get is_optimizable=False.
+        Excludes files inside Security-excluded paths.
         """
         safe_limit = max(1, min(1000, limit))
+        excluded_paths = security_service.get_excluded_paths(db)
 
         query = db.query(File).order_by(desc(File.size))
-        total_count = query.count()
-        file_records = query.limit(safe_limit).all()
+        all_records = query.all()
+        valid_records = [f for f in all_records if not _is_file_excluded(f.path, excluded_paths)]
+        total_count = len(valid_records)
+        file_records = valid_records[:safe_limit]
 
         items = []
         for f in file_records:
@@ -302,8 +337,8 @@ class StorageService:
             else:
                 cat = "Other"
 
-            is_opt = ext in OPTIMIZABLE_EXTENSIONS
-            opt_type = OPTIMIZABLE_EXTENSIONS.get(ext)
+            is_opt = (ext in OPTIMIZABLE_EXTENSIONS) and not getattr(f, "is_encrypted", False)
+            opt_type = OPTIMIZABLE_EXTENSIONS.get(ext) if is_opt else None
 
             items.append({
                 "id": f.id,
@@ -346,6 +381,23 @@ class StorageService:
         file_rec = db.query(File).filter(File.id == file_id).first()
         if not file_rec:
             raise StorageServiceError(f"File record with ID {file_id} not found in database.")
+
+        # Check Security-excluded folder protection
+        excluded_paths = security_service.get_excluded_paths(db)
+        if _is_file_excluded(file_rec.path, excluded_paths):
+            return {
+                "status": "excluded",
+                "file_id": file_id,
+                "reason": "File is located inside an excluded folder."
+            }
+
+        # Check Encrypted file protection
+        if getattr(file_rec, "is_encrypted", False):
+            return {
+                "status": "encrypted",
+                "file_id": file_id,
+                "reason": "File is encrypted and protected by Security module."
+            }
 
         source_path = os.path.abspath(file_rec.path)
         if not os.path.exists(source_path) or not os.path.isfile(source_path):
@@ -914,6 +966,7 @@ class StorageService:
             raise StorageServiceError(f"Destination archive already exists: '{dest_abs}'. Set overwrite=true to replace.")
 
         # Validate all file IDs and source files before starting write
+        excluded_paths = security_service.get_excluded_paths(db)
         source_items = []
         total_original_bytes = 0
 
@@ -921,6 +974,12 @@ class StorageService:
             f_rec = db.query(File).filter(File.id == fid).first()
             if not f_rec:
                 raise StorageServiceError(f"File ID {fid} not found in database.")
+
+            if _is_file_excluded(f_rec.path, excluded_paths):
+                raise StorageServiceError(f"File '{f_rec.name}' is located inside a Security-excluded folder.")
+
+            if getattr(f_rec, "is_encrypted", False):
+                raise StorageServiceError(f"File '{f_rec.name}' is encrypted and protected.")
 
             f_path = os.path.abspath(f_rec.path)
             if not os.path.exists(f_path) or not os.path.isfile(f_path):

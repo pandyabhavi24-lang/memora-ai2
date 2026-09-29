@@ -886,12 +886,3 @@ class ZipArchiveResponse(BaseModel):
     execution_time_ms: float
 
 
-# ==============================================================================
-# MODULE 5 SCHEMAS - FILE EXPIRY & RENEWAL REMINDERS
-# ==============================================================================
-
-class ExpiryRecordResponse(BaseModel):
-    id: int
-    file_id: int
-
-
