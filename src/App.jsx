@@ -14,6 +14,7 @@ import { SearchResults } from './pages/SearchResults';
 import { Organization } from './pages/Organization';
 import { MediaIntelligence } from './pages/MediaIntelligence';
 import { PDFStudio } from './pages/PDFStudio';
+import StorageOptimization from './pages/StorageOptimization';
 import { FileExpiry } from './pages/FileExpiry';
 import { Settings } from './pages/Settings';
 import { Security } from './pages/Security';
@@ -103,6 +104,16 @@ function AppRoutes() {
         element={
           <MainLayout>
             <PDFStudio />
+          </MainLayout>
+        }
+      />
+
+            {/* Storage & Optimization */}
+      <Route
+        path="/storage-optimization"
+        element={
+          <MainLayout>
+            <StorageOptimization />
           </MainLayout>
         }
       />

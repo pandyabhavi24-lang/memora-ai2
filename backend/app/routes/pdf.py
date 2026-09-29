@@ -60,6 +60,9 @@ def get_pdf_preview_file(file_path: str):
     import os
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail=f"Preview file not found: {file_path}")
+    from ..services.security_service import security_service
+    if security_service.is_file_encrypted(file_path):
+        raise HTTPException(status_code=403, detail="File is encrypted. Decrypt file to preview.")
     return FastAPIFileResponse(os.path.abspath(file_path), media_type="application/pdf")
 
 

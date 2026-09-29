@@ -44,6 +44,10 @@ def get_file_content(file_id: int, db: Session = Depends(get_db)):
     if not file_rec:
         raise HTTPException(status_code=404, detail="File not found")
 
+    from ..services.security_service import security_service
+    if getattr(file_rec, "is_encrypted", False) or file_rec.extraction_status == "encrypted" or security_service.is_file_encrypted(file_rec.path):
+        raise HTTPException(status_code=403, detail="File is encrypted. Decrypt file to view content.")
+
     return {
         "file_id": file_rec.id,
         "name": file_rec.name,
