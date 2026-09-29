@@ -113,33 +113,6 @@ class IndexingService:
                         item["folder_id"] = folder.id
                     all_found_scans.extend(found)
 
-                self.state["files_found"] = len(all_found_scans)
-
-                if len(all_found_scans) == 0:
-                    self.state["status"] = "complete"
-                    self.state["progress_percentage"] = 100
-                    return
-
-                processed = 0
-                failed = 0
-                chunks_total = 0
-                vectors_total = 0
-
-                for idx, item_meta in enumerate(all_found_scans):
-                    if self._is_cancelled:
-                        logger.info("Scan cancelled by user.")
-                        self.state["status"] = "idle"
-                        self.state["current_file"] = "Scan cancelled"
-                        return
-                    
-
-                all_found_scans = []
-                for folder in folders:
-                    found = scan_directory(folder.path)
-                    for item in found:
-                        item["folder_id"] = folder.id
-                    all_found_scans.extend(found)
-
                 # Deduplicate scan list by normalized path
                 unique_scans = []
                 seen_paths = set()
@@ -152,6 +125,7 @@ class IndexingService:
                 all_found_scans = unique_scans
 
                 self.state["files_found"] = len(all_found_scans)
+
                 if len(all_found_scans) == 0:
                     self.state["status"] = "complete"
                     self.state["progress_percentage"] = 100
@@ -176,7 +150,6 @@ class IndexingService:
                         processed += 1
                         continue
 
-                    from .security_service import security_service
                     is_enc_disk = security_service.is_file_encrypted(file_path)
 
                     self.state["current_file"] = item_meta["name"]
