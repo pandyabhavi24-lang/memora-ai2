@@ -212,9 +212,45 @@ def test_expiry_pipeline():
     assert "ollama_available" in summary
     print(f"  [OK] Module 5 Summary counts verified: {summary}")
 
+    # 13. Test Electricity Bill Due Date & LastDate of Payment Regression
+    print("\n[13/13] Testing Electricity Bill Due Date & LastDate of Payment Regression...")
+    bill_test_texts = [
+        ("Bill Date: 05-09-2026\nLastDate of Payment: 16-09-2026", "Bill_LastDate.pdf"),
+        ("Bill Date: 05-09-2026\nLast Date of Payment: 16-09-2026", "Bill_Last_Date.pdf"),
+        ("Bill Date 05\u201009\u20102026\nLastDate\xa0of\xa0Payment 16\u201009\u20102026", "Bill_UnicodeHyphen.pdf")
+    ]
+
+    for b_text, b_name in bill_test_texts:
+        b_file = db.query(File).filter(File.name == b_name).first()
+        if not b_file:
+            b_file = File(
+                folder_id=test_folder.id,
+                path=f"C:\\TestFolderExpiry\\{b_name}",
+                name=b_name,
+                extension=".pdf",
+                size=1024,
+                modified_at=datetime.utcnow(),
+                file_hash=f"hash_{b_name}",
+                extracted_text=b_text
+            )
+            db.add(b_file)
+            db.commit()
+
+        b_rec = expiry_service.analyze_file(db, b_file.id, reanalyze=True)
+        assert b_rec is not None, f"Failed to extract expiry/due record for '{b_name}'"
+        assert b_rec.date_type == "Due", f"Expected date_type 'Due', got '{b_rec.date_type}'"
+        assert b_rec.extracted_date.strftime("%Y-%m-%d") == "2026-09-16", f"Expected date '2026-09-16', got '{b_rec.extracted_date}'"
+        assert b_rec.status == "expired", f"Expected status 'expired', got '{b_rec.status}'"
+        
+        # Verify API query returns it
+        records_from_api = expiry_service.get_expiry_records(db, status="all")
+        record_ids = [r.id for r in records_from_api]
+        assert b_rec.id in record_ids, f"Record ID {b_rec.id} for '{b_name}' not returned by get_expiry_records"
+        print(f"  [OK] '{b_name}' -> Date: 2026-09-16, Type: Due, Status: expired, Saved & Queryable.")
+
     db.close()
     print("\n==================================================")
-    print("ALL 12 FILE EXPIRY & RENEWAL REMINDER TESTS PASSED!")
+    print("ALL FILE EXPIRY & RENEWAL REMINDER TESTS PASSED!")
     print("==================================================")
 
 if __name__ == "__main__":

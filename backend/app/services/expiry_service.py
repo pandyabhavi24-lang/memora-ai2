@@ -41,7 +41,8 @@ DATE_TYPE_PATTERNS = [
         r"\brenewal\b", r"\brenews\b", r"\bsubscription\s+end\b", r"\brenew\s+by\b"
     ]),
     ("Due", [
-        r"\bdue\s+date\b", r"\bpayment\s+due\b", r"\bdue\s+on\b", r"\bpayable\s+by\b", r"\bdue\b"
+        r"\bdue\s+date\b", r"\bpayment\s+due\s+date\b", r"\bpayment\s+due\b", r"\bdue\s+on\b",
+        r"\bpayable\s+by\b", r"\blast\s*date\s+of\s+payment\b", r"\bpayment\s+deadline\b", r"\bdue\s+by\b", r"\bdue\b"
     ]),
     ("Start", [
         r"\bstart\s+date\b", r"\beffective\s+from\b", r"\bfrom\s+date\b", r"\bpolicy\s+start\b"
@@ -355,7 +356,8 @@ class ExpiryService:
         if not date_str or not isinstance(date_str, str):
             return None
 
-        clean_str = date_str.strip().replace(",", " ")
+        clean_str = date_str.strip().replace("\xa0", " ").replace(",", " ")
+        clean_str = re.sub(r"[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]", "-", clean_str)
         clean_str = re.sub(r"\s+", " ", clean_str)
 
         # 1. ISO format: 2027-03-15 or 2027/03/15
@@ -435,6 +437,10 @@ class ExpiryService:
         """
         if not text or not text.strip():
             return []
+
+        # Normalize non-breaking spaces and Unicode hyphens/dashes from PDF text extraction
+        text = text.replace("\xa0", " ")
+        text = re.sub(r"[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]", "-", text)
 
         candidates: List[Dict[str, Any]] = []
         doc_type = self.classify_document_type(filename, text)
