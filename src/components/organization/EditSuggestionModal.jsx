@@ -97,7 +97,6 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
         finalTags[editingIndex] = trimmed;
       }
     }
-    // Clean, trim, and deduplicate
     const cleanList = [];
     const seen = new Set();
     for (const t of finalTags) {
@@ -114,23 +113,23 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn select-none">
       <div
-        className="w-full max-w-2xl glass-panel bg-slate-900 border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scaleUp"
+        className="w-full max-w-2xl bg-[#0A1629] border border-[rgba(139,170,215,0.18)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scaleUp"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/90 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(139,170,215,0.14)] bg-[#0E1D35] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+            <div className="w-9 h-9 rounded-xl bg-[rgba(117,102,246,0.15)] border border-[rgba(117,102,246,0.3)] flex items-center justify-center text-[#7566F6]">
               <Tag className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">Edit Smart Tags</h3>
-              <p className="text-xs text-slate-400">Manage descriptive metadata tags for semantic search & filtering</p>
+              <h3 className="text-lg font-bold text-[#F4F7FF]">Edit Smart Tags</h3>
+              <p className="text-xs text-[#A7B7D0]">Manage descriptive metadata tags for semantic search & filtering</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-xl transition-colors cursor-pointer"
+            className="p-2 text-[#71839E] hover:text-[#F4F7FF] hover:bg-[#132642] rounded-xl transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -140,50 +139,50 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
         <div className="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
           
           {/* Target File Info */}
-          <div className="p-4 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+          <div className="p-4 bg-[#06101F] rounded-xl border border-[rgba(139,170,215,0.14)] space-y-1">
+            <span className="text-[10px] font-bold text-[#71839E] uppercase tracking-wider block">
               TARGET FILE
             </span>
-            <p className="text-sm font-bold text-white font-mono truncate" title={suggestion.filename}>
+            <p className="text-sm font-bold text-[#F4F7FF] font-mono truncate" title={suggestion.filename}>
               📄 {suggestion.filename}
             </p>
-            <p className="text-xs text-slate-400 font-mono truncate" title={suggestion.currentPath}>
-              📁 Location: <span className="text-slate-300">{suggestion.currentPath}</span>
+            <p className="text-xs text-[#A7B7D0] font-mono truncate" title={suggestion.currentPath}>
+              📁 Location: <span className="text-[#F4F7FF]">{suggestion.currentPath}</span>
             </p>
           </div>
 
           {/* CONCEPT BANNER */}
-          <div className="p-4 bg-purple-500/10 rounded-xl border border-purple-500/25 space-y-1.5 text-xs text-purple-200">
-            <div className="font-bold flex items-center gap-2 text-purple-300 text-sm">
-              <Info className="w-4 h-4 text-purple-400 shrink-0" />
+          <div className="p-4 bg-[rgba(117,102,246,0.1)] rounded-xl border border-[rgba(117,102,246,0.25)] space-y-1.5 text-xs text-indigo-200">
+            <div className="font-bold flex items-center gap-2 text-indigo-300 text-sm">
+              <Info className="w-4 h-4 text-[#7566F6] shrink-0" />
               <span>Smart Tags vs. Physical Folders</span>
             </div>
-            <p className="text-[11px] leading-relaxed text-purple-200/90">
+            <p className="text-[11px] leading-relaxed text-indigo-200/90">
               <strong>Smart Tags</strong> describe file content for quick search filtering and indexing. Multiple Smart Tags can be attached to a single file. They do <strong>not</strong> restrict or determine physical hard drive folder names.
             </p>
           </div>
 
           {/* ACTIVE SMART TAGS CHIPS */}
-          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-3">
-            <span className="font-bold text-xs text-slate-200 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-400" />
+          <div className="p-4 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.14)] space-y-3">
+            <span className="font-bold text-xs text-[#F4F7FF] flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#7566F6]" />
               <span>Active Smart Tags ({smartTags.length})</span>
             </span>
 
             <div className="flex flex-wrap items-center gap-2 min-h-[36px]">
               {smartTags.length === 0 ? (
-                <span className="text-xs text-slate-500 italic">No smart tags assigned. Add one below.</span>
+                <span className="text-xs text-[#71839E] italic">No smart tags assigned. Add one below.</span>
               ) : (
                 smartTags.map((tag, idx) => (
                   editingIndex === idx ? (
-                    <div key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-900 border border-purple-500">
+                    <div key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-[#0E1D35] border border-[#7566F6]">
                       <input
                         type="text"
                         autoFocus
                         value={editingText}
                         onChange={(e) => setEditingText(e.target.value)}
                         onKeyDown={(e) => handleKeyDownEditTag(e, idx)}
-                        className="px-1 py-0.5 bg-transparent text-xs text-white focus:outline-none w-28 font-semibold"
+                        className="px-1 py-0.5 bg-transparent text-xs text-[#F4F7FF] focus:outline-none w-28 font-semibold"
                       />
                       <button
                         type="button"
@@ -196,7 +195,7 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
                       <button
                         type="button"
                         onClick={() => setEditingIndex(null)}
-                        className="text-slate-400 hover:text-slate-200 p-0.5"
+                        className="text-[#71839E] hover:text-[#F4F7FF] p-0.5"
                         title="Cancel edit"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -205,14 +204,14 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
                   ) : (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40 group transition-all"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[rgba(117,102,246,0.15)] text-indigo-300 border border-[rgba(117,102,246,0.3)] group transition-all"
                     >
-                      <Tag className="w-3 h-3 text-purple-400" />
+                      <Tag className="w-3 h-3 text-[#7566F6]" />
                       <span>{tag}</span>
                       <button
                         type="button"
                         onClick={() => handleStartEditing(idx, tag)}
-                        className="text-purple-400 hover:text-purple-200 transition-colors ml-1 p-0.5"
+                        className="text-[#7566F6] hover:text-[#F4F7FF] transition-colors ml-1 p-0.5"
                         title="Edit tag text"
                       >
                         <Edit3 className="w-3 h-3" />
@@ -220,7 +219,7 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
                       <button
                         type="button"
                         onClick={() => handleRemoveTag(idx)}
-                        className="text-purple-400 hover:text-red-400 transition-colors p-0.5"
+                        className="text-[#7566F6] hover:text-red-400 transition-colors p-0.5"
                         title="Remove tag"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -234,7 +233,7 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
 
           {/* ADD CUSTOM TAG INPUT */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-200">
+            <label className="text-xs font-bold text-[#F4F7FF]">
               Add New Smart Tag:
             </label>
             <div className="flex items-center gap-2">
@@ -244,12 +243,12 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
                 onChange={(e) => setNewTagInput(e.target.value)}
                 onKeyDown={handleKeyDownNewTag}
                 placeholder="Type tag name (e.g. Artificial Intelligence) and press Enter"
-                className="flex-1 px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 font-medium"
+                className="flex-1 px-4 py-2.5 bg-[#06101F] border border-[rgba(139,170,215,0.18)] rounded-xl text-xs text-[#F4F7FF] placeholder-[#71839E] focus:outline-none focus:border-[#7566F6] font-medium"
               />
               <button
                 type="button"
                 onClick={() => handleAddTag()}
-                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                className="px-4 py-2.5 bg-[#7566F6] hover:bg-[#6353F5] text-white font-semibold text-xs rounded-xl transition-colors flex items-center gap-1 cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 <span>Add Tag</span>
@@ -259,7 +258,7 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
 
           {/* SUGGESTED PRESET TAGS */}
           <div className="space-y-2.5">
-            <span className="text-xs font-bold text-slate-300">
+            <span className="text-xs font-bold text-[#A7B7D0]">
               Suggested Preset Tags:
             </span>
             <div className="flex flex-wrap gap-2">
@@ -273,11 +272,11 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
                     onClick={() => handleAddTag(preset)}
                     className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1 cursor-pointer ${
                       isSelected
-                        ? 'bg-slate-900 text-slate-600 border-slate-800 opacity-50 cursor-not-allowed'
-                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-purple-500/20 hover:text-purple-300 hover:border-purple-500/30'
+                        ? 'bg-[#0E1D35] text-[#71839E] border-[rgba(139,170,215,0.1)] opacity-50 cursor-not-allowed'
+                        : 'bg-[#06101F] text-[#A7B7D0] border-[rgba(139,170,215,0.14)] hover:bg-[rgba(117,102,246,0.15)] hover:text-indigo-300 hover:border-[rgba(117,102,246,0.3)]'
                     }`}
                   >
-                    <Plus className="w-3 h-3 text-purple-400" />
+                    <Plus className="w-3 h-3 text-[#7566F6]" />
                     <span>{preset}</span>
                   </button>
                 );
@@ -288,22 +287,22 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-slate-950/90 shrink-0">
-          <div className="text-xs text-slate-400 font-mono">
-            Tags count: <span className="text-purple-300 font-semibold">{smartTags.length}</span>
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[rgba(139,170,215,0.14)] bg-[#0E1D35] shrink-0">
+          <div className="text-xs text-[#71839E] font-mono">
+            Tags count: <span className="text-indigo-300 font-semibold">{smartTags.length}</span>
           </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-[#06101F] hover:bg-[#132642] text-[#A7B7D0] hover:text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] font-semibold text-xs transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs shadow-lg shadow-purple-500/20 border border-purple-500/30 transition-all cursor-pointer"
+              className="px-5 py-2 rounded-xl bg-[#7566F6] hover:bg-[#6353F5] text-white font-semibold text-xs shadow-lg shadow-purple-500/20 border border-purple-500/30 transition-all cursor-pointer"
             >
               Save Smart Tags
             </button>

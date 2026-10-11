@@ -120,16 +120,6 @@ export const SemanticSearch = () => {
     ...categoryList.filter(c => c.id !== 'all')
   ];
 
-  const dynamicFolderOptions = (folders || []).map(f => ({
-    id: f.id || f.name,
-    label: f.name || f.path
-  }));
-
-  const folderOptions = [
-    { id: 'all', label: 'All Locations' },
-    ...dynamicFolderOptions
-  ];
-
   const samplePrompts = [
     'Find recent project documents',
     'Search for reports and notes',
@@ -150,86 +140,86 @@ export const SemanticSearch = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 py-4 select-none">
+    <div className="max-w-4xl mx-auto space-y-6 py-3 select-none">
       {/* Friendly Plain-Language Header */}
       <div className="text-center">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400 mb-3">
-          <Sparkles className="w-4 h-4 text-blue-400" />
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#3478F6]/10 border border-[#3478F6]/20 text-xs font-semibold text-[#4B91FF] mb-2.5">
+          <Sparkles className="w-3.5 h-3.5 text-[#4B91FF]" />
           <span>Intelligent Digital Memory Assistant</span>
         </div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F4F7FF] tracking-tight mb-1.5">
           Search Your Files
         </h1>
-        <p className="text-sm text-gray-300 max-w-xl mx-auto font-medium">
-          Search by meaning, not only exact words.
+        <p className="text-xs sm:text-sm text-[#A7B7D0] max-w-xl mx-auto font-medium">
+          Search by meaning and context, not only exact file titles.
         </p>
       </div>
 
       {/* Prominent Hero Search Input Form */}
       <form onSubmit={handleSearchSubmit} className="relative shadow-2xl">
-        <div className="glass-panel p-2.5 rounded-2xl border-blue-500/40 focus-within:border-blue-500 flex items-center gap-3 transition-all">
-          <Search className="w-6 h-6 text-gray-400 ml-3 shrink-0" />
+        <div className="glass-panel p-2 rounded-2xl border-[rgba(139,170,215,0.22)] bg-[#0A1629] focus-within:border-[#3478F6] focus-within:ring-2 focus-within:ring-[#3478F6]/20 flex items-center gap-3 transition-all">
+          <Search className="w-5 h-5 text-[#71839E] ml-3 shrink-0" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="What are you looking for?"
-            className="w-full bg-transparent border-none text-base text-white placeholder-gray-400 focus:outline-none py-3 font-medium"
+            className="w-full bg-transparent border-none text-sm sm:text-base text-[#F4F7FF] placeholder-[#71839E] focus:outline-none py-2.5 font-medium"
             autoFocus
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
+              className="p-1.5 text-[#71839E] hover:text-[#F4F7FF] rounded-lg hover:bg-[#0E1D35] transition-colors cursor-pointer"
               title="Clear search"
             >
               <X className="w-4 h-4" />
             </button>
           )}
-          <Button type="submit" variant="primary" size="md" className="shrink-0 rounded-xl px-6 font-semibold">
+          <Button type="submit" variant="primary" size="md" className="shrink-0 rounded-xl px-5 font-semibold">
             Search Files
           </Button>
         </div>
       </form>
 
       {/* Natural Language Suggestions Section */}
-      <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-3">
-        <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-          <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+      <div className="glass-panel p-4 sm:p-5 rounded-2xl border-[rgba(139,170,215,0.14)] bg-[#0A1629] space-y-2.5">
+        <h3 className="text-xs font-bold text-[#A7B7D0] uppercase tracking-wider flex items-center gap-2">
+          <Sparkles className="w-3.5 h-3.5 text-[#4B91FF]" />
           <span>Try searching for:</span>
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {samplePrompts.map((prompt, idx) => (
             <div
               key={idx}
               onClick={() => handleSelectQuery(prompt)}
-              className="p-3.5 rounded-xl bg-gray-900/70 hover:bg-blue-950/40 border border-gray-800/80 hover:border-blue-500/40 cursor-pointer transition-all flex items-center justify-between group"
+              className="p-3 rounded-xl bg-[#0E1D35] hover:bg-[#132642] border border-[rgba(139,170,215,0.14)] hover:border-[#3478F6]/40 cursor-pointer transition-all flex items-center justify-between group"
             >
-              <span className="text-xs text-gray-200 font-medium group-hover:text-blue-300">
+              <span className="text-xs text-[#F4F7FF] font-medium group-hover:text-[#4B91FF]">
                 "{prompt}"
               </span>
-              <ArrowRight className="w-3.5 h-3.5 text-gray-500 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="w-3.5 h-3.5 text-[#71839E] group-hover:text-[#4B91FF] group-hover:translate-x-0.5 transition-all" />
             </div>
           ))}
         </div>
       </div>
 
       {/* Refine Search / Filter Controls */}
-      <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-4">
-        <div className="flex items-center justify-between border-b border-gray-800/80 pb-3">
-          <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-            <SlidersHorizontal className="w-4 h-4 text-blue-400" />
+      <div className="glass-panel p-4 sm:p-5 rounded-2xl border-[rgba(139,170,215,0.14)] bg-[#0A1629] space-y-3.5">
+        <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.14)] pb-2.5">
+          <h3 className="text-xs font-bold text-[#A7B7D0] uppercase tracking-wider flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-[#4B91FF]" />
             <span>Refine Your Search</span>
           </h3>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 font-medium">Sort by:</span>
+            <span className="text-xs text-[#71839E] font-medium">Sort by:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+              className="bg-[#0E1D35] border border-[rgba(139,170,215,0.18)] rounded-lg px-2.5 py-1 text-xs text-[#F4F7FF] focus:outline-none focus:border-[#3478F6]"
             >
               <option value="relevant">Most Relevant</option>
               <option value="newest">Newest Modified</option>
@@ -243,14 +233,14 @@ export const SemanticSearch = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           {/* File Type Filter */}
           <div>
-            <label className="text-gray-400 font-semibold mb-1.5 block flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-blue-400" />
+            <label className="text-[#A7B7D0] font-semibold mb-1 block flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-[#4B91FF]" />
               File Type
             </label>
             <select
               value={filters.fileType}
               onChange={(e) => setFilters({ ...filters, fileType: e.target.value })}
-              className="w-full bg-gray-900/80 border border-gray-800 rounded-xl p-2 text-gray-200 focus:outline-none focus:border-blue-500 font-medium"
+              className="w-full bg-[#0E1D35] border border-[rgba(139,170,215,0.18)] rounded-xl p-2 text-[#F4F7FF] focus:outline-none focus:border-[#3478F6] font-medium"
             >
               {fileTypeOptions.map(opt => (
                 <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -260,14 +250,14 @@ export const SemanticSearch = () => {
 
           {/* Date Range Filter */}
           <div>
-            <label className="text-gray-400 font-semibold mb-1.5 block flex items-center gap-1.5">
+            <label className="text-[#A7B7D0] font-semibold mb-1 block flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-purple-400" />
               Date Modified
             </label>
             <select
               value={filters.dateRange}
               onChange={(e) => setFilters({ ...filters, dateRange: e.target.value })}
-              className="w-full bg-gray-900/80 border border-gray-800 rounded-xl p-2 text-gray-200 focus:outline-none focus:border-blue-500 font-medium"
+              className="w-full bg-[#0E1D35] border border-[rgba(139,170,215,0.18)] rounded-xl p-2 text-[#F4F7FF] focus:outline-none focus:border-[#3478F6] font-medium"
             >
               {dateRangeOptions.map(opt => (
                 <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -277,14 +267,14 @@ export const SemanticSearch = () => {
 
           {/* File Size Filter */}
           <div>
-            <label className="text-gray-400 font-semibold mb-1.5 block flex items-center gap-1.5">
+            <label className="text-[#A7B7D0] font-semibold mb-1 block flex items-center gap-1.5">
               <HardDrive className="w-3.5 h-3.5 text-amber-400" />
               File Size
             </label>
             <select
               value={filters.size || 'any'}
               onChange={(e) => setFilters({ ...filters, size: e.target.value })}
-              className="w-full bg-gray-900/80 border border-gray-800 rounded-xl p-2 text-gray-200 focus:outline-none focus:border-blue-500 font-medium"
+              className="w-full bg-[#0E1D35] border border-[rgba(139,170,215,0.18)] rounded-xl p-2 text-[#F4F7FF] focus:outline-none focus:border-[#3478F6] font-medium"
             >
               {sizeOptions.map(opt => (
                 <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -294,14 +284,14 @@ export const SemanticSearch = () => {
 
           {/* Category Filter */}
           <div>
-            <label className="text-gray-400 font-semibold mb-1.5 block flex items-center gap-1.5">
+            <label className="text-[#A7B7D0] font-semibold mb-1 block flex items-center gap-1.5">
               <Tag className="w-3.5 h-3.5 text-emerald-400" />
               Category
             </label>
             <select
               value={filters.category || 'all'}
               onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-              className="w-full bg-gray-900/80 border border-gray-800 rounded-xl p-2 text-gray-200 focus:outline-none focus:border-blue-500 font-medium"
+              className="w-full bg-[#0E1D35] border border-[rgba(139,170,215,0.18)] rounded-xl p-2 text-[#F4F7FF] focus:outline-none focus:border-[#3478F6] font-medium"
             >
               {categoryOptions.map(opt => (
                 <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -312,13 +302,13 @@ export const SemanticSearch = () => {
 
         {/* Active Filters Ribbon */}
         {hasActiveFilters && (
-          <div className="pt-3 border-t border-gray-800/80 flex items-center justify-between flex-wrap gap-2 text-xs">
+          <div className="pt-2.5 border-t border-[rgba(139,170,215,0.14)] flex items-center justify-between flex-wrap gap-2 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-gray-400 font-semibold">Active Filters:</span>
+              <span className="text-[#71839E] font-semibold">Active Filters:</span>
               {filters.fileType !== 'all' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#3478F6]/15 text-[#4B91FF] border border-[#3478F6]/30">
                   Type: {fileTypeOptions.find(o => o.id === filters.fileType)?.label}
-                  <button onClick={() => setFilters({ ...filters, fileType: 'all' })} className="hover:text-white ml-0.5">
+                  <button onClick={() => setFilters({ ...filters, fileType: 'all' })} className="hover:text-white ml-0.5 cursor-pointer">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -326,7 +316,7 @@ export const SemanticSearch = () => {
               {filters.dateRange !== 'any' && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/30">
                   Date: {dateRangeOptions.find(o => o.id === filters.dateRange)?.label}
-                  <button onClick={() => setFilters({ ...filters, dateRange: 'any' })} className="hover:text-white ml-0.5">
+                  <button onClick={() => setFilters({ ...filters, dateRange: 'any' })} className="hover:text-white ml-0.5 cursor-pointer">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -334,7 +324,7 @@ export const SemanticSearch = () => {
               {filters.size && filters.size !== 'any' && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30">
                   Size: {sizeOptions.find(o => o.id === filters.size)?.label}
-                  <button onClick={() => setFilters({ ...filters, size: 'any' })} className="hover:text-white ml-0.5">
+                  <button onClick={() => setFilters({ ...filters, size: 'any' })} className="hover:text-white ml-0.5 cursor-pointer">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -342,7 +332,7 @@ export const SemanticSearch = () => {
               {filters.category && filters.category !== 'all' && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                   Category: {categoryOptions.find(o => o.id === filters.category)?.label}
-                  <button onClick={() => setFilters({ ...filters, category: 'all' })} className="hover:text-white ml-0.5">
+                  <button onClick={() => setFilters({ ...filters, category: 'all' })} className="hover:text-white ml-0.5 cursor-pointer">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -352,7 +342,7 @@ export const SemanticSearch = () => {
             <button
               type="button"
               onClick={resetFilters}
-              className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 transition-colors"
+              className="text-xs text-[#4B91FF] hover:underline font-semibold flex items-center gap-1 transition-colors cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
               <span>Clear All</span>
@@ -363,17 +353,17 @@ export const SemanticSearch = () => {
 
       {/* Recently Opened Files */}
       {recentlyOpenedFiles && recentlyOpenedFiles.length > 0 && (
-        <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-3">
+        <div className="glass-panel p-4 sm:p-5 rounded-2xl border-[rgba(139,170,215,0.14)] bg-[#0A1629] space-y-2.5">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-blue-400" />
+            <h3 className="text-xs font-bold text-[#A7B7D0] uppercase tracking-wider flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-[#4B91FF]" />
               <span>Recently Opened Files</span>
             </h3>
-            <span className="text-[11px] text-gray-500 font-medium">Click to open file</span>
+            <span className="text-[11px] text-[#71839E] font-medium">Click to open file</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {recentlyOpenedFiles.slice(0, 5).map((fileItem) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {recentlyOpenedFiles.slice(0, 6).map((fileItem) => {
               const shortenedPath = fileItem.path && fileItem.path.length > 40
                 ? '...' + fileItem.path.slice(-37)
                 : fileItem.path;
@@ -382,21 +372,21 @@ export const SemanticSearch = () => {
                 <div
                   key={fileItem.id || fileItem.path}
                   onClick={() => handleOpenRecentFile(fileItem)}
-                  className="p-3 rounded-xl bg-gray-900/80 hover:bg-blue-950/40 border border-gray-800/80 hover:border-blue-500/40 cursor-pointer transition-all flex items-center justify-between group"
+                  className="p-3 rounded-xl bg-[#0E1D35] hover:bg-[#132642] border border-[rgba(139,170,215,0.14)] hover:border-[#3478F6]/40 cursor-pointer transition-all flex items-center justify-between group"
                   title={`Open ${fileItem.name}\n${fileItem.path}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <FileText className="w-4 h-4 text-blue-400 shrink-0 group-hover:scale-105 transition-transform" />
+                    <FileText className="w-4 h-4 text-[#4B91FF] shrink-0 group-hover:scale-105 transition-transform" />
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-gray-200 truncate group-hover:text-blue-300">
+                      <p className="text-xs font-semibold text-[#F4F7FF] truncate group-hover:text-[#4B91FF]">
                         {fileItem.name}
                       </p>
-                      <p className="text-[10px] text-gray-400 font-mono truncate">
+                      <p className="text-[10px] text-[#71839E] font-mono truncate">
                         {shortenedPath}
                       </p>
                     </div>
                   </div>
-                  <ExternalLink className="w-3.5 h-3.5 text-gray-500 group-hover:text-blue-400 shrink-0 ml-2" />
+                  <ExternalLink className="w-3.5 h-3.5 text-[#71839E] group-hover:text-[#4B91FF] shrink-0 ml-2" />
                 </div>
               );
             })}
@@ -406,16 +396,16 @@ export const SemanticSearch = () => {
 
       {/* Recent Searches */}
       {searchHistory.length > 0 && (
-        <div className="glass-panel p-5 rounded-2xl border-gray-800/80">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+        <div className="glass-panel p-4 sm:p-5 rounded-2xl border-[rgba(139,170,215,0.14)] bg-[#0A1629]">
+          <div className="flex items-center justify-between mb-2.5">
+            <h3 className="text-xs font-bold text-[#A7B7D0] uppercase tracking-wider flex items-center gap-2">
               <History className="w-3.5 h-3.5 text-purple-400" />
               <span>Recent Searches</span>
             </h3>
             <button
               type="button"
               onClick={clearHistoryAll}
-              className="text-[11px] text-gray-400 hover:text-red-400 transition-colors font-medium"
+              className="text-[11px] text-[#71839E] hover:text-red-400 transition-colors font-medium cursor-pointer"
             >
               Clear All History
             </button>
@@ -425,18 +415,18 @@ export const SemanticSearch = () => {
             {searchHistory.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-900/80 text-xs text-gray-300 border border-gray-800 hover:border-gray-700 transition-colors group"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0E1D35] text-xs text-[#A7B7D0] border border-[rgba(139,170,215,0.14)] hover:border-[#3478F6]/40 transition-colors group"
               >
                 <span
                   onClick={() => handleSelectQuery(item.query)}
-                  className="cursor-pointer hover:text-white font-medium"
+                  className="cursor-pointer hover:text-[#F4F7FF] font-medium"
                 >
                   {item.query}
                 </span>
                 <button
                   type="button"
                   onClick={() => removeHistoryItem(item.id)}
-                  className="text-gray-500 hover:text-red-400 p-0.5 rounded transition-colors"
+                  className="text-[#71839E] hover:text-red-400 p-0.5 rounded transition-colors cursor-pointer"
                   title="Remove item"
                 >
                   <X className="w-3 h-3" />
@@ -449,4 +439,3 @@ export const SemanticSearch = () => {
     </div>
   );
 };
-

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -19,7 +20,9 @@ import {
   CheckCircle2,
   CalendarClock,
   Clock,
-  AlertCircle
+  ExternalLink,
+  FolderOpen,
+  Layers
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/common/Button';
@@ -57,11 +60,10 @@ function getDaysRemainingText(dateStr) {
 export const Dashboard = () => {
   const navigate = useNavigate();
   const { 
-    searchQuery, 
-    setSearchQuery, 
-    executeSearch, 
     folders, 
-    selectFolderNative
+    selectFolderNative,
+    recentlyOpenedFiles,
+    recordOpenedFile
   } = useApp();
 
   // Primary Data States
@@ -95,9 +97,8 @@ export const Dashboard = () => {
 
   const [categories, setCategories] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
-  const [activeTooltip, setActiveTooltip] = useState(null);
 
-  // Module 5 Expiry State
+  // Expiry State
   const [expirySummary, setExpirySummary] = useState({
     total_tracked: 0,
     upcoming: 0,
@@ -112,6 +113,56 @@ export const Dashboard = () => {
   const [hasError, setHasError] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const bellButtonRef = useRef(null);
+  const popoverRef = useRef(null);
+  const [popoverCoords, setPopoverCoords] = useState({ top: 0, right: 16 });
+
+  const updatePopoverPosition = () => {
+    if (!bellButtonRef.current) return;
+    const rect = bellButtonRef.current.getBoundingClientRect();
+    const right = Math.max(16, window.innerWidth - rect.right);
+    const top = rect.bottom + 8;
+    setPopoverCoords({ top, right });
+  };
+
+  useEffect(() => {
+    if (!showNotifications) return;
+
+    updatePopoverPosition();
+
+    const handleClickOutside = (event) => {
+      if (
+        popoverRef.current && 
+        !popoverRef.current.contains(event.target) &&
+        bellButtonRef.current &&
+        !bellButtonRef.current.contains(event.target)
+      ) {
+        setShowNotifications(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowNotifications(false);
+      }
+    };
+
+    const handleWindowChange = () => {
+      updatePopoverPosition();
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleWindowChange);
+    window.addEventListener('scroll', handleWindowChange, true);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleWindowChange);
+      window.removeEventListener('scroll', handleWindowChange, true);
+    };
+  }, [showNotifications]);
 
   useEffect(() => {
     loadAllDashboardData();
@@ -180,7 +231,6 @@ export const Dashboard = () => {
       if (expiryListRes.status === 'fulfilled' && Array.isArray(expiryListRes.value)) {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        // Find next upcoming date (extracted_date >= today or top record)
         const nextUpcoming = expiryListRes.value.find(r => new Date(r.extracted_date) >= today) || expiryListRes.value[0] || null;
         setNextExpiry(nextUpcoming);
       }
@@ -192,24 +242,29 @@ export const Dashboard = () => {
     }
   };
 
-  const handleHeaderSearchSubmit = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      executeSearch(searchQuery);
-      navigate('/results');
+  const handleOpenRecentFile = (fileItem) => {
+    if (fileItem && fileItem.path) {
+      apiService.openFile(fileItem.path);
+      recordOpenedFile(fileItem);
+    }
+  };
+
+  const handleLocateRecentFile = (fileItem) => {
+    if (fileItem && fileItem.path) {
+      apiService.locateFile(fileItem.path);
     }
   };
 
   // Full Page Error State
   if (hasError) {
     return (
-      <div className="glass-panel p-8 rounded-3xl border-red-500/30 text-center space-y-4 max-w-lg mx-auto my-12">
-        <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-400 flex items-center justify-center mx-auto">
+      <div className="glass-panel p-8 rounded-2xl border-red-500/30 bg-[#0A1629] text-center space-y-4 max-w-lg mx-auto my-12">
+        <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-400 flex items-center justify-center mx-auto border border-red-500/20">
           <AlertTriangle className="w-6 h-6" />
         </div>
-        <h2 className="text-lg font-bold text-white">Engine Connection Error</h2>
-        <p className="text-xs text-gray-400">
-          Memora could not connect to the local FastAPI backend. Verify backend service status.
+        <h2 className="text-lg font-bold text-[#F4F7FF]">Engine Connection Error</h2>
+        <p className="text-xs text-[#A7B7D0]">
+          Memora could not connect to the local FastAPI backend. Verify that the backend service is running.
         </p>
         <Button variant="primary" size="md" onClick={loadAllDashboardData} className="mx-auto">
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -219,484 +274,612 @@ export const Dashboard = () => {
     );
   }
 
-  // Calculate real system operational status
   const systemOperationalLabel = healthStatus.status === 'ok' 
     ? 'Ready' 
-    : (healthStatus.status === 'degraded' ? 'Needs Attention' : 'Unavailable');
+    : (healthStatus.status === 'degraded' ? 'Needs Attention' : 'Offline');
 
   const systemOperationalColor = healthStatus.status === 'ok'
     ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
     : (healthStatus.status === 'degraded' ? 'text-amber-400 border-amber-500/30 bg-amber-500/10' : 'text-red-400 border-red-500/30 bg-red-500/10');
 
+  // Combined recent files (local app history or backend stats recent files)
+  const combinedRecentFiles = (recentlyOpenedFiles && recentlyOpenedFiles.length > 0)
+    ? recentlyOpenedFiles.slice(0, 4)
+    : (stats.recent_files || []).slice(0, 4);
+
+  const totalNotificationAlerts = 
+    (duplicateCount > 0 ? 1 : 0) +
+    ((expirySummary.due_soon > 0 || expirySummary.expired > 0) ? 1 : 0) +
+    (scanStatus.status === 'scanning' ? 1 : 0);
+
   return (
-    <div className="flex flex-col justify-between h-[calc(100vh-4.5rem)] overflow-y-auto lg:overflow-hidden p-0.5 space-y-2.5 w-full mx-auto select-none">
+    <div className="space-y-2 sm:space-y-2.5 pb-2 w-full mx-auto select-none">
       
-      {/* ==========================================================
-          A. TOP HEADER (BALANCED ALIGNMENT)
-      ========================================================== */}
-      <div className="glass-panel px-4 py-2.5 rounded-2xl border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/95 to-slate-950/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 shadow-md shadow-black/20 relative z-[60]">
+      {/* 1. Welcome & Status Header (Compact, 44px) */}
+      <div className="glass-panel px-3.5 py-2 rounded-xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
         
-        {/* Title & Short Subtitle */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
-            <Sparkles className="w-4 h-4" />
+        {/* Title & Status */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#3478F6] to-[#7566F6] flex items-center justify-center text-white shadow-xs shrink-0 border border-[#4B91FF]/30">
+            <Sparkles className="w-3.5 h-3.5" />
           </div>
-          <div>
-            <h1 className="text-base sm:text-lg font-extrabold text-white tracking-tight leading-none">
-              Dashboard
-            </h1>
-            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-              Your files, organized.
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm sm:text-base font-bold text-[#F4F7FF] tracking-tight truncate">
+                Intelligent Digital Memory
+              </h1>
+              <span className={`text-[9px] font-semibold px-2 py-0.2 rounded-full border shrink-0 ${systemOperationalColor}`}>
+                {systemOperationalLabel}
+              </span>
+            </div>
+            <p className="text-[10px] text-[#A7B7D0] font-normal truncate hidden sm:block">
+              Local knowledge base and semantic workspace overview
             </p>
           </div>
         </div>
 
-        {/* Center Compact Search Bar */}
-        <form onSubmit={handleHeaderSearchSubmit} className="relative flex-1 max-w-md mx-2">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search files..."
-            className="w-full pl-9 pr-16 py-1.5 text-xs rounded-xl glass-input text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 border-slate-800"
-            aria-label="Search files..."
-          />
-          <button
-            type="submit"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold transition-all cursor-pointer shadow-sm"
-          >
-            Search
-          </button>
-        </form>
-
-        {/* Right Side Action Buttons */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Rescan Button */}
+        {/* Right Header Controls */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => navigate('/scan')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-blue-400 hover:text-blue-300 text-xs font-semibold transition-all cursor-pointer shadow-sm"
-            title="Rescan Folders — Trigger automated file scan"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#3478F6]/15 hover:bg-[#3478F6]/25 border border-[#3478F6]/30 text-[#4B91FF] text-[11px] font-semibold transition-all cursor-pointer shadow-xs active:scale-95"
+            title="Rescan Folders — Trigger local file scan"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${scanStatus.status === 'scanning' ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 ${scanStatus.status === 'scanning' ? 'animate-spin' : ''}`} />
             <span>Rescan</span>
           </button>
 
-          {/* Help Trigger */}
           <button
             type="button"
             onClick={() => setIsHelpOpen(true)}
-            className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition-all cursor-pointer"
-            title="Help & Support Modal"
-            aria-label="Help & Support Modal"
+            className="p-1.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] text-[#A7B7D0] hover:text-[#F4F7FF] border border-[rgba(139,170,215,0.14)] transition-all cursor-pointer"
+            title="Help & Shortcuts"
+            aria-label="Help & Shortcuts"
           >
-            <HelpCircle className="w-4 h-4 text-slate-400" />
+            <HelpCircle className="w-3.5 h-3.5" />
           </button>
 
-          {/* Notification Bell */}
-          <div className="relative z-[60]">
+          {/* Anchored Notification Bell */}
+          <div className="relative">
             <button
+              ref={bellButtonRef}
               type="button"
-              onClick={() => setShowNotifications(prev => !prev)}
-              className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition-all cursor-pointer relative"
-              title="Notifications"
+              onClick={() => {
+                setShowNotifications(prev => {
+                  const next = !prev;
+                  if (next) updatePopoverPosition();
+                  return next;
+                });
+              }}
+              className={`p-1.5 rounded-lg border transition-all cursor-pointer relative ${
+                showNotifications 
+                  ? 'bg-[#132642] text-[#F4F7FF] border-[#3478F6]/50 shadow-xs' 
+                  : 'bg-[#0E1D35] hover:bg-[#132642] text-[#A7B7D0] hover:text-[#F4F7FF] border-[rgba(139,170,215,0.14)]'
+              }`}
+              title="Notifications & System Alerts"
               aria-label="Notifications"
+              aria-expanded={showNotifications}
             >
-              <Bell className="w-4 h-4 text-slate-400" />
-              {duplicateCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border border-slate-950 animate-pulse" />
+              <Bell className="w-3.5 h-3.5" />
+              {totalNotificationAlerts > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[15px] h-3.5 px-0.5 rounded-full bg-amber-400 text-black text-[9px] font-black flex items-center justify-center border border-[#06101F]">
+                  {totalNotificationAlerts}
+                </span>
               )}
             </button>
 
-            {showNotifications && (
-              <div className="absolute right-0 top-full mt-2 w-72 p-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs shadow-2xl shadow-black/90 z-[100] backdrop-blur-2xl ring-1 ring-white/10 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2 font-bold text-xs">
-                  <span className="text-slate-200">System Notifications</span>
+            {/* Portal-rendered Notification Popover attached to document.body */}
+            {showNotifications && createPortal(
+              <div 
+                ref={popoverRef}
+                style={{
+                  position: 'fixed',
+                  top: `${popoverCoords.top}px`,
+                  right: `${popoverCoords.right}px`,
+                  zIndex: 99999,
+                  maxWidth: 'calc(100vw - 32px)'
+                }}
+                className="w-80 sm:w-92 p-3.5 rounded-2xl bg-[#0A1629] border border-[rgba(139,170,215,0.25)] text-[#F4F7FF] text-xs shadow-2xl backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 select-none ring-1 ring-black/50"
+                role="region"
+                aria-label="Activity Alerts"
+              >
+                {/* Popover Header */}
+                <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.14)] pb-2.5 mb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-[#3478F6]/20 border border-[#3478F6]/30 flex items-center justify-center text-[#4B91FF]">
+                      <Bell className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-xs text-[#F4F7FF]">Activity Alerts</span>
+                      <span className="text-[10px] text-[#71839E] ml-1.5 font-normal">Real-time status</span>
+                    </div>
+                    {totalNotificationAlerts > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        {totalNotificationAlerts}
+                      </span>
+                    )}
+                  </div>
                   <button 
                     onClick={() => setShowNotifications(false)}
-                    className="text-slate-400 hover:text-white text-[11px] font-mono"
+                    className="text-[#A7B7D0] hover:text-[#F4F7FF] hover:bg-[#0E1D35] px-2 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border border-transparent hover:border-[rgba(139,170,215,0.14)]"
                   >
-                    &times; Close
+                    Close <span className="text-[9px] opacity-60 ml-0.5">(Esc)</span>
                   </button>
                 </div>
-                {duplicateCount > 0 ? (
-                  <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] space-y-1.5">
-                    <p className="font-semibold text-xs text-amber-200">{duplicateCount} Duplicate File Group{duplicateCount === 1 ? '' : 's'} Detected</p>
-                    <p className="text-[10px] text-slate-300 leading-snug">AI identified copies that can be organized or cleaned up.</p>
-                    <button 
-                      onClick={() => { setShowNotifications(false); navigate('/organize'); }}
-                      className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 hover:underline text-[11px] font-bold mt-1"
-                    >
-                      Review in Organization &rarr;
-                    </button>
-                  </div>
-                ) : (
-                  <div className="p-3 text-center text-slate-400 text-xs">
-                    <p className="font-semibold text-slate-300">All quiet</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">No active alerts or warnings.</p>
-                  </div>
-                )}
-              </div>
+
+                {/* Popover Notifications Body */}
+                <div className="max-h-76 overflow-y-auto custom-scrollbar space-y-2 pr-0.5">
+                  {duplicateCount > 0 && (
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-amber-200">Duplicates Detected</span>
+                        <span className="text-[10px] font-mono font-semibold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                          {duplicateCount} groups
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-[#A7B7D0] leading-snug">
+                        Identical or high-similarity files identified in your local folders.
+                      </p>
+                      <button 
+                        onClick={() => { setShowNotifications(false); navigate('/organize'); }}
+                        className="inline-flex items-center gap-1 text-[#4B91FF] hover:underline text-[11px] font-bold pt-0.5 cursor-pointer"
+                      >
+                        Review in Organization &rarr;
+                      </button>
+                    </div>
+                  )}
+
+                  {(expirySummary.due_soon > 0 || expirySummary.expired > 0) && (
+                    <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-[11px] space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-red-200">Document Expiries</span>
+                        <span className="text-[10px] font-mono font-semibold text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded border border-red-500/20">
+                          {expirySummary.expired > 0 ? `${expirySummary.expired} expired` : `${expirySummary.due_soon} due soon`}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-[#A7B7D0] leading-snug">
+                        Important certificates, contracts, or IDs require attention.
+                      </p>
+                      <button 
+                        onClick={() => { setShowNotifications(false); navigate('/expiry'); }}
+                        className="inline-flex items-center gap-1 text-[#4B91FF] hover:underline text-[11px] font-bold pt-0.5 cursor-pointer"
+                      >
+                        Open Expiry & Reminders &rarr;
+                      </button>
+                    </div>
+                  )}
+
+                  {scanStatus.status === 'scanning' && (
+                    <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px] space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <RefreshCw className="w-3 h-3 text-[#4B91FF] animate-spin" />
+                          <span className="font-bold text-xs text-blue-200">Ingestion Active</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-blue-400">
+                          {scanStatus.progress_percentage || 0}%
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-[#A7B7D0] leading-snug truncate" title={scanStatus.current_file}>
+                        {scanStatus.current_file || 'Scanning documents & media...'}
+                      </p>
+                    </div>
+                  )}
+
+                  {totalNotificationAlerts === 0 && (
+                    <div className="py-6 text-center text-[#71839E] text-xs space-y-1.5">
+                      <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <p className="font-semibold text-[#A7B7D0]">All Systems Optimal</p>
+                      <p className="text-[10px] text-[#71839E]">No active warnings, duplicate alerts, or expired files.</p>
+                    </div>
+                  )}
+                </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>
       </div>
 
-      {/* ==========================================================
-          B. STATISTIC CARDS (LARGER 15% READABLE NUMBERS)
-      ========================================================== */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 shrink-0">
+      {/* 2. Key Statistics Grid (5 Compact KPI Cards Strip) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
         
         {/* Stat 1: Total Files */}
         <div 
-          className="glass-panel p-3.5 rounded-xl border-slate-800 hover:border-blue-500/40 hover:bg-slate-900/80 transition-all duration-200 group relative cursor-pointer overflow-hidden shadow-md shadow-black/20"
-          onMouseEnter={() => setActiveTooltip('stat-files')}
-          onMouseLeave={() => setActiveTooltip(null)}
+          className="glass-panel p-2.5 rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-[#3478F6]/40 bg-[#0A1629] hover:bg-[#0E1D35] transition-all duration-150 group cursor-pointer shadow-xs"
           onClick={() => navigate('/folders')}
         >
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-cyan-500" />
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Files</span>
-            <div className="p-1 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform">
-              <FileText className="w-3.5 h-3.5" />
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#71839E]">Indexed Files</span>
+            <div className="p-1 rounded-md bg-[#3478F6]/10 text-[#4B91FF] group-hover:scale-105 transition-transform">
+              <FileText className="w-3 h-3" />
             </div>
           </div>
-          <div className="text-2xl sm:text-[1.65rem] font-black text-white font-mono leading-tight tracking-tight">
+          <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
             {stats.files !== undefined ? stats.files : '—'}
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 truncate font-medium">Total indexed files</p>
-
-          {activeTooltip === 'stat-files' && (
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-48 p-2 rounded-lg bg-slate-950/95 border border-slate-700 text-white text-[11px] shadow-xl z-50 pointer-events-none">
-              <span className="font-bold text-blue-400">Files</span> — Total indexed documents & media.
-            </div>
-          )}
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Documents & media</p>
         </div>
 
         {/* Stat 2: Storage Used */}
         <div 
-          className="glass-panel p-3.5 rounded-xl border-slate-800 hover:border-purple-500/40 hover:bg-slate-900/80 transition-all duration-200 group relative cursor-pointer overflow-hidden shadow-md shadow-black/20"
-          onMouseEnter={() => setActiveTooltip('stat-storage')}
-          onMouseLeave={() => setActiveTooltip(null)}
-          onClick={() => navigate('/folders')}
+          className="glass-panel p-2.5 rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-purple-500/40 bg-[#0A1629] hover:bg-[#0E1D35] transition-all duration-150 group cursor-pointer shadow-xs"
+          onClick={() => navigate('/storage-optimization')}
         >
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-purple-500 to-indigo-500" />
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Storage</span>
-            <div className="p-1 rounded-lg bg-purple-500/10 text-purple-400 group-hover:scale-110 transition-transform">
-              <HardDrive className="w-3.5 h-3.5" />
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#71839E]">Storage Size</span>
+            <div className="p-1 rounded-md bg-purple-500/10 text-purple-400 group-hover:scale-105 transition-transform">
+              <HardDrive className="w-3 h-3" />
             </div>
           </div>
-          <div className="text-2xl sm:text-[1.65rem] font-black text-white font-mono leading-tight tracking-tight">
+          <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
             {stats.total_size_bytes ? formatBytes(stats.total_size_bytes) : '—'}
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 truncate font-medium">Total storage used</p>
-
-          {activeTooltip === 'stat-storage' && (
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-48 p-2 rounded-lg bg-slate-950/95 border border-slate-700 text-white text-[11px] shadow-xl z-50 pointer-events-none">
-              <span className="font-bold text-purple-400">Storage</span> — Total disk space of scanned files.
-            </div>
-          )}
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Scanned local space</p>
         </div>
 
-        {/* Stat 3: Duplicate Groups */}
+        {/* Stat 3: Monitored Folders */}
         <div 
-          className="glass-panel p-3.5 rounded-xl border-slate-800 hover:border-amber-500/40 hover:bg-slate-900/80 transition-all duration-200 group relative cursor-pointer overflow-hidden shadow-md shadow-black/20"
-          onMouseEnter={() => setActiveTooltip('stat-duplicates')}
-          onMouseLeave={() => setActiveTooltip(null)}
-          onClick={() => navigate('/organize')}
-        >
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 to-orange-500" />
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Duplicates</span>
-            <div className="p-1 rounded-lg bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform">
-              <Copy className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="text-2xl sm:text-[1.65rem] font-black text-white font-mono leading-tight tracking-tight">
-            {duplicateCount !== undefined ? duplicateCount : '—'}
-          </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 truncate font-medium">Potential duplicate groups</p>
-
-          {activeTooltip === 'stat-duplicates' && (
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-48 p-2 rounded-lg bg-slate-950/95 border border-slate-700 text-white text-[11px] shadow-xl z-50 pointer-events-none">
-              <span className="font-bold text-amber-400">Duplicates</span> — Groups of duplicate files detected by AI.
-            </div>
-          )}
-        </div>
-
-        {/* Stat 4: Monitored Folders */}
-        <div 
-          className="glass-panel p-3.5 rounded-xl border-slate-800 hover:border-emerald-500/40 hover:bg-slate-900/80 transition-all duration-200 group relative cursor-pointer overflow-hidden shadow-md shadow-black/20"
-          onMouseEnter={() => setActiveTooltip('stat-folders')}
-          onMouseLeave={() => setActiveTooltip(null)}
+          className="glass-panel p-2.5 rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-emerald-500/40 bg-[#0A1629] hover:bg-[#0E1D35] transition-all duration-150 group cursor-pointer shadow-xs"
           onClick={() => navigate('/folders')}
         >
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 to-teal-500" />
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Folders</span>
-            <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
-              <Folder className="w-3.5 h-3.5" />
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#71839E]">Folders</span>
+            <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-400 group-hover:scale-105 transition-transform">
+              <Folder className="w-3 h-3" />
             </div>
           </div>
-          <div className="text-2xl sm:text-[1.65rem] font-black text-white font-mono leading-tight tracking-tight">
+          <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
             {stats.folders !== undefined ? stats.folders : folders.length}
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 truncate font-medium">Monitored folders</p>
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Monitored roots</p>
+        </div>
 
-          {activeTooltip === 'stat-folders' && (
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-48 p-2 rounded-lg bg-slate-950/95 border border-slate-700 text-white text-[11px] shadow-xl z-50 pointer-events-none">
-              <span className="font-bold text-emerald-400">Folders</span> — Directories registered for automated indexing.
+        {/* Stat 4: Chunks / Vectors */}
+        <div 
+          className="glass-panel p-2.5 rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-cyan-500/40 bg-[#0A1629] hover:bg-[#0E1D35] transition-all duration-150 group cursor-pointer shadow-xs"
+          onClick={() => navigate('/search')}
+        >
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#71839E]">Vector Chunks</span>
+            <div className="p-1 rounded-md bg-cyan-500/10 text-cyan-400 group-hover:scale-105 transition-transform">
+              <Layers className="w-3 h-3" />
             </div>
-          )}
+          </div>
+          <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
+            {stats.chunks || stats.vectors || stats.files * 2 || 0}
+          </div>
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">FAISS index vectors</p>
+        </div>
+
+        {/* Stat 5: Duplicate Groups */}
+        <div 
+          className="glass-panel p-2.5 rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-amber-500/40 bg-[#0A1629] hover:bg-[#0E1D35] transition-all duration-150 group cursor-pointer shadow-xs col-span-2 sm:col-span-1"
+          onClick={() => navigate('/organize')}
+        >
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#71839E]">Duplicates</span>
+            <div className="p-1 rounded-md bg-amber-500/10 text-amber-400 group-hover:scale-105 transition-transform">
+              <Copy className="w-3 h-3" />
+            </div>
+          </div>
+          <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
+            {duplicateCount !== undefined ? duplicateCount : '—'}
+          </div>
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Detected clusters</p>
         </div>
       </div>
 
-      {/* ==========================================================
-          C. MEMORA AI WORKFLOW / STATUS SECTION
-      ========================================================== */}
-      <div className="shrink-0">
-        <WorkflowPipeline 
-          folderCount={stats.folders || folders.length}
-          fileCount={stats.files}
-          suggestionCount={suggestions.length}
-          isScanning={scanStatus.status === 'scanning'}
-        />
-      </div>
+      {/* 3. Workflow Pipeline Stepper (Compact Sleek Bar) */}
+      <WorkflowPipeline 
+        folderCount={stats.folders || folders.length}
+        fileCount={stats.files}
+        suggestionCount={suggestions.length}
+        isScanning={scanStatus.status === 'scanning'}
+      />
 
-      {/* ==========================================================
-          D. ROW 3: MAIN CONTENT & QUICK ACTIONS RIGHT SIDEBAR
-      ========================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1 min-h-[220px]">
+      {/* 4. Core Intelligence Workspace (Middle: Categories & Expiry side by side) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-2.5">
         
-        {/* Main Content Area (9 Cols): File Overview Donut Chart + Expiry & Reminders Card */}
-        <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 gap-2.5 h-full">
-          
-          {/* File Overview Donut Chart */}
-          <div className="h-full">
-            <FileDistributionChart 
-              categories={categories} 
-              isLoading={isLoading} 
-              hasError={hasError}
-              onRetry={loadAllDashboardData}
-            />
-          </div>
+        {/* Left Column (7 cols): File Overview Donut Chart */}
+        <div className="lg:col-span-7 h-52 sm:h-56">
+          <FileDistributionChart 
+            categories={categories} 
+            isLoading={isLoading} 
+            hasError={hasError}
+            onRetry={loadAllDashboardData}
+          />
+        </div>
 
-          {/* Expiry & Reminders Live Summary Card */}
+        {/* Right Column (5 cols): Expiry Alerts Card */}
+        <div className="lg:col-span-5 h-52 sm:h-56">
           <div 
             onClick={() => navigate('/expiry')}
-            className="glass-panel p-3.5 rounded-2xl border border-slate-800 hover:border-blue-500/40 hover:bg-slate-900/80 transition-all duration-200 cursor-pointer flex flex-col justify-between shadow-lg shadow-black/20 group relative overflow-hidden h-full"
+            className="glass-panel p-3 rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-[#3478F6]/40 bg-[#0A1629] hover:bg-[#0E1D35] transition-all duration-150 cursor-pointer shadow-xs relative overflow-hidden group h-full flex flex-col justify-between"
           >
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-            <div className="flex flex-col justify-between h-full">
-              <div>
-                <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
-                  <h3 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
-                    <CalendarClock className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
-                    <span>Expiry & Reminders</span>
-                  </h3>
+            <div>
+              <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.14)] pb-1.5 mb-2">
+                <h3 className="font-bold text-[11px] text-[#F4F7FF] uppercase tracking-wider flex items-center gap-1.5">
+                  <CalendarClock className="w-3.5 h-3.5 text-[#4B91FF] group-hover:scale-105 transition-transform" />
+                  <span>Expiry & Renewal Alerts</span>
+                </h3>
+                <span className="text-[10px] text-[#4B91FF] font-semibold group-hover:underline">
+                  View &rarr;
+                </span>
+              </div>
+
+              {/* Metric Counts Grid */}
+              <div className="grid grid-cols-3 gap-1.5 mb-2">
+                <div className="p-1.5 rounded-lg bg-[#06101F] border border-[rgba(139,170,215,0.14)] text-center">
+                  <div className="text-[9px] text-[#71839E] font-semibold uppercase">Upcoming</div>
+                  <div className="text-sm font-black text-emerald-400 font-mono mt-0.5 leading-none">{expirySummary.upcoming}</div>
                 </div>
-
-                {/* Metric Counts Grid */}
-                <div className="grid grid-cols-3 gap-1.5 mb-2.5">
-                  <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center">
-                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Upcoming</div>
-                    <div className="text-base font-black text-emerald-400 font-mono mt-0.5">{expirySummary.upcoming}</div>
-                  </div>
-                  <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center">
-                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Due Soon</div>
-                    <div className="text-base font-black text-amber-400 font-mono mt-0.5">{expirySummary.due_soon}</div>
-                  </div>
-                  <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center">
-                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Expired</div>
-                    <div className="text-base font-black text-red-400 font-mono mt-0.5">{expirySummary.expired}</div>
-                  </div>
+                <div className="p-1.5 rounded-lg bg-[#06101F] border border-[rgba(139,170,215,0.14)] text-center">
+                  <div className="text-[9px] text-[#71839E] font-semibold uppercase">Due Soon</div>
+                  <div className="text-sm font-black text-amber-400 font-mono mt-0.5 leading-none">{expirySummary.due_soon}</div>
                 </div>
-
-                {/* Next Expiry Highlight */}
-                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1">
-                  <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
-                    <span>NEXT UPCOMING EXPIRY</span>
-                    {nextExpiry && (
-                      <span className="text-blue-400 font-mono">{nextExpiry.date_type}</span>
-                    )}
-                  </div>
-
-                  {nextExpiry ? (
-                    <div className="flex items-center justify-between gap-2 pt-0.5">
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-white truncate max-w-[160px]" title={nextExpiry.file_name}>
-                          {nextExpiry.file_name}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {new Date(nextExpiry.extracted_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 ${
-                        nextExpiry.status === 'due_soon'
-                          ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                          : (nextExpiry.status === 'expired'
-                              ? 'text-red-400 bg-red-500/10 border-red-500/30'
-                              : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30')
-                      }`}>
-                        {getDaysRemainingText(nextExpiry.extracted_date)}
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-slate-400 italic py-0.5">No upcoming document dates detected.</p>
-                  )}
+                <div className="p-1.5 rounded-lg bg-[#06101F] border border-[rgba(139,170,215,0.14)] text-center">
+                  <div className="text-[9px] text-[#71839E] font-semibold uppercase">Expired</div>
+                  <div className="text-sm font-black text-red-400 font-mono mt-0.5 leading-none">{expirySummary.expired}</div>
                 </div>
               </div>
 
-              <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/60">
-                <span>Tracked Documents: {expirySummary.total_tracked}</span>
-                {expirySummary.needs_review > 0 && (
-                  <span className="text-purple-400 font-semibold">{expirySummary.needs_review} Needs Review</span>
+              {/* Next Expiry Highlight */}
+              <div className="p-2 rounded-lg bg-[#06101F] border border-[rgba(139,170,215,0.14)] space-y-1">
+                <div className="flex items-center justify-between text-[9px] font-semibold text-[#71839E]">
+                  <span>NEXT UPCOMING EXPIRY</span>
+                  {nextExpiry && (
+                    <span className="text-[#4B91FF] font-mono">{nextExpiry.date_type}</span>
+                  )}
+                </div>
+
+                {nextExpiry ? (
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-[#F4F7FF] truncate max-w-[170px]" title={nextExpiry.file_name}>
+                        {nextExpiry.file_name}
+                      </div>
+                      <div className="text-[10px] text-[#71839E] font-mono">
+                        {new Date(nextExpiry.extracted_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 ${
+                      nextExpiry.status === 'due_soon'
+                        ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
+                        : (nextExpiry.status === 'expired'
+                            ? 'text-red-400 bg-red-500/10 border-red-500/30'
+                            : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30')
+                    }`}>
+                      {getDaysRemainingText(nextExpiry.extracted_date)}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-[#71839E] italic py-0.5">No upcoming document expiries detected.</p>
                 )}
               </div>
             </div>
-          </div>
 
-        </div>
-
-        {/* Dedicated Quick Actions Sidebar (3 Cols) */}
-        <div className="lg:col-span-3 glass-panel p-3 sm:p-3.5 rounded-2xl border border-slate-800 flex flex-col justify-between shadow-lg shadow-black/20 h-full">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2.5">
-              <h3 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                <span>Quick Actions</span>
-              </h3>
-              <span className="text-[10px] text-slate-400 font-medium">Nav</span>
-            </div>
-
-            <div className="space-y-1.5 text-xs">
-              {/* Action 1: Search */}
-              <button
-                type="button"
-                onClick={() => navigate('/search')}
-                className="w-full p-2 rounded-xl bg-slate-950/50 hover:bg-blue-600/20 text-slate-200 border border-slate-800 hover:border-blue-500/40 text-left transition-all cursor-pointer group flex items-center gap-2.5 shadow-sm"
-                title="Search Files — Natural language semantic query"
-              >
-                <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform shrink-0">
-                  <Search className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-xs text-white leading-tight">Search</div>
-                  <div className="text-[10px] text-slate-400 truncate">Semantic query</div>
-                </div>
-              </button>
-
-              {/* Action 2: Organize */}
-              <button
-                type="button"
-                onClick={() => navigate('/organize')}
-                className="w-full p-2 rounded-xl bg-slate-950/50 hover:bg-amber-600/20 text-slate-200 border border-slate-800 hover:border-amber-500/40 text-left transition-all cursor-pointer group flex items-center gap-2.5 shadow-sm"
-                title="Organize Files — Smart taxonomy & duplicate detection"
-              >
-                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform shrink-0">
-                  <FolderTree className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-xs text-white leading-tight">Organize</div>
-                  <div className="text-[10px] text-slate-400 truncate">Smart taxonomy</div>
-                </div>
-              </button>
-
-              {/* Action 3: Expiries */}
-              <button
-                type="button"
-                onClick={() => navigate('/expiry')}
-                className="w-full p-2 rounded-xl bg-slate-950/50 hover:bg-purple-600/20 text-slate-200 border border-slate-800 hover:border-purple-500/40 text-left transition-all cursor-pointer group flex items-center gap-2.5 shadow-sm"
-                title="Expiry & Reminders — Document dates & renewal alerts"
-              >
-                <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 group-hover:scale-110 transition-transform shrink-0">
-                  <CalendarClock className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-xs text-white leading-tight">Expiries</div>
-                  <div className="text-[10px] text-slate-400 truncate">Date reminders</div>
-                </div>
-              </button>
-
-              {/* Action 4: Media */}
-              <button
-                type="button"
-                onClick={() => navigate('/media')}
-                className="w-full p-2 rounded-xl bg-slate-950/50 hover:bg-emerald-600/20 text-slate-200 border border-slate-800 hover:border-emerald-500/40 text-left transition-all cursor-pointer group flex items-center gap-2.5 shadow-sm"
-                title="Media Intelligence — OCR text & visual processing"
-              >
-                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform shrink-0">
-                  <BarChart3 className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-xs text-white leading-tight">Media</div>
-                  <div className="text-[10px] text-slate-400 truncate">OCR & Visual</div>
-                </div>
-              </button>
+            <div className="text-[9px] text-[#71839E] flex items-center justify-between pt-1 border-t border-[rgba(139,170,215,0.12)]">
+              <span>Tracked Records: {expirySummary.total_tracked}</span>
+              {expirySummary.needs_review > 0 && (
+                <span className="text-purple-400 font-semibold">{expirySummary.needs_review} Needs Review</span>
+              )}
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={selectFolderNative}
-            className="w-full mt-2 p-1.5 sm:p-2 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-blue-300 hover:text-white text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
-          >
-            <FolderPlus className="w-3.5 h-3.5 text-blue-400" />
-            <span>Add New Directory</span>
-          </button>
         </div>
 
       </div>
 
-      {/* ==========================================================
-          E. ROW 4: SYSTEM STATUS (SLIGHTLY TALLER & READABLE HORIZONTAL BAR)
-      ========================================================== */}
-      <div className="glass-panel p-3 sm:p-3.5 rounded-2xl border border-slate-800 shrink-0 shadow-md shadow-black/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      {/* 5. Lower Section: Recent Files & Module Shortcuts side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-2.5">
         
-        {/* Left Status Label & Operational Badge */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-emerald-400" />
-            <span className="font-bold text-xs text-white uppercase tracking-wider">
-              System Status
+        {/* Left Column (7 cols): Recent Files */}
+        <div className="lg:col-span-7 h-48 sm:h-52">
+          <div className="glass-panel p-3 rounded-xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] h-full flex flex-col justify-between shadow-xs">
+            <div>
+              <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.14)] pb-1.5 mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#4B91FF]" />
+                  <h3 className="text-[11px] font-bold text-[#F4F7FF] uppercase tracking-wider">
+                    Recent Files & Documents
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/search')}
+                  className="text-[10px] text-[#4B91FF] hover:underline font-semibold cursor-pointer"
+                >
+                  Browse All &rarr;
+                </button>
+              </div>
+
+              {combinedRecentFiles.length === 0 ? (
+                <div className="text-center py-6 text-xs text-[#71839E]">
+                  No recently accessed files. Search or open a document to view history here.
+                </div>
+              ) : (
+                <div className="divide-y divide-[rgba(139,170,215,0.08)]">
+                  {combinedRecentFiles.map((file, idx) => {
+                    const fileName = file.name || file.filename || (file.path ? file.path.split(/[/\\]/).pop() : `File ${idx + 1}`);
+                    const filePath = file.path || '';
+                    return (
+                      <div 
+                        key={file.id || idx}
+                        className="py-1 flex items-center justify-between gap-2.5 hover:bg-[#0E1D35]/80 px-1.5 rounded-lg transition-colors group"
+                      >
+                        <div className="min-w-0 flex items-center gap-2">
+                          <FileText className="w-3.5 h-3.5 text-[#71839E] shrink-0 group-hover:text-[#4B91FF] transition-colors" />
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-semibold text-[#F4F7FF] truncate max-w-[280px]" title={fileName}>
+                              {fileName}
+                            </p>
+                            <p className="text-[9px] text-[#71839E] font-mono truncate max-w-[280px]" title={filePath}>
+                              {filePath}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {filePath && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleLocateRecentFile(file)}
+                                className="p-1 rounded text-[#71839E] hover:text-[#F4F7FF] hover:bg-[#132642] transition-colors cursor-pointer"
+                                title="Locate in folder"
+                              >
+                                <FolderOpen className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenRecentFile(file)}
+                                className="p-1 rounded text-[#71839E] hover:text-[#4B91FF] hover:bg-[#132642] transition-colors cursor-pointer"
+                                title="Open file"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column (5 cols): Module Shortcuts */}
+        <div className="lg:col-span-5 h-48 sm:h-52">
+          <div className="glass-panel p-3 rounded-xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] h-full flex flex-col justify-between shadow-xs">
+            <div>
+              <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.14)] pb-1 mb-1.5">
+                <h3 className="font-bold text-[11px] text-[#F4F7FF] uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-[#4B91FF]" />
+                  <span>Module Shortcuts</span>
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => navigate('/search')}
+                  className="p-1.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] border border-[rgba(139,170,215,0.14)] hover:border-[#3478F6]/40 text-left transition-all cursor-pointer group"
+                >
+                  <Search className="w-3 h-3 text-[#4B91FF] mb-0.5 group-hover:scale-105 transition-transform" />
+                  <div className="font-bold text-[11px] text-[#F4F7FF] truncate">Search</div>
+                  <div className="text-[8px] text-[#71839E] truncate">Semantic query</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/organize')}
+                  className="p-1.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] border border-[rgba(139,170,215,0.14)] hover:border-amber-500/40 text-left transition-all cursor-pointer group"
+                >
+                  <FolderTree className="w-3 h-3 text-amber-400 mb-0.5 group-hover:scale-105 transition-transform" />
+                  <div className="font-bold text-[11px] text-[#F4F7FF] truncate">Organize</div>
+                  <div className="text-[8px] text-[#71839E] truncate">Tags & duplicates</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/media')}
+                  className="p-1.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] border border-[rgba(139,170,215,0.14)] hover:border-emerald-500/40 text-left transition-all cursor-pointer group"
+                >
+                  <BarChart3 className="w-3 h-3 text-emerald-400 mb-0.5 group-hover:scale-105 transition-transform" />
+                  <div className="font-bold text-[11px] text-[#F4F7FF] truncate">Media Intel</div>
+                  <div className="text-[8px] text-[#71839E] truncate">OCR & vision</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/pdf-studio')}
+                  className="p-1.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] border border-[rgba(139,170,215,0.14)] hover:border-indigo-500/40 text-left transition-all cursor-pointer group"
+                >
+                  <FileText className="w-3 h-3 text-indigo-400 mb-0.5 group-hover:scale-105 transition-transform" />
+                  <div className="font-bold text-[11px] text-[#F4F7FF] truncate">PDF Studio</div>
+                  <div className="text-[8px] text-[#71839E] truncate">Edit & convert</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/storage-optimization')}
+                  className="p-1.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] border border-[rgba(139,170,215,0.14)] hover:border-purple-500/40 text-left transition-all cursor-pointer group"
+                >
+                  <HardDrive className="w-3 h-3 text-purple-400 mb-0.5 group-hover:scale-105 transition-transform" />
+                  <div className="font-bold text-[11px] text-[#F4F7FF] truncate">Storage Opt</div>
+                  <div className="text-[8px] text-[#71839E] truncate">Compress space</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/expiry')}
+                  className="p-1.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] border border-[rgba(139,170,215,0.14)] hover:border-cyan-500/40 text-left transition-all cursor-pointer group"
+                >
+                  <CalendarClock className="w-3 h-3 text-cyan-400 mb-0.5 group-hover:scale-105 transition-transform" />
+                  <div className="font-bold text-[11px] text-[#F4F7FF] truncate">Expiry</div>
+                  <div className="text-[8px] text-[#71839E] truncate">Reminders</div>
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={selectFolderNative}
+              className="w-full mt-1.5 py-1.5 px-2 rounded-lg bg-[#3478F6]/10 hover:bg-[#3478F6]/20 border border-[#3478F6]/30 text-[#4B91FF] text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>Add Local Folder to Index</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 6. System Status Footer Bar (Ultra Sleek 28px) */}
+      <div className="glass-panel px-3 py-1.5 rounded-xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="font-bold text-[10px] text-[#F4F7FF] uppercase tracking-wider">
+              System Telemetry
             </span>
           </div>
-          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${systemOperationalColor}`}>
+          <span className={`text-[9px] font-semibold px-2 py-0.2 rounded-full border ${systemOperationalColor}`}>
             {systemOperationalLabel}
           </span>
         </div>
 
-        {/* Center Horizontal Metric Cards */}
-        <div className="grid grid-cols-3 gap-2 flex-1 max-w-xl">
-          <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between px-3">
-            <span className="text-xs text-slate-400 font-medium">Search Engine</span>
-            <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+        <div className="flex items-center gap-2 flex-1 max-w-md justify-center">
+          <div className="px-2 py-0.5 rounded-lg bg-[#0E1D35] border border-[rgba(139,170,215,0.12)] flex items-center gap-1.5 text-[10px]">
+            <span className="text-[#A7B7D0]">Engine:</span>
+            <span className="font-semibold text-emerald-400 flex items-center gap-0.5">
+              <CheckCircle2 className="w-3 h-3" /> Ready
             </span>
           </div>
 
-          <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between px-3">
-            <span className="text-xs text-slate-400 font-medium">Indexed Files</span>
-            <span className="text-sm font-mono font-black text-white">{stats.files}</span>
+          <div className="px-2 py-0.5 rounded-lg bg-[#0E1D35] border border-[rgba(139,170,215,0.12)] flex items-center gap-1.5 text-[10px]">
+            <span className="text-[#A7B7D0]">Indexed:</span>
+            <span className="font-mono font-bold text-[#F4F7FF]">{stats.files}</span>
           </div>
 
-          <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between px-3">
-            <span className="text-xs text-slate-400 font-medium">Monitored Folders</span>
-            <span className="text-sm font-mono font-black text-blue-400">{stats.folders || folders.length}</span>
+          <div className="px-2 py-0.5 rounded-lg bg-[#0E1D35] border border-[rgba(139,170,215,0.12)] flex items-center gap-1.5 text-[10px]">
+            <span className="text-[#A7B7D0]">Folders:</span>
+            <span className="font-mono font-bold text-[#4B91FF]">{stats.folders || folders.length}</span>
           </div>
         </div>
 
-        {/* Right Local Privacy Footnote */}
-        <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-xs text-emerald-400 font-semibold shrink-0">
-          <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-400" />
-          <span>Local & Private &bull; 100% offline</span>
+        <div className="px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold shrink-0">
+          <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+          <span>100% Local &bull; Offline Privacy</span>
         </div>
-
       </div>
 
-      {/* Help Modal */}
+      {/* Help & Shortcuts Modal */}
       <HelpModal 
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 

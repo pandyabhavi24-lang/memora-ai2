@@ -120,7 +120,7 @@ export const OrganizationPreviewModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn select-none">
       <div
-        className="w-full max-w-3xl glass-panel bg-slate-900 border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh] animate-scaleUp"
+        className="w-full max-w-3xl bg-[#0A1629] border border-[rgba(139,170,215,0.18)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh] animate-scaleUp"
         onClick={(e) => e.stopPropagation()}
       >
         {isConfirmed ? (
@@ -130,18 +130,18 @@ export const OrganizationPreviewModal = ({
               <CheckCircle2 className="w-9 h-9" />
             </div>
 
-            <h3 className="text-xl font-extrabold text-white">
+            <h3 className="text-xl font-extrabold text-[#F4F7FF]">
               ✓ Folder Organization Complete
             </h3>
 
-            <p className="text-sm font-medium text-slate-300 max-w-md leading-relaxed">
+            <p className="text-sm font-medium text-[#A7B7D0] max-w-md leading-relaxed">
               {itemsToOrganize.length} file(s) successfully {operationMode === 'move' ? 'moved' : 'copied'} into physical folder <strong className="text-emerald-300 font-mono">📁 {folderNameClean}</strong>.
             </p>
 
-            <div className="p-4 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-slate-300 font-medium flex items-center gap-3 max-w-md text-left">
+            <div className="p-4 bg-[#06101F] border border-[rgba(139,170,215,0.14)] rounded-xl text-xs text-[#A7B7D0] font-medium flex items-center gap-3 max-w-md text-left">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
               <div>
-                <span className="font-semibold text-white block">Physical Folders Updated</span>
+                <span className="font-semibold text-[#F4F7FF] block">Physical Folders Updated</span>
                 Memora has moved/copied the files on disk and updated its internal path index.
               </div>
             </div>
@@ -149,7 +149,7 @@ export const OrganizationPreviewModal = ({
             <button
               type="button"
               onClick={handleCloseAll}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-500/25 border border-blue-500/30 transition-all cursor-pointer mt-2"
+              className="px-6 py-2.5 bg-[#3478F6] hover:bg-[#2563EB] text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-500/25 border border-blue-400/30 transition-all cursor-pointer mt-2"
             >
               Done & Return to Table
             </button>
@@ -158,33 +158,33 @@ export const OrganizationPreviewModal = ({
           /* PREVIEW STATE */
           <>
             {/* Sticky Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/90 shrink-0">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(139,170,215,0.14)] bg-[#0E1D35] shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <div className="w-9 h-9 rounded-xl bg-[rgba(52,120,246,0.15)] border border-[rgba(52,120,246,0.3)] flex items-center justify-center text-[#4B91FF]">
                   <FolderOutput className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Folder Organization Preview</h3>
-                  <p className="text-xs text-slate-400">Review physical file operations and destination paths before confirming</p>
+                  <h3 className="text-lg font-bold text-[#F4F7FF]">Folder Organization Preview</h3>
+                  <p className="text-xs text-[#A7B7D0]">Review physical file operations and destination paths before confirming</p>
                 </div>
               </div>
               <button
                 onClick={handleCloseAll}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-xl transition-colors cursor-pointer"
+                className="p-2 text-[#71839E] hover:text-[#F4F7FF] hover:bg-[#132642] rounded-xl transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* CREATE NEW FOLDER SECTION */}
-            <div className="p-5 bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-purple-950/40 border-b border-blue-500/30 space-y-3 shrink-0">
+            <div className="p-5 bg-[#06101F] border-b border-[rgba(139,170,215,0.14)] space-y-3 shrink-0">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-blue-300 uppercase tracking-wider flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-400" />
+                <span className="text-xs font-bold text-[#4B91FF] uppercase tracking-wider flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#4B91FF]" />
                   <span>CREATE NEW FOLDER (Collective AI Suggestion)</span>
                 </span>
                 {isLoadingCollective && (
-                  <span className="text-[11px] text-blue-400 flex items-center gap-1">
+                  <span className="text-[11px] text-[#4B91FF] flex items-center gap-1">
                     <RefreshCw className="w-3 h-3 animate-spin" />
                     Generating folder name...
                   </span>
@@ -192,12 +192,12 @@ export const OrganizationPreviewModal = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300 block">
+                <label className="text-xs font-semibold text-[#A7B7D0] block">
                   Folder Name:
                 </label>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-blue-400">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#4B91FF]">
                       <Folder className="w-4 h-4" />
                     </div>
                     <input
@@ -205,23 +205,23 @@ export const OrganizationPreviewModal = ({
                       value={collectiveFolderName}
                       onChange={(e) => setCollectiveFolderName(e.target.value)}
                       placeholder="e.g. Java OOP Study"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-blue-500/50 rounded-xl text-sm font-bold text-white placeholder-slate-500 focus:outline-none focus:border-blue-400 shadow-inner font-mono"
+                      className="w-full pl-10 pr-4 py-2.5 bg-[#0A1629] border border-[rgba(52,120,246,0.4)] rounded-xl text-sm font-bold text-[#F4F7FF] placeholder-[#71839E] focus:outline-none focus:border-[#3478F6] shadow-inner font-mono"
                     />
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-[#71839E]">
                   Edit the collective physical folder name above. All selected files will be placed into this folder.
                 </p>
               </div>
             </div>
 
             {/* Stat Banner & Operation Selection Radio Cards */}
-            <div className="p-5 bg-slate-950/80 border-b border-slate-800/80 space-y-3 shrink-0">
-              <div className="flex items-center justify-between text-xs text-slate-300">
-                <span className="font-semibold text-sm text-white">
-                  Selected files to organize: <strong className="text-blue-400 font-bold">{itemsToOrganize.length}</strong>
+            <div className="p-5 bg-[#0E1D35] border-b border-[rgba(139,170,215,0.14)] space-y-3 shrink-0">
+              <div className="flex items-center justify-between text-xs text-[#A7B7D0]">
+                <span className="font-semibold text-sm text-[#F4F7FF]">
+                  Selected files to organize: <strong className="text-[#4B91FF] font-bold">{itemsToOrganize.length}</strong>
                 </span>
-                <span className="text-[11px] text-slate-400">Choose organization mode:</span>
+                <span className="text-[11px] text-[#71839E]">Choose organization mode:</span>
               </div>
 
               {/* Move vs Copy Radio Cards */}
@@ -231,8 +231,8 @@ export const OrganizationPreviewModal = ({
                   onClick={() => setOperationMode('move')}
                   className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
                     operationMode === 'move'
-                      ? 'bg-blue-600/15 border-blue-500/60 text-white shadow-md shadow-blue-500/10'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+                      ? 'bg-[rgba(52,120,246,0.15)] border-[#3478F6] text-[#F4F7FF] shadow-md shadow-blue-500/10'
+                      : 'bg-[#06101F] border-[rgba(139,170,215,0.14)] text-[#A7B7D0] hover:bg-[#132642]'
                   }`}
                 >
                   <input
@@ -240,11 +240,11 @@ export const OrganizationPreviewModal = ({
                     name="opMode"
                     checked={operationMode === 'move'}
                     onChange={() => setOperationMode('move')}
-                    className="mt-0.5 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
+                    className="mt-0.5 text-[#3478F6] focus:ring-[#3478F6]/30 cursor-pointer"
                   />
                   <div>
-                    <span className="font-bold text-xs text-white block">○ Move Files</span>
-                    <p className="text-[11px] text-slate-300 mt-0.5">
+                    <span className="font-bold text-xs text-[#F4F7FF] block">○ Move Files</span>
+                    <p className="text-[11px] text-[#A7B7D0] mt-0.5">
                       Relocate original files from current directories into <strong>{folderNameClean}</strong>.
                     </p>
                   </div>
@@ -255,8 +255,8 @@ export const OrganizationPreviewModal = ({
                   onClick={() => setOperationMode('copy')}
                   className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
                     operationMode === 'copy'
-                      ? 'bg-blue-600/15 border-blue-500/60 text-white shadow-md shadow-blue-500/10'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+                      ? 'bg-[rgba(52,120,246,0.15)] border-[#3478F6] text-[#F4F7FF] shadow-md shadow-blue-500/10'
+                      : 'bg-[#06101F] border-[rgba(139,170,215,0.14)] text-[#A7B7D0] hover:bg-[#132642]'
                   }`}
                 >
                   <input
@@ -264,11 +264,11 @@ export const OrganizationPreviewModal = ({
                     name="opMode"
                     checked={operationMode === 'copy'}
                     onChange={() => setOperationMode('copy')}
-                    className="mt-0.5 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
+                    className="mt-0.5 text-[#3478F6] focus:ring-[#3478F6]/30 cursor-pointer"
                   />
                   <div>
-                    <span className="font-bold text-xs text-white block">○ Copy Files</span>
-                    <p className="text-[11px] text-slate-300 mt-0.5">
+                    <span className="font-bold text-xs text-[#F4F7FF] block">○ Copy Files</span>
+                    <p className="text-[11px] text-[#A7B7D0] mt-0.5">
                       Keep original files in place and create copies inside <strong>{folderNameClean}</strong>.
                     </p>
                   </div>
@@ -282,14 +282,14 @@ export const OrganizationPreviewModal = ({
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-sm font-bold text-white block mb-0.5">
+                    <strong className="text-sm font-bold text-[#F4F7FF] block mb-0.5">
                       Memora could not find this file at its recorded location.
                     </strong>
                     <p className="text-xs text-red-300/90 leading-relaxed">
                       {errorMessage}
                     </p>
                     {missingFileDetails && (
-                      <div className="mt-2 p-2.5 rounded-lg bg-slate-950 border border-red-500/30 font-mono text-[11px] text-red-300 space-y-1">
+                      <div className="mt-2 p-2.5 rounded-lg bg-[#06101F] border border-red-500/30 font-mono text-[11px] text-red-300 space-y-1">
                         <div><strong>Recorded location:</strong> {missingFileDetails.recordedPath}</div>
                         <div><strong>Possible reason:</strong> The file may have been moved, renamed, or deleted manually outside of Memora.</div>
                       </div>
@@ -311,8 +311,8 @@ export const OrganizationPreviewModal = ({
             )}
 
             {/* Explanatory Banner: Safety Note */}
-            <div className="px-6 py-2.5 bg-slate-950/90 border-b border-slate-800/80 text-[11px] text-slate-300 flex items-center gap-2 shrink-0">
-              <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <div className="px-6 py-2.5 bg-[#06101F] border-b border-[rgba(139,170,215,0.1)] text-[11px] text-[#A7B7D0] flex items-center gap-2 shrink-0">
+              <Info className="w-3.5 h-3.5 text-[#4B91FF] shrink-0" />
               <span>
                 Safety Check: Files remain in place until you click <strong>Confirm Organization</strong>.
               </span>
@@ -324,29 +324,29 @@ export const OrganizationPreviewModal = ({
                 return (
                   <div
                     key={item.id}
-                    className="p-4 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-2 text-xs"
+                    className="p-4 bg-[#06101F] rounded-xl border border-[rgba(139,170,215,0.14)] space-y-2 text-xs"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <span className="font-bold text-sm text-white font-mono">{item.filename}</span>
+                      <span className="font-bold text-sm text-[#F4F7FF] font-mono">{item.filename}</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono pt-1">
                       {/* Current Location */}
-                      <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">
+                      <div className="p-2.5 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.14)] space-y-0.5">
+                        <span className="text-[10px] font-bold text-[#71839E] uppercase tracking-wider block font-sans">
                           CURRENT LOCATION
                         </span>
-                        <p className="text-slate-300 text-[11px] truncate" title={item.currentPath}>
+                        <p className="text-[#A7B7D0] text-[11px] truncate" title={item.currentPath}>
                           {item.currentPath}
                         </p>
                       </div>
 
                       {/* Proposed Destination */}
-                      <div className="p-2.5 rounded-lg bg-slate-900 border border-blue-500/30 space-y-0.5">
-                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider block font-sans">
+                      <div className="p-2.5 rounded-lg bg-[#0A1629] border border-[rgba(52,120,246,0.3)] space-y-0.5">
+                        <span className="text-[10px] font-bold text-[#4B91FF] uppercase tracking-wider block font-sans">
                           TARGET PATH ({operationMode.toUpperCase()})
                         </span>
-                        <p className="text-blue-300 text-[11px] font-bold truncate" title={`${folderNameClean}/${item.filename}`}>
+                        <p className="text-[#4B91FF] text-[11px] font-bold truncate" title={`${folderNameClean}/${item.filename}`}>
                           📁 {folderNameClean}/{item.filename}
                         </p>
                       </div>
@@ -357,8 +357,8 @@ export const OrganizationPreviewModal = ({
             </div>
 
             {/* Sticky Actions Footer */}
-            <div className="flex items-center justify-between px-6 py-4 bg-slate-950/90 border-t border-slate-800 shrink-0">
-              <span className="text-xs text-slate-400 font-medium">
+            <div className="flex items-center justify-between px-6 py-4 bg-[#0E1D35] border-t border-[rgba(139,170,215,0.14)] shrink-0">
+              <span className="text-xs text-[#71839E] font-medium">
                 Nothing is moved without explicit confirmation.
               </span>
 
@@ -367,7 +367,7 @@ export const OrganizationPreviewModal = ({
                   type="button"
                   onClick={handleCloseAll}
                   disabled={isSubmitting}
-                  className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-medium text-[#A7B7D0] hover:text-[#F4F7FF] hover:bg-[#132642] rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -375,7 +375,7 @@ export const OrganizationPreviewModal = ({
                   type="button"
                   onClick={handleConfirm}
                   disabled={isSubmitting}
-                  className="px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl shadow-lg shadow-blue-500/25 border border-blue-500/30 transition-all cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2.5 text-xs font-bold text-white bg-[#3478F6] hover:bg-[#2563EB] active:scale-95 rounded-xl shadow-lg shadow-blue-500/25 border border-blue-400/30 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? 'Organizing Files...' : 'Confirm Organization'}
                 </button>

@@ -70,7 +70,7 @@ export const OrganizationSuggestionsTable = ({
         return <FileText className="w-4 h-4 text-red-400 shrink-0" />;
       case 'DOCX':
       case 'DOC':
-        return <FileText className="w-4 h-4 text-blue-400 shrink-0" />;
+        return <FileText className="w-4 h-4 text-[#4B91FF] shrink-0" />;
       case 'PPTX':
       case 'PPT':
         return <FilePresentation className="w-4 h-4 text-amber-400 shrink-0" />;
@@ -80,14 +80,14 @@ export const OrganizationSuggestionsTable = ({
       case 'JAVA':
       case 'C':
       case 'CPP':
-        return <FileCode className="w-4 h-4 text-slate-400 shrink-0" />;
+        return <FileCode className="w-4 h-4 text-[#A7B7D0] shrink-0" />;
       case 'JPG':
       case 'PNG':
       case 'JPEG':
       case 'WEBP':
-        return <FileImage className="w-4 h-4 text-purple-400 shrink-0" />;
+        return <FileImage className="w-4 h-4 text-[#7566F6] shrink-0" />;
       default:
-        return <File className="w-4 h-4 text-slate-400 shrink-0" />;
+        return <File className="w-4 h-4 text-[#71839E] shrink-0" />;
     }
   };
 
@@ -109,7 +109,7 @@ export const OrganizationSuggestionsTable = ({
       );
     } else {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700/60">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-[#06101F] text-[#71839E] border border-[rgba(139,170,215,0.14)]">
           <span>{confVal}% {level || 'Low'}</span>
         </span>
       );
@@ -128,23 +128,23 @@ export const OrganizationSuggestionsTable = ({
         );
       case 'Applied':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">
-            <ShieldCheck className="w-3 h-3 text-blue-400" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[rgba(52,120,246,0.15)] text-[#4B91FF] border border-[rgba(52,120,246,0.3)]">
+            <ShieldCheck className="w-3 h-3 text-[#4B91FF]" />
             Applied
           </span>
         );
       case 'Rejected':
       case 'Skipped':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
-            <X className="w-3 h-3 text-slate-400" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#06101F] text-[#71839E] border border-[rgba(139,170,215,0.14)]">
+            <X className="w-3 h-3 text-[#71839E]" />
             Skipped
           </span>
         );
       case 'Edited':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
-            <Edit3 className="w-3 h-3 text-indigo-400" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[rgba(117,102,246,0.15)] text-[#7566F6] border border-[rgba(117,102,246,0.3)]">
+            <Edit3 className="w-3 h-3 text-[#7566F6]" />
             Edited
           </span>
         );
@@ -159,7 +159,7 @@ export const OrganizationSuggestionsTable = ({
   };
 
   return (
-    <div className="glass-panel rounded-2xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-md mb-8 overflow-hidden shadow-xl">
+    <div className="rounded-2xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] mb-8 overflow-hidden shadow-xl">
       {/* Selection Warning Banner */}
       {warningMessage && (
         <div className="px-5 py-3 bg-amber-500/15 border-b border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-between animate-fadeIn">
@@ -171,29 +171,29 @@ export const OrganizationSuggestionsTable = ({
       )}
 
       {/* Table Control Header */}
-      <div className="p-4 sm:p-5 border-b border-slate-800/80 bg-slate-950/70 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 border-b border-[rgba(139,170,215,0.14)] bg-[#0E1D35] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+          <h2 className="text-base font-bold text-[#F4F7FF] tracking-tight flex items-center gap-2">
             <span>Folder Organization Review</span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[rgba(52,120,246,0.15)] text-[#4B91FF] border border-[rgba(52,120,246,0.3)]">
               {folderEntries.length} {folderEntries.length === 1 ? 'folder' : 'folders'} ({safeSuggestions.length} files)
             </span>
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-[#A7B7D0] mt-0.5">
             Expand folder groups below to review AI category suggestions, confidence ratings, and smart tags.
           </p>
         </div>
 
-        {/* Bulk Actions Toolbar - Single Row Alignment */}
+        {/* Bulk Actions Toolbar */}
         <div className="flex items-center flex-wrap sm:flex-nowrap gap-2 sm:gap-2.5 shrink-0 overflow-x-auto py-0.5">
           <button
             onClick={onSelectAll}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 h-9 rounded-xl border border-slate-700/60 bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 font-semibold text-xs whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 h-9 rounded-xl border border-[rgba(139,170,215,0.18)] bg-[#06101F] hover:bg-[#132642] text-[#F4F7FF] font-semibold text-xs whitespace-nowrap shrink-0 transition-colors cursor-pointer"
           >
             {allSelected ? (
-              <CheckSquare className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <CheckSquare className="w-3.5 h-3.5 text-[#4B91FF] shrink-0" />
             ) : (
-              <Square className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <Square className="w-3.5 h-3.5 text-[#71839E] shrink-0" />
             )}
             <span>Select All</span>
           </button>
@@ -210,7 +210,7 @@ export const OrganizationSuggestionsTable = ({
           <button
             onClick={onRejectSelected}
             disabled={!someSelected}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60 font-semibold text-xs whitespace-nowrap shrink-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 h-9 rounded-xl bg-[#06101F] hover:bg-[#132642] text-[#A7B7D0] border border-[rgba(139,170,215,0.18)] font-semibold text-xs whitespace-nowrap shrink-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             <X className="w-3.5 h-3.5 shrink-0" />
             <span>Skip Selected</span>
@@ -218,7 +218,7 @@ export const OrganizationSuggestionsTable = ({
 
           <button
             onClick={onPreviewChanges}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 h-9 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:from-blue-700 active:to-indigo-700 text-white font-semibold text-xs whitespace-nowrap shrink-0 shadow-md shadow-blue-500/20 border border-blue-500/30 transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 h-9 rounded-xl bg-[#3478F6] hover:bg-[#2563EB] active:scale-95 text-white font-semibold text-xs whitespace-nowrap shrink-0 shadow-md shadow-blue-500/20 border border-blue-400/30 transition-all cursor-pointer"
           >
             <FolderOutput className="w-3.5 h-3.5 shrink-0" />
             <span>Folder Organization ({safeSelectedIds.length})</span>
@@ -227,9 +227,9 @@ export const OrganizationSuggestionsTable = ({
       </div>
 
       {/* Expandable Folder Groups List */}
-      <div className="divide-y divide-slate-800/80">
+      <div className="divide-y divide-[rgba(139,170,215,0.1)]">
         {safeSuggestions.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 text-xs font-medium">
+          <div className="py-12 text-center text-[#71839E] text-xs font-medium">
             No organization suggestions found. Click "Analyze Files" to scan and analyze files.
           </div>
         ) : (
@@ -240,25 +240,25 @@ export const OrganizationSuggestionsTable = ({
             ).length;
 
             return (
-              <div key={folderKey} className="bg-slate-900/60 transition-colors">
+              <div key={folderKey} className="bg-[#0A1629] transition-colors">
                 {/* Collapsed/Expanded Folder Header Card */}
                 <div
                   onClick={() => toggleFolder(folderKey)}
-                  className="p-4 bg-slate-950/80 hover:bg-slate-800/50 border-b border-slate-800/80 flex items-center justify-between cursor-pointer select-none transition-colors"
+                  className="p-4 bg-[#06101F] hover:bg-[#0E1D35] border-b border-[rgba(139,170,215,0.1)] flex items-center justify-between cursor-pointer select-none transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="p-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400">
+                    <div className="p-1 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.14)] text-[#A7B7D0]">
                       {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-blue-400" />
+                        <ChevronDown className="w-4 h-4 text-[#4B91FF]" />
                       ) : (
-                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                        <ChevronRight className="w-4 h-4 text-[#71839E]" />
                       )}
                     </div>
-                    <Folder className="w-5 h-5 text-blue-400 shrink-0" />
+                    <Folder className="w-5 h-5 text-[#4B91FF] shrink-0" />
                     <div>
-                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-[#F4F7FF] flex items-center gap-2">
                         <span>📁 {folderKey}</span>
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[rgba(52,120,246,0.15)] text-[#4B91FF] border border-[rgba(52,120,246,0.3)]">
                           {items.length} {items.length === 1 ? 'file' : 'files'}
                         </span>
                       </h3>
@@ -276,7 +276,7 @@ export const OrganizationSuggestionsTable = ({
                         Pending Review
                       </span>
                     )}
-                    <span className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                    <span className="text-xs font-semibold text-[#4B91FF] hover:text-[#F4F7FF] flex items-center gap-1">
                       <span>{isExpanded ? 'Collapse' : 'Expand Files'}</span>
                     </span>
                   </div>
@@ -287,9 +287,9 @@ export const OrganizationSuggestionsTable = ({
                   <div className="overflow-x-auto custom-scrollbar animate-fadeIn">
                     <table className="w-full text-left border-collapse min-w-[920px]">
                       <thead>
-                        <tr className="bg-slate-950/90 border-b border-slate-800/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
+                        <tr className="bg-[#06101F] border-b border-[rgba(139,170,215,0.14)] text-[11px] font-bold text-[#71839E] uppercase tracking-wider select-none">
                           <th className="py-3 px-4 w-10">
-                            {/* Folder Specific Checkbox */}
+                            {/* Checkbox */}
                           </th>
                           <th className="py-3 px-4 min-w-[180px]">File Details</th>
                           <th className="py-3 px-4 min-w-[280px]">Smart Tags</th>
@@ -299,7 +299,7 @@ export const OrganizationSuggestionsTable = ({
                           <th className="py-3 px-4 text-right pr-6 min-w-[160px]">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60 text-xs">
+                      <tbody className="divide-y divide-[rgba(139,170,215,0.08)] text-xs">
                         {items.map((item) => {
                           if (!item) return null;
                           const isSelected = safeSelectedIds.includes(item.id);
@@ -316,8 +316,8 @@ export const OrganizationSuggestionsTable = ({
                           return (
                             <tr
                               key={item.id || item.filename}
-                              className={`transition-colors hover:bg-slate-800/40 ${
-                                isSelected ? 'bg-blue-500/10' : ''
+                              className={`transition-colors hover:bg-[#0E1D35] ${
+                                isSelected ? 'bg-[rgba(52,120,246,0.1)]' : ''
                               }`}
                             >
                               <td className="py-3.5 px-4">
@@ -325,19 +325,19 @@ export const OrganizationSuggestionsTable = ({
                                   type="checkbox"
                                   checked={isSelected}
                                   onChange={() => onToggleSelect && onToggleSelect(item.id)}
-                                  className="rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500/30 cursor-pointer"
+                                  className="rounded border-[rgba(139,170,215,0.25)] bg-[#06101F] text-[#3478F6] focus:ring-[#3478F6]/30 cursor-pointer"
                                 />
                               </td>
 
                               {/* File Name & Type */}
                               <td className="py-3.5 px-4">
-                                <div className="flex items-center gap-2.5 font-medium text-white">
+                                <div className="flex items-center gap-2.5 font-medium text-[#F4F7FF]">
                                   {getFileIcon(item.type)}
                                   <div>
-                                    <span className="font-semibold text-slate-100 block line-clamp-1" title={item.filename || ''}>
+                                    <span className="font-semibold text-[#F4F7FF] block line-clamp-1" title={item.filename || ''}>
                                       {item.filename || 'Unnamed File'}
                                     </span>
-                                    <span className="text-[10px] text-slate-400 font-mono block">
+                                    <span className="text-[10px] text-[#71839E] font-mono block">
                                       Type: {item.type || 'FILE'}
                                     </span>
                                   </div>
@@ -348,25 +348,25 @@ export const OrganizationSuggestionsTable = ({
                               <td className="py-3.5 px-4">
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   {displayTags.map((tag, tIdx) => (
-                                    <span key={tIdx} className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1">
-                                      <Tag className="w-3 h-3 text-purple-400" />
+                                    <span key={tIdx} className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[rgba(117,102,246,0.15)] text-indigo-300 border border-[rgba(117,102,246,0.3)] flex items-center gap-1">
+                                      <Tag className="w-3 h-3 text-[#7566F6]" />
                                       <span>{tag}</span>
                                     </span>
                                   ))}
                                   {extraCount > 0 && (
                                     <span
                                       onClick={() => onEdit && onEdit(item)}
-                                      className="px-2 py-1 rounded-md text-[11px] font-bold bg-slate-800 text-purple-300 border border-slate-700 cursor-pointer hover:bg-purple-500/20"
+                                      className="px-2 py-1 rounded-md text-[11px] font-bold bg-[#06101F] text-indigo-300 border border-[rgba(139,170,215,0.18)] cursor-pointer hover:bg-[rgba(117,102,246,0.2)]"
                                     >
                                       +{extraCount}
                                     </span>
                                   )}
                                   <button
                                     onClick={() => onEdit && onEdit(item)}
-                                    className="ml-1 p-1 rounded-md bg-slate-800 hover:bg-purple-500/20 text-slate-400 hover:text-purple-300 border border-slate-700/60 text-[10px] transition-colors cursor-pointer"
+                                    className="ml-1 p-1 rounded-md bg-[#06101F] hover:bg-[rgba(117,102,246,0.2)] text-[#71839E] hover:text-indigo-300 border border-[rgba(139,170,215,0.14)] text-[10px] transition-colors cursor-pointer"
                                     title="Edit Smart Tags"
                                   >
-                                    <Edit3 className="w-3 h-3 text-purple-400" />
+                                    <Edit3 className="w-3 h-3 text-[#7566F6]" />
                                   </button>
                                 </div>
                               </td>
@@ -377,7 +377,7 @@ export const OrganizationSuggestionsTable = ({
                               </td>
 
                               {/* Current Physical Folder */}
-                              <td className="py-3.5 px-4 font-mono text-[11px] text-slate-300 truncate max-w-[220px]" title={item.displayPath || item.currentPath || ''}>
+                              <td className="py-3.5 px-4 font-mono text-[11px] text-[#A7B7D0] truncate max-w-[220px]" title={item.displayPath || item.currentPath || ''}>
                                 📁 {item.displayPath || item.currentPath || 'Root Folder'}
                               </td>
 
@@ -401,7 +401,7 @@ export const OrganizationSuggestionsTable = ({
                                   <button
                                     onClick={() => onReject && onReject(item.id)}
                                     title="Skip suggestion"
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-700/60 transition-colors cursor-pointer"
+                                    className="p-1.5 rounded-lg bg-[#06101F] hover:bg-red-950/40 text-[#71839E] hover:text-red-400 border border-[rgba(139,170,215,0.14)] transition-colors cursor-pointer"
                                   >
                                     <X className="w-3.5 h-3.5" />
                                   </button>
@@ -430,4 +430,3 @@ function FilePresentation(props) {
     </svg>
   );
 }
-

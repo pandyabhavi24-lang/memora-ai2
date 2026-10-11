@@ -1,4 +1,5 @@
 import React from 'react';
+import { Loader2 } from 'lucide-react';
 
 export const Button = ({
   children,
@@ -10,34 +11,41 @@ export const Button = ({
   className = '',
   disabled = false,
   onClick,
+  type = 'button',
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none';
+  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3478F6]/50 active:scale-[0.98]';
 
   const sizeStyles = {
     sm: 'px-3 py-1.5 text-xs gap-1.5',
-    md: 'px-4 py-2 text-sm gap-2',
-    lg: 'px-6 py-3 text-base gap-2.5'
+    md: 'px-4 py-2 text-xs sm:text-sm gap-2',
+    lg: 'px-5 py-2.5 text-sm sm:text-base gap-2.5'
   };
 
   const variantStyles = {
-    primary: 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 border border-blue-500/30',
-    secondary: 'bg-gray-800/80 hover:bg-gray-700/80 text-gray-100 border border-gray-700/60 backdrop-blur-md',
-    ghost: 'bg-transparent hover:bg-gray-800/50 text-gray-300 hover:text-white',
-    danger: 'bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30'
+    primary: 'bg-[#3478F6] hover:bg-[#4B91FF] text-[#F4F7FF] shadow-sm shadow-[#3478F6]/25 border border-[#4B91FF]/30 font-semibold',
+    secondary: 'bg-[#0E1D35] hover:bg-[#182F50] text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] hover:border-[rgba(139,170,215,0.30)] shadow-sm',
+    ghost: 'bg-transparent hover:bg-[#0E1D35] text-[#A7B7D0] hover:text-[#F4F7FF]',
+    outline: 'bg-transparent hover:bg-[#3478F6]/10 text-[#4B91FF] border border-[#3478F6]/40 hover:border-[#3478F6]/70',
+    danger: 'bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 hover:border-red-500/50'
   };
 
   const IconComponent = Icon;
 
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      className={`${baseStyles} ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}
+      className={`${baseStyles} ${sizeStyles[size] || sizeStyles.md} ${variantStyles[variant] || variantStyles.primary} ${className}`}
       {...props}
     >
-      {IconComponent && <IconComponent className={`w-4 h-4 shrink-0 ${loading ? 'animate-spin' : ''} ${iconClassName}`} />}
-      <span>{children}</span>
+      {loading ? (
+        <Loader2 className={`w-4 h-4 shrink-0 animate-spin text-current ${iconClassName}`} />
+      ) : (
+        IconComponent && <IconComponent className={`w-4 h-4 shrink-0 text-current ${iconClassName}`} />
+      )}
+      {children && <span>{children}</span>}
     </button>
   );
 };

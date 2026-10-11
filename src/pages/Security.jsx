@@ -15,11 +15,14 @@ import { securityService } from '../services/securityService';
 // ---------------------------------------------------------------------------
 // Small reusable row
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Small reusable row
+// ---------------------------------------------------------------------------
 const SettingRow = ({ label, description, children }) => (
-  <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800">
+  <div className="flex items-center justify-between p-4 rounded-xl bg-[#0A1629] border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] hover:bg-[#0E1D35]/40 transition-all">
     <div className="flex-1 min-w-0 mr-4">
-      <h4 className="text-xs font-semibold text-gray-200">{label}</h4>
-      {description && <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{description}</p>}
+      <h4 className="text-xs font-semibold text-white">{label}</h4>
+      {description && <p className="text-[11px] text-[#A7B7D0] mt-0.5 leading-relaxed">{description}</p>}
     </div>
     <div className="shrink-0">{children}</div>
   </div>
@@ -28,9 +31,9 @@ const SettingRow = ({ label, description, children }) => (
 const StatusBadge = ({ ok, label }) => (
   <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg border ${
     ok ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-       : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
+       : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
   }`}>
-    {ok ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+    {ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
     {label}
   </span>
 );
@@ -41,52 +44,52 @@ const StatusBadge = ({ ok, label }) => (
 const OverviewTab = ({ settings }) => (
   <div className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 space-y-2">
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <Lock className="w-3.5 h-3.5" /> Application Lock
+      <div className="p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] space-y-2">
+        <div className="flex items-center gap-2 text-xs text-[#7E93B3] font-semibold uppercase tracking-wider font-mono">
+          <Lock className="w-3.5 h-3.5 text-[#38BDF8]" /> Application Lock
         </div>
         <StatusBadge ok={settings?.lock_enabled} label={settings?.lock_enabled ? 'Enabled' : 'Disabled'} />
       </div>
-      <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 space-y-2">
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <ShieldCheck className="w-3.5 h-3.5" /> PIN Configured
+      <div className="p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] space-y-2">
+        <div className="flex items-center gap-2 text-xs text-[#7E93B3] font-semibold uppercase tracking-wider font-mono">
+          <ShieldCheck className="w-3.5 h-3.5 text-[#38BDF8]" /> PIN Configured
         </div>
         <StatusBadge ok={settings?.has_pin} label={settings?.has_pin ? 'Set' : 'Not Set'} />
       </div>
-      <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 space-y-2">
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <Globe className="w-3.5 h-3.5" /> Data Processing
+      <div className="p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] space-y-2">
+        <div className="flex items-center gap-2 text-xs text-[#7E93B3] font-semibold uppercase tracking-wider font-mono">
+          <Globe className="w-3.5 h-3.5 text-emerald-400" /> Data Processing
         </div>
         <StatusBadge ok={true} label="100% Local" />
       </div>
     </div>
 
-    <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20 space-y-2">
-      <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+    <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 space-y-2">
+      <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 font-mono uppercase tracking-wider">
         <Cpu className="w-3.5 h-3.5" /> Local Processing & AES-256-GCM Encryption Guarantee
       </div>
-      <p className="text-[11px] text-emerald-300/80 leading-relaxed">
+      <p className="text-[11px] text-emerald-300/90 leading-relaxed">
         All document indexing, OCR, vector embeddings, local file/folder encryption (AES-256-GCM), and audit logs execute exclusively on your computer.
         No file contents, encryption keys, OCR text, or search queries leave your local machine.
       </p>
     </div>
 
-    <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/20 space-y-1">
-      <div className="flex items-center gap-2 text-xs font-semibold text-blue-400">
+    <div className="p-4 rounded-xl bg-[#3478F6]/10 border border-[#3478F6]/25 space-y-1">
+      <div className="flex items-center gap-2 text-xs font-semibold text-[#38BDF8] font-mono uppercase tracking-wider">
         <Info className="w-3.5 h-3.5" /> Core Security Action Distinctions
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 text-[11px]">
-        <div className="p-2.5 rounded-lg bg-gray-900/50 border border-gray-800">
-          <strong className="text-yellow-400 block mb-1">1. Exclude</strong>
-          Stops scanning and indexing. Does NOT delete or encrypt the file on disk.
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-2 text-[11px]">
+        <div className="p-3 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)]">
+          <strong className="text-amber-400 block mb-1">1. Exclude</strong>
+          <span className="text-[#A7B7D0] leading-relaxed">Stops scanning and indexing. Does NOT delete or encrypt the file on disk.</span>
         </div>
-        <div className="p-2.5 rounded-lg bg-gray-900/50 border border-gray-800">
-          <strong className="text-purple-400 block mb-1">2. Encrypt</strong>
-          Protects actual file contents locally with AES-256-GCM. Unreadable without decryption.
+        <div className="p-3 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)]">
+          <strong className="text-[#38BDF8] block mb-1">2. Encrypt</strong>
+          <span className="text-[#A7B7D0] leading-relaxed">Protects actual file contents locally with AES-256-GCM. Unreadable without decryption.</span>
         </div>
-        <div className="p-2.5 rounded-lg bg-gray-900/50 border border-gray-800">
+        <div className="p-3 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)]">
           <strong className="text-red-400 block mb-1">3. Delete Permanently</strong>
-          Permanently removes original file/folder from computer disk with confirmation modal.
+          <span className="text-[#A7B7D0] leading-relaxed">Permanently removes original file/folder from computer disk with confirmation modal.</span>
         </div>
       </div>
     </div>
@@ -1138,7 +1141,7 @@ export const Security = () => {
         badge={<Badge variant="blue">Module 5</Badge>}
       />
 
-      <div className="flex items-center gap-2 border-b border-gray-800 pb-3 overflow-x-auto custom-scrollbar flex-nowrap">
+      <div className="flex items-center gap-2 border-b border-[rgba(139,170,215,0.14)] pb-3 overflow-x-auto custom-scrollbar flex-nowrap">
         {TABS.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1149,8 +1152,8 @@ export const Security = () => {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
                 isActive
-                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
+                  ? 'bg-[#3478F6]/20 text-[#38BDF8] border border-[#3478F6]/40 shadow-sm'
+                  : 'text-[#7E93B3] hover:text-white hover:bg-[#0E1D35]'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -1160,7 +1163,7 @@ export const Security = () => {
         })}
       </div>
 
-      <div className="glass-panel p-6 rounded-2xl border-gray-800/80">
+      <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl">
         {activeTab === 'overview'   && <OverviewTab settings={settings} />}
         {activeTab === 'lock'       && <LockTab settings={settings} sessionToken={sessionToken} onRefresh={handleRefresh} addToast={addToast} />}
         {activeTab === 'excluded'   && <ExcludedTab sessionToken={sessionToken} addToast={addToast} />}

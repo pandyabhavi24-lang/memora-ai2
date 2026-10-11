@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { PieChart, RefreshCw, AlertTriangle, HardDrive } from 'lucide-react';
 import { Button } from '../common/Button';
 
-// Category color map matching Memora design system
+// Category color map matching Memora electric-blue & midnight design system
 const COLOR_PALETTE = [
-  '#3B82F6', // Blue (Documents / Default 1)
-  '#A855F7', // Purple (Education / Default 2)
-  '#10B981', // Emerald (Images / Default 3)
-  '#F59E0B', // Amber (Projects / Default 4)
-  '#EC4899', // Pink (Finance / Default 5)
-  '#6366F1', // Indigo (Other / Default 6)
+  '#3478F6', // Electric Blue (Documents / Default 1)
+  '#4B91FF', // Bright Blue (Images / Default 2)
+  '#7566F6', // Indigo (Education / Default 3)
+  '#10B981', // Emerald (Finance / Default 4)
+  '#F59E0B', // Amber (Projects / Default 5)
+  '#EC4899', // Pink (Media / Default 6)
   '#14B8A6', // Teal
   '#F97316'  // Orange
 ];
@@ -19,13 +19,13 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
 
   if (hasError) {
     return (
-      <div className="glass-panel p-4 rounded-2xl border border-red-500/30 bg-slate-900/90 text-center space-y-2 h-full flex flex-col justify-center">
+      <div className="glass-panel p-4 rounded-2xl border border-red-500/30 bg-[#0A1629] text-center space-y-2 h-full flex flex-col justify-center">
         <div className="w-8 h-8 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 mx-auto">
           <AlertTriangle className="w-4 h-4" />
         </div>
         <div className="space-y-0.5">
-          <h4 className="text-xs font-bold text-white">Couldn't load file overview</h4>
-          <p className="text-[10px] text-slate-400">Please check backend connection.</p>
+          <h4 className="text-xs font-bold text-[#F4F7FF]">Couldn't load file overview</h4>
+          <p className="text-[10px] text-[#A7B7D0]">Please check backend connection.</p>
         </div>
         {onRetry && (
           <Button variant="outline" size="sm" onClick={onRetry} className="mx-auto text-[11px] py-1">
@@ -41,8 +41,8 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
   const totalFiles = categories.reduce((sum, c) => sum + (c.fileCount || 0), 0);
 
   // SVG Donut geometry
-  const size = 125;
-  const strokeWidth = 16;
+  const size = 112;
+  const strokeWidth = 14;
   const center = size / 2;
   const radius = center - strokeWidth / 2;
   const circumference = 2 * Math.PI * radius;
@@ -66,17 +66,17 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
   const activeSegment = hoveredIdx !== null ? segments[hoveredIdx] : null;
 
   return (
-    <div className="glass-panel p-3 rounded-2xl border border-slate-800 flex flex-col justify-between h-full shadow-lg shadow-black/20">
+    <div className="glass-panel p-3 rounded-xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] flex flex-col justify-between h-full shadow-sm">
       {/* Header Bar */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
-        <div className="flex items-center gap-2">
-          <PieChart className="w-4 h-4 text-purple-400" />
-          <h3 className="font-bold text-xs text-white uppercase tracking-wider">
-            File Overview
+      <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.14)] pb-1.5 mb-1.5 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <PieChart className="w-3.5 h-3.5 text-[#4B91FF]" />
+          <h3 className="font-bold text-[11px] text-[#F4F7FF] uppercase tracking-wider">
+            File Category Overview
           </h3>
         </div>
         {totalFiles > 0 && (
-          <span className="text-[11px] font-mono font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
+          <span className="text-[10px] font-mono font-bold text-[#4B91FF] bg-[#3478F6]/10 px-2 py-0.5 rounded-full border border-[#3478F6]/20">
             {totalFiles} Total
           </span>
         )}
@@ -85,14 +85,14 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
       {/* Content Body */}
       {isLoading ? (
         <div className="animate-pulse flex flex-col items-center justify-center p-6 space-y-3 my-auto">
-          <div className="w-24 h-24 rounded-full border-4 border-slate-800 border-t-purple-500 animate-spin" />
-          <div className="h-2.5 bg-slate-800 rounded w-1/3" />
+          <div className="w-20 h-20 rounded-full border-4 border-[#0E1D35] border-t-[#3478F6] animate-spin" />
+          <div className="h-2.5 bg-[#0E1D35] rounded w-1/3" />
         </div>
       ) : categories.length === 0 || totalFiles === 0 ? (
-        <div className="p-6 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl border border-slate-800/50 space-y-1.5 my-auto">
-          <HardDrive className="w-6 h-6 text-slate-600 mx-auto" />
-          <p className="font-semibold text-slate-300 text-xs">No file category data yet.</p>
-          <p className="text-[10px] text-slate-400">Add a folder to populate file distribution.</p>
+        <div className="p-6 text-center text-xs text-[#A7B7D0] bg-[#0E1D35]/50 rounded-xl border border-[rgba(139,170,215,0.12)] space-y-1.5 my-auto">
+          <HardDrive className="w-6 h-6 text-[#71839E] mx-auto" />
+          <p className="font-semibold text-[#F4F7FF] text-xs">No file category data yet.</p>
+          <p className="text-[10px] text-[#A7B7D0]">Add a monitored folder to view file distribution.</p>
         </div>
       ) : (
         <div className="flex flex-row items-center justify-between gap-3 py-1 flex-1">
@@ -105,7 +105,7 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
                 cy={center}
                 r={radius}
                 fill="transparent"
-                stroke="#1E293B"
+                stroke="#0E1D35"
                 strokeWidth={strokeWidth}
               />
               {/* Segments */}
@@ -135,17 +135,17 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
               {activeSegment ? (
                 <>
-                  <span className="text-base sm:text-lg font-black text-white font-mono leading-none">
+                  <span className="text-base sm:text-lg font-black text-[#F4F7FF] font-mono leading-none">
                     {activeSegment.fileCount}
                   </span>
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-purple-400 truncate max-w-[65px] mt-0.5">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-[#4B91FF] truncate max-w-[65px] mt-0.5">
                     {activeSegment.category}
                   </span>
                 </>
               ) : (
                 <>
-                  <span className="text-lg sm:text-xl font-black text-white font-mono leading-none">{totalFiles}</span>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Files</span>
+                  <span className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono leading-none">{totalFiles}</span>
+                  <span className="text-[9px] font-bold text-[#A7B7D0] uppercase tracking-wider mt-0.5">Files</span>
                 </>
               )}
             </div>
@@ -162,8 +162,8 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
                   onMouseLeave={() => setHoveredIdx(null)}
                   className={`p-1.5 px-2.5 rounded-lg border transition-all duration-150 flex items-center justify-between text-xs cursor-pointer ${
                     isHovered 
-                      ? 'bg-slate-800/90 border-purple-500/40 shadow-sm' 
-                      : 'bg-slate-950/40 border-slate-800/60 hover:bg-slate-900/60'
+                      ? 'bg-[#182F50] border-[#3478F6]/50 shadow-sm' 
+                      : 'bg-[#0E1D35]/80 border-[rgba(139,170,215,0.12)] hover:bg-[#132642]'
                   }`}
                   title={`${seg.category}: ${seg.fileCount} files (${seg.percentage.toFixed(1)}%)`}
                 >
@@ -172,13 +172,13 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
                       className="w-2.5 h-2.5 rounded-sm shrink-0" 
                       style={{ backgroundColor: seg.color }}
                     />
-                    <span className="font-semibold text-slate-200 capitalize truncate text-xs">
+                    <span className="font-semibold text-[#F4F7FF] capitalize truncate text-xs">
                       {seg.category}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 font-mono text-xs">
-                    <span className="text-white font-black">{seg.fileCount}</span>
-                    <span className="text-slate-400 text-[10px] font-semibold">{seg.percentage.toFixed(0)}%</span>
+                    <span className="text-[#F4F7FF] font-black">{seg.fileCount}</span>
+                    <span className="text-[#A7B7D0] text-[10px] font-semibold">{seg.percentage.toFixed(0)}%</span>
                   </div>
                 </div>
               );

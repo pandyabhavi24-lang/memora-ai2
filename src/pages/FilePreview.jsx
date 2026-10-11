@@ -77,66 +77,69 @@ export const FilePreviewModal = ({ file, onClose }) => {
         </>
       }
     >
-      <div className="space-y-6 select-none">
+      <div className="space-y-5 select-none">
         {/* Top Header */}
-        <div className="flex items-center justify-between text-[11px] text-gray-500 font-mono border-b border-gray-800 pb-2">
+        <div className="flex items-center justify-between text-[11px] text-[#8BAAD7] font-mono border-b border-[rgba(139,170,215,0.14)] pb-2.5">
           <span>Memora AI Local File Inspector</span>
-          <span className="text-blue-400 font-semibold">[Indexed & Verified]</span>
+          <span className="text-[#38BDF8] font-semibold flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse"></span>
+            [Indexed & Verified]
+          </span>
         </div>
 
         {/* Metadata Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3 rounded-xl bg-gray-900/80 border border-gray-800">
-            <div className="text-[11px] text-gray-400 font-medium mb-0.5">Format</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="p-3 rounded-xl bg-[#0A1629] border border-[rgba(139,170,215,0.14)] shadow-xs">
+            <div className="text-[11px] text-[#8BAAD7] font-medium mb-0.5">Format</div>
             <div className="text-xs font-semibold text-white uppercase">{file.fileExtension || file.category || 'FILE'}</div>
           </div>
 
-          <div className="p-3 rounded-xl bg-gray-900/80 border border-gray-800">
-            <div className="text-[11px] text-gray-400 font-medium mb-0.5">Size</div>
+          <div className="p-3 rounded-xl bg-[#0A1629] border border-[rgba(139,170,215,0.14)] shadow-xs">
+            <div className="text-[11px] text-[#8BAAD7] font-medium mb-0.5">Size</div>
             <div className="text-xs font-semibold text-white font-mono">
               {file.sizeBytes ? (file.sizeBytes / 1024 / 1024).toFixed(2) + ' MB' : 'Local File'}
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-gray-900/80 border border-gray-800">
-            <div className="text-[11px] text-gray-400 font-medium mb-0.5">Modified Date</div>
+          <div className="p-3 rounded-xl bg-[#0A1629] border border-[rgba(139,170,215,0.14)] shadow-xs">
+            <div className="text-[11px] text-[#8BAAD7] font-medium mb-0.5">Modified Date</div>
             <div className="text-xs font-semibold text-white font-mono">
               {file.modifiedAt ? new Date(file.modifiedAt).toLocaleDateString() : 'Recent'}
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-gray-900/80 border border-emerald-500/30 bg-emerald-950/20">
+          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 shadow-xs">
             <div className="text-[11px] text-emerald-400 font-medium mb-0.5">Match Relevance</div>
-            <div className="text-xs font-extrabold text-emerald-300 font-mono">
+            <div className="text-xs font-bold text-emerald-300 font-mono">
               {file.relevanceScore || file.score || 95}% Match
             </div>
           </div>
         </div>
 
         {/* Location Bar */}
-        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-gray-950/70 border border-gray-800 text-xs font-mono text-gray-300">
-          <Folder className="w-4 h-4 text-blue-400 shrink-0" />
-          <span className="truncate">{file.path}</span>
+        <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.14)] text-xs font-mono text-[#8BAAD7]">
+          <Folder className="w-4 h-4 text-[#38BDF8] shrink-0" />
+          <span className="truncate select-all text-[#DCE5F3]">{file.path}</span>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-2 border-b border-gray-800 pb-2">
+        <div className="flex items-center gap-2 border-b border-[rgba(139,170,215,0.14)] pb-2">
           <button
             onClick={() => setActiveTab('summary')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'summary'
-                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-[#3478F6]/20 text-[#60A5FA] border border-[#3478F6]/40 shadow-xs'
+                : 'text-[#8BAAD7] hover:text-white hover:bg-[#0A1629]'
             }`}
           >
             AI Insight & Overview
           </button>
           <button
             onClick={() => setActiveTab('text')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'text'
-                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-[#3478F6]/20 text-[#60A5FA] border border-[#3478F6]/40 shadow-xs'
+                : 'text-[#8BAAD7] hover:text-white hover:bg-[#0A1629]'
             }`}
           >
             Extracted Text Content
@@ -145,19 +148,19 @@ export const FilePreviewModal = ({ file, onClose }) => {
 
         {/* Tab Content Display */}
         {activeTab === 'summary' && (
-          <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-blue-950/25 border border-blue-500/30">
-              <h4 className="text-xs font-semibold text-blue-400 flex items-center gap-2 mb-1.5">
-                <Brain className="w-4 h-4 text-blue-400" />
+          <div className="space-y-3.5">
+            <div className="p-4 rounded-xl bg-[#0A1629] border border-[rgba(139,170,215,0.14)] shadow-xs">
+              <h4 className="text-xs font-semibold text-[#38BDF8] flex items-center gap-2 mb-2">
+                <Brain className="w-4 h-4 text-[#38BDF8]" />
                 <span>AI Content Summary & Snippet</span>
               </h4>
-              <p className="text-xs text-gray-200 leading-relaxed">
+              <p className="text-xs text-[#CBD5E1] leading-relaxed">
                 {file.aiSummary || file.extractedSnippet || 'Document content indexed locally.'}
               </p>
             </div>
 
             {file.aiExplanation && (
-              <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/25 text-xs text-purple-200">
+              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-200">
                 <strong className="text-purple-300 block mb-1 font-semibold">Search Match Context:</strong>
                 "{file.aiExplanation}"
               </div>
@@ -165,8 +168,8 @@ export const FilePreviewModal = ({ file, onClose }) => {
 
             {file.tags && (
               <div>
-                <h4 className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5" />
+                <h4 className="text-xs font-semibold text-[#8BAAD7] mb-2 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-[#8BAAD7]" />
                   <span>Indexed Tags</span>
                 </h4>
                 <div className="flex flex-wrap gap-1.5">
@@ -182,9 +185,9 @@ export const FilePreviewModal = ({ file, onClose }) => {
         )}
 
         {activeTab === 'text' && (
-          <div className="p-4 rounded-xl bg-gray-950 border border-gray-800 text-xs text-gray-300 font-mono leading-relaxed max-h-60 overflow-y-auto custom-scrollbar">
+          <div className="p-4 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.14)] text-xs text-[#CBD5E1] font-mono leading-relaxed max-h-60 overflow-y-auto custom-scrollbar">
             {loadingContent ? (
-              <div className="text-gray-400 italic">Loading extracted content from local database...</div>
+              <div className="text-[#8BAAD7] italic">Loading extracted content from local database...</div>
             ) : (
               realContent || 'No extracted text content.'
             )}

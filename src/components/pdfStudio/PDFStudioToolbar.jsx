@@ -52,15 +52,15 @@ export const PDFStudioToolbar = ({
   onCloseDocument
 }) => {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 glass-panel px-4 py-2 rounded-xl border border-gray-800/80 bg-gray-900/80 backdrop-blur-md select-none">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 rounded-xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629]/90 backdrop-blur-md select-none">
       {/* Group 1: Content Creation & Insert Tools */}
-      <div className="flex items-center gap-1.5 bg-gray-950/70 p-1 rounded-lg border border-gray-800/60 shrink-0">
+      <div className="flex items-center gap-1.5 bg-[#06101F]/70 p-1 rounded-lg border border-[rgba(139,170,215,0.12)] shrink-0">
         <button
           onClick={onAddText}
-          className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 transition-all cursor-pointer shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md bg-[#3478F6]/20 hover:bg-[#3478F6]/30 text-[#4B91FF] border border-[#3478F6]/40 transition-all cursor-pointer shadow-sm"
           title="Add Word-like Text Box to A4 Document"
         >
-          <Type className="w-3.5 h-3.5 text-blue-400" />
+          <Type className="w-3.5 h-3.5 text-[#4B91FF]" />
           <span>Add Text</span>
         </button>
 
@@ -76,10 +76,10 @@ export const PDFStudioToolbar = ({
         {onAddFromCamera && (
           <button
             onClick={onAddFromCamera}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-gray-400 hover:text-cyan-300 hover:bg-cyan-600/20 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-[#A7B7D0] hover:text-[#4B91FF] hover:bg-[#3478F6]/15 transition-all cursor-pointer"
             title="Capture Photo from Camera"
           >
-            <Camera className="w-3.5 h-3.5 text-cyan-400" />
+            <Camera className="w-3.5 h-3.5 text-[#4B91FF]" />
             <span className="hidden sm:inline">Camera</span>
           </button>
         )}
@@ -87,35 +87,35 @@ export const PDFStudioToolbar = ({
         {onAddFromMemora && (
           <button
             onClick={onAddFromMemora}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-gray-400 hover:text-purple-300 hover:bg-purple-600/20 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-[#A7B7D0] hover:text-[#C4B5FD] hover:bg-[#7566F6]/15 transition-all cursor-pointer"
             title="Import from Memora Workspace"
           >
-            <Layers className="w-3.5 h-3.5 text-purple-400" />
+            <Layers className="w-3.5 h-3.5 text-[#7566F6]" />
             <span className="hidden sm:inline">From Memora</span>
           </button>
         )}
       </div>
 
       {/* Group 2: Page Navigation & Stepper */}
-      <div className="flex items-center gap-1.5 bg-gray-950/60 px-2 py-1 rounded-lg border border-gray-800/50 shrink-0">
+      <div className="flex items-center gap-1.5 bg-[#06101F]/60 px-2 py-1 rounded-lg border border-[rgba(139,170,215,0.12)] shrink-0">
         <button
           onClick={onPrevPage}
           disabled={currentPage <= 1}
-          className="p-1 text-gray-400 hover:text-white disabled:opacity-30 rounded hover:bg-gray-800/50 transition-colors cursor-pointer"
+          className="p-1 text-[#A7B7D0] hover:text-[#F4F7FF] disabled:opacity-30 rounded hover:bg-[#0E1D35] transition-colors cursor-pointer"
           title="Previous Page"
           aria-label="Previous Page"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        <span className="text-xs text-gray-300 font-mono px-1">
-          Page <strong className="text-white">{currentPage}</strong> of <strong className="text-gray-400">{totalPages}</strong>
+        <span className="text-xs text-[#A7B7D0] font-mono px-1">
+          Page <strong className="text-[#F4F7FF]">{currentPage}</strong> of <strong className="text-[#71839E]">{totalPages}</strong>
         </span>
 
         <button
           onClick={onNextPage}
           disabled={currentPage >= totalPages}
-          className="p-1 text-gray-400 hover:text-white disabled:opacity-30 rounded hover:bg-gray-800/50 transition-colors cursor-pointer"
+          className="p-1 text-[#A7B7D0] hover:text-[#F4F7FF] disabled:opacity-30 rounded hover:bg-[#0E1D35] transition-colors cursor-pointer"
           title="Next Page"
           aria-label="Next Page"
         >
@@ -124,32 +124,32 @@ export const PDFStudioToolbar = ({
       </div>
 
       {/* Group 3: Page Actions Toolbar */}
-      <div className="flex items-center gap-1 bg-gray-950/70 p-1 rounded-lg border border-gray-800/60 shrink-0">
+      <div className="flex items-center gap-1 bg-[#06101F]/70 p-1 rounded-lg border border-[rgba(139,170,215,0.12)] shrink-0">
         <button
           onClick={onAddPage}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-300 hover:text-white hover:bg-gray-800/60 rounded transition-colors cursor-pointer"
+          className="flex items-center gap-1 px-2 py-1 text-xs text-[#A7B7D0] hover:text-[#F4F7FF] hover:bg-[#0E1D35] rounded transition-colors cursor-pointer"
           title="Add Blank Page"
           aria-label="Add Blank Page"
         >
-          <Plus className="w-3.5 h-3.5 text-blue-400" />
+          <Plus className="w-3.5 h-3.5 text-[#4B91FF]" />
           <span className="hidden md:inline">Add</span>
         </button>
 
         <button
           onClick={onDuplicatePage}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-300 hover:text-white hover:bg-gray-800/60 rounded transition-colors cursor-pointer"
+          className="flex items-center gap-1 px-2 py-1 text-xs text-[#A7B7D0] hover:text-[#F4F7FF] hover:bg-[#0E1D35] rounded transition-colors cursor-pointer"
           title="Duplicate Current Page"
           aria-label="Duplicate Current Page"
         >
-          <Copy className="w-3.5 h-3.5 text-indigo-400" />
+          <Copy className="w-3.5 h-3.5 text-[#7566F6]" />
           <span className="hidden md:inline">Duplicate</span>
         </button>
 
-        <div className="w-px h-4 bg-gray-800 my-auto mx-0.5" />
+        <div className="w-px h-4 bg-[rgba(139,170,215,0.14)] my-auto mx-0.5" />
 
         <button
           onClick={onRotateLeft}
-          className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-gray-800/60 transition-colors cursor-pointer"
+          className="p-1.5 text-[#A7B7D0] hover:text-[#F4F7FF] rounded hover:bg-[#0E1D35] transition-colors cursor-pointer"
           title="Rotate Left 90°"
           aria-label="Rotate Page Left 90 Degrees"
         >
@@ -158,19 +158,19 @@ export const PDFStudioToolbar = ({
 
         <button
           onClick={onRotateRight}
-          className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-gray-800/60 transition-colors cursor-pointer"
+          className="p-1.5 text-[#A7B7D0] hover:text-[#F4F7FF] rounded hover:bg-[#0E1D35] transition-colors cursor-pointer"
           title="Rotate Right 90°"
           aria-label="Rotate Page Right 90 Degrees"
         >
           <RotateCw className="w-3.5 h-3.5" />
         </button>
 
-        <div className="w-px h-4 bg-gray-800 my-auto mx-0.5" />
+        <div className="w-px h-4 bg-[rgba(139,170,215,0.14)] my-auto mx-0.5" />
 
         <button
           onClick={onMoveUp}
           disabled={currentPage <= 1}
-          className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 rounded hover:bg-gray-800/60 transition-colors cursor-pointer"
+          className="p-1.5 text-[#A7B7D0] hover:text-[#F4F7FF] disabled:opacity-30 rounded hover:bg-[#0E1D35] transition-colors cursor-pointer"
           title="Move Page Up"
           aria-label="Move Page Up"
         >
@@ -180,14 +180,14 @@ export const PDFStudioToolbar = ({
         <button
           onClick={onMoveDown}
           disabled={currentPage >= totalPages}
-          className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 rounded hover:bg-gray-800/60 transition-colors cursor-pointer"
+          className="p-1.5 text-[#A7B7D0] hover:text-[#F4F7FF] disabled:opacity-30 rounded hover:bg-[#0E1D35] transition-colors cursor-pointer"
           title="Move Page Down"
           aria-label="Move Page Down"
         >
           <ArrowDown className="w-3.5 h-3.5" />
         </button>
 
-        <div className="w-px h-4 bg-gray-800 my-auto mx-0.5" />
+        <div className="w-px h-4 bg-[rgba(139,170,215,0.14)] my-auto mx-0.5" />
 
         <button
           onClick={onDeletePage}
@@ -201,11 +201,11 @@ export const PDFStudioToolbar = ({
       </div>
 
       {/* Group 4: Zoom Controls */}
-      <div className="flex items-center gap-1.5 bg-gray-950/60 px-2 py-1 rounded-lg border border-gray-800/50 shrink-0">
+      <div className="flex items-center gap-1.5 bg-[#06101F]/60 px-2 py-1 rounded-lg border border-[rgba(139,170,215,0.12)] shrink-0">
         <button
           onClick={onZoomOut}
           disabled={zoomLevel <= 50}
-          className="p-1 text-gray-400 hover:text-white disabled:opacity-30 rounded hover:bg-gray-800/50 transition-colors cursor-pointer"
+          className="p-1 text-[#A7B7D0] hover:text-[#F4F7FF] disabled:opacity-30 rounded hover:bg-[#0E1D35] transition-colors cursor-pointer"
           title="Zoom Out"
           aria-label="Zoom Out"
         >
@@ -214,7 +214,7 @@ export const PDFStudioToolbar = ({
 
         <button
           onClick={onResetZoom}
-          className="text-xs text-gray-300 font-mono px-1.5 hover:text-blue-400 transition-colors cursor-pointer"
+          className="text-xs text-[#A7B7D0] font-mono px-1.5 hover:text-[#4B91FF] transition-colors cursor-pointer"
           title="Reset Zoom to 100%"
           aria-label="Reset Zoom to 100 Percent"
         >
@@ -224,21 +224,21 @@ export const PDFStudioToolbar = ({
         <button
           onClick={onZoomIn}
           disabled={zoomLevel >= 200}
-          className="p-1 text-gray-400 hover:text-white disabled:opacity-30 rounded hover:bg-gray-800/50 transition-colors cursor-pointer"
+          className="p-1 text-[#A7B7D0] hover:text-[#F4F7FF] disabled:opacity-30 rounded hover:bg-[#0E1D35] transition-colors cursor-pointer"
           title="Zoom In"
           aria-label="Zoom In"
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
 
-        <div className="w-px h-3.5 bg-gray-800 my-auto mx-0.5" />
+        <div className="w-px h-3.5 bg-[rgba(139,170,215,0.14)] my-auto mx-0.5" />
 
         <button
           onClick={onFitWidth}
           className={`p-1 text-xs rounded transition-colors cursor-pointer ${
             zoomMode === 'fit-width'
-              ? 'text-blue-400 bg-blue-500/20'
-              : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              ? 'text-[#4B91FF] bg-[#3478F6]/20'
+              : 'text-[#A7B7D0] hover:text-[#F4F7FF] hover:bg-[#0E1D35]'
           }`}
           title="Fit to Width"
           aria-label="Fit Page to Width"
@@ -250,8 +250,8 @@ export const PDFStudioToolbar = ({
           onClick={onFitPage}
           className={`p-1 text-xs rounded transition-colors cursor-pointer ${
             zoomMode === 'fit-page'
-              ? 'text-blue-400 bg-blue-500/20'
-              : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              ? 'text-[#4B91FF] bg-[#3478F6]/20'
+              : 'text-[#A7B7D0] hover:text-[#F4F7FF] hover:bg-[#0E1D35]'
           }`}
           title="Fit to Page"
           aria-label="Fit Page to Screen"
@@ -263,7 +263,7 @@ export const PDFStudioToolbar = ({
       {/* Close Document */}
       <button
         onClick={onCloseDocument}
-        className="p-1.5 text-gray-400 hover:text-red-400 rounded-lg hover:bg-gray-800/60 transition-colors cursor-pointer shrink-0"
+        className="p-1.5 text-[#71839E] hover:text-red-400 rounded-lg hover:bg-[#0E1D35] transition-colors cursor-pointer shrink-0"
         title="Close Document Studio"
         aria-label="Close Document Studio Workspace"
       >

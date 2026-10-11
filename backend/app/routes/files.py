@@ -57,6 +57,20 @@ def get_file_content(file_id: int, db: Session = Depends(get_db)):
         "extracted_text": file_rec.extracted_text or "No extracted text available."
     }
 
+@router.get("/{file_id}/visual-preview")
+def get_file_visual_preview(file_id: int, db: Session = Depends(get_db)):
+    file_rec = db.query(File).filter(File.id == file_id).first()
+    if not file_rec:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    from ..services.security_service import security_service
+    if getattr(file_rec, "is_encrypted", False) or file_rec.extraction_status == "encrypted" or security_service.is_file_encrypted(file_rec.path):
+        raise HTTPException(status_code=403, detail="File is encrypted. Decrypt file to preview.")
+
+    from ..services.preview_service import preview_service
+    preview_data = preview_service.get_file_preview_data(file_rec)
+    return preview_data
+
 @router.put("/{file_id}/tags")
 @router.patch("/{file_id}/tags")
 def update_file_tags(file_id: int, req: FileTagsUpdate, db: Session = Depends(get_db)):

@@ -57,12 +57,12 @@ export const PDFPageThumbnailList = ({
   const isAllSelected = selectedPageIndices.length === pages.length && pages.length > 0;
 
   return (
-    <aside className="w-64 glass-panel rounded-xl p-3 border border-gray-800/80 bg-gray-900/60 flex flex-col shrink-0 overflow-hidden select-none">
+    <aside className="w-64 rounded-2xl p-3 border border-[rgba(139,170,215,0.14)] bg-[#0A1629]/90 backdrop-blur-md flex flex-col shrink-0 overflow-hidden select-none">
       {/* Thumbnail Drawer Header */}
-      <div className="flex items-center justify-between px-2 pb-2.5 border-b border-gray-800/60">
+      <div className="flex items-center justify-between px-2 pb-2.5 border-b border-[rgba(139,170,215,0.12)]">
         <div className="flex items-center gap-1.5">
-          <FileText className="w-3.5 h-3.5 text-blue-400" />
-          <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+          <FileText className="w-3.5 h-3.5 text-[#4B91FF]" />
+          <h3 className="text-xs font-semibold text-[#A7B7D0] uppercase tracking-wider">
             Pages ({pages.length})
           </h3>
         </div>
@@ -70,7 +70,7 @@ export const PDFPageThumbnailList = ({
         <div className="flex items-center gap-1">
           <button
             onClick={onAddPage}
-            className="p-1 text-gray-400 hover:text-blue-400 rounded hover:bg-gray-800/60 transition-colors cursor-pointer"
+            className="p-1 text-[#A7B7D0] hover:text-[#4B91FF] rounded hover:bg-[#0E1D35] transition-colors cursor-pointer"
             title="Add Blank Page"
           >
             <Plus className="w-4 h-4" />
@@ -79,21 +79,21 @@ export const PDFPageThumbnailList = ({
       </div>
 
       {/* Multi-Selection Control Toolbar */}
-      <div className="flex items-center justify-between px-2 py-2 border-b border-gray-800/40 text-[11px] text-gray-400">
+      <div className="flex items-center justify-between px-2 py-2 border-b border-[rgba(139,170,215,0.1)] text-[11px] text-[#A7B7D0]">
         <button
           onClick={isAllSelected ? onClearSelection : onSelectAll}
-          className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer"
+          className="flex items-center gap-1 hover:text-[#F4F7FF] transition-colors cursor-pointer"
         >
           {isAllSelected ? (
-            <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
+            <CheckSquare className="w-3.5 h-3.5 text-[#4B91FF]" />
           ) : (
-            <Square className="w-3.5 h-3.5" />
+            <Square className="w-3.5 h-3.5 text-[#71839E]" />
           )}
           <span>{isAllSelected ? 'Deselect All' : 'Select All'}</span>
         </button>
 
         {selectedPageIndices.length > 0 && (
-          <span className="font-mono text-blue-400 font-semibold">
+          <span className="font-mono text-[#4B91FF] font-semibold">
             {selectedPageIndices.length} Selected
           </span>
         )}
@@ -101,12 +101,12 @@ export const PDFPageThumbnailList = ({
 
       {/* Extract Action Button (Visible when multi-selection > 0) */}
       {selectedPageIndices.length > 0 && (
-        <div className="px-1 py-1.5 border-b border-gray-800/40">
+        <div className="px-1 py-1.5 border-b border-[rgba(139,170,215,0.1)]">
           <button
             onClick={onExtractSelected}
-            className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-medium transition-all cursor-pointer shadow-sm"
+            className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#7566F6]/15 hover:bg-[#7566F6]/25 text-[#C4B5FD] border border-[#7566F6]/30 text-xs font-medium transition-all cursor-pointer shadow-sm"
           >
-            <Download className="w-3.5 h-3.5 text-purple-400" />
+            <Download className="w-3.5 h-3.5 text-[#C4B5FD]" />
             <span>Extract Selected ({selectedPageIndices.length})</span>
           </button>
         </div>
@@ -115,12 +115,12 @@ export const PDFPageThumbnailList = ({
       {/* Thumbnails Scroll Container */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-1 pt-2 custom-scrollbar">
         {pages.length === 0 ? (
-          <div className="p-6 text-center text-xs text-gray-400 space-y-2 my-auto">
-            <FileText className="w-8 h-8 text-gray-600 mx-auto" />
+          <div className="p-6 text-center text-xs text-[#71839E] space-y-2 my-auto">
+            <FileText className="w-8 h-8 text-[#71839E] mx-auto" />
             <p>No pages in document.</p>
             <button
               onClick={onAddPage}
-              className="px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-semibold cursor-pointer hover:bg-blue-600/30 transition-colors"
+              className="px-3 py-1.5 rounded-xl bg-[#3478F6]/20 text-[#4B91FF] border border-[#3478F6]/30 text-xs font-semibold cursor-pointer hover:bg-[#3478F6]/30 transition-colors"
             >
               + Add First Page
             </button>
@@ -150,9 +150,9 @@ export const PDFPageThumbnailList = ({
                 }}
                 className={`group relative p-2.5 rounded-xl border transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-blue-600/15 border-blue-500/60 shadow-lg shadow-blue-500/10 ring-1 ring-blue-500/40'
-                    : 'bg-gray-950/40 border-gray-800/60 hover:border-gray-700/80 hover:bg-gray-800/30'
-                } ${draggedIndex === idx ? 'opacity-40 border-dashed border-blue-400' : ''}`}
+                    ? 'bg-[#3478F6]/15 border-[#3478F6] shadow-lg shadow-[#3478F6]/15 ring-1 ring-[#3478F6]/40'
+                    : 'bg-[#06101F]/70 border-[rgba(139,170,215,0.12)] hover:border-[#3478F6]/50 hover:bg-[#0E1D35]/50'
+                } ${draggedIndex === idx ? 'opacity-40 border-dashed border-[#4B91FF]' : ''}`}
               >
                 {/* Top Bar: Checkbox, Page Number, Drag Handle */}
                 <div className="flex items-center justify-between mb-2 px-0.5 z-10">
@@ -162,39 +162,39 @@ export const PDFPageThumbnailList = ({
                         e.stopPropagation();
                         onToggleSelectPage(idx);
                       }}
-                      className="p-0.5 text-gray-400 hover:text-blue-400 cursor-pointer"
+                      className="p-0.5 text-[#71839E] hover:text-[#4B91FF] cursor-pointer"
                       title="Select Page"
                       aria-label={`Select Page ${idx + 1}`}
                     >
                       {isSelected ? (
-                        <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
+                        <CheckSquare className="w-3.5 h-3.5 text-[#4B91FF]" />
                       ) : (
                         <Square className="w-3.5 h-3.5" />
                       )}
                     </button>
-                    <span className={`text-[11px] font-mono font-bold ${isSelected ? 'text-blue-400' : 'text-gray-400'}`}>
+                    <span className={`text-[11px] font-mono font-bold ${isSelected ? 'text-[#4B91FF]' : 'text-[#A7B7D0]'}`}>
                       #{idx + 1}
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1">
                     {isActive && (
-                      <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono">
+                      <span className="text-[10px] bg-[#3478F6]/20 text-[#4B91FF] px-1.5 py-0.5 rounded font-mono border border-[#3478F6]/30">
                         Active
                       </span>
                     )}
-                    <GripVertical className="w-3.5 h-3.5 text-gray-600 group-hover:text-gray-400 cursor-grab shrink-0" />
+                    <GripVertical className="w-3.5 h-3.5 text-[#71839E] group-hover:text-[#A7B7D0] cursor-grab shrink-0" />
                   </div>
                 </div>
 
                 {/* Hover Quick Action Toolbar */}
-                <div className="absolute top-8 right-2 z-20 flex items-center gap-0.5 bg-gray-900/95 backdrop-blur-md p-1 rounded-lg border border-gray-800 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                <div className="absolute top-8 right-2 z-20 flex items-center gap-0.5 bg-[#0A1629]/95 backdrop-blur-md p-1 rounded-lg border border-[rgba(139,170,215,0.18)] opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onRotateLeft(idx);
                     }}
-                    className="p-1 text-gray-400 hover:text-white rounded hover:bg-gray-800 cursor-pointer"
+                    className="p-1 text-[#A7B7D0] hover:text-[#F4F7FF] rounded hover:bg-[#0E1D35] cursor-pointer"
                     title="Rotate Left"
                     aria-label={`Rotate Page ${idx + 1} Left 90 Degrees`}
                   >
@@ -206,7 +206,7 @@ export const PDFPageThumbnailList = ({
                       e.stopPropagation();
                       onRotateRight(idx);
                     }}
-                    className="p-1 text-gray-400 hover:text-white rounded hover:bg-gray-800 cursor-pointer"
+                    className="p-1 text-[#A7B7D0] hover:text-[#F4F7FF] rounded hover:bg-[#0E1D35] cursor-pointer"
                     title="Rotate Right"
                     aria-label={`Rotate Page ${idx + 1} Right 90 Degrees`}
                   >
@@ -218,7 +218,7 @@ export const PDFPageThumbnailList = ({
                       e.stopPropagation();
                       onDuplicatePage(idx);
                     }}
-                    className="p-1 text-gray-400 hover:text-indigo-400 rounded hover:bg-gray-800 cursor-pointer"
+                    className="p-1 text-[#A7B7D0] hover:text-[#7566F6] rounded hover:bg-[#0E1D35] cursor-pointer"
                     title="Duplicate Page"
                     aria-label={`Duplicate Page ${idx + 1}`}
                   >
@@ -231,7 +231,7 @@ export const PDFPageThumbnailList = ({
                       onMoveUp(idx);
                     }}
                     disabled={idx === 0}
-                    className="p-1 text-gray-400 hover:text-white disabled:opacity-20 rounded hover:bg-gray-800 cursor-pointer"
+                    className="p-1 text-[#A7B7D0] hover:text-[#F4F7FF] disabled:opacity-20 rounded hover:bg-[#0E1D35] cursor-pointer"
                     title="Move Up"
                     aria-label={`Move Page ${idx + 1} Up`}
                   >
@@ -244,7 +244,7 @@ export const PDFPageThumbnailList = ({
                       onMoveDown(idx);
                     }}
                     disabled={idx === pages.length - 1}
-                    className="p-1 text-gray-400 hover:text-white disabled:opacity-20 rounded hover:bg-gray-800 cursor-pointer"
+                    className="p-1 text-[#A7B7D0] hover:text-[#F4F7FF] disabled:opacity-20 rounded hover:bg-[#0E1D35] cursor-pointer"
                     title="Move Down"
                     aria-label={`Move Page ${idx + 1} Down`}
                   >
@@ -268,7 +268,7 @@ export const PDFPageThumbnailList = ({
 
                 {/* Thumbnail Miniature Surface Frame */}
                 <div 
-                  className="w-full aspect-[1/1.3] bg-slate-900 rounded-lg border border-slate-800 flex flex-col justify-between p-2 shadow-inner overflow-hidden transition-transform duration-200 relative"
+                  className="w-full aspect-[1/1.3] bg-[#06101F] rounded-lg border border-[rgba(139,170,215,0.12)] flex flex-col justify-between p-2 shadow-inner overflow-hidden transition-transform duration-200 relative"
                   style={{ transform: `rotate(${page.rotation || 0}deg)` }}
                 >
                   {(() => {
@@ -298,9 +298,9 @@ export const PDFPageThumbnailList = ({
 
                     if (firstText) {
                       return (
-                        <div className="w-full h-full flex flex-col justify-between p-1 text-[8px] text-slate-300 font-sans leading-tight overflow-hidden bg-slate-950/60 rounded">
-                          <p className="line-clamp-4 font-medium text-slate-200">{firstText}</p>
-                          <div className="text-[7px] text-blue-400 font-mono mt-auto">Text Page</div>
+                        <div className="w-full h-full flex flex-col justify-between p-1 text-[8px] text-[#A7B7D0] font-sans leading-tight overflow-hidden bg-[#0A1629]/80 rounded">
+                          <p className="line-clamp-4 font-medium text-[#F4F7FF]">{firstText}</p>
+                          <div className="text-[7px] text-[#4B91FF] font-mono mt-auto">Text Page</div>
                         </div>
                       );
                     }
@@ -308,19 +308,19 @@ export const PDFPageThumbnailList = ({
                     return (
                       <>
                         <div className="space-y-1.5 opacity-40">
-                          <div className="w-3/4 h-1.5 bg-slate-400 rounded-sm" />
-                          <div className="w-full h-1 bg-slate-600 rounded-sm" />
-                          <div className="w-5/6 h-1 bg-slate-600 rounded-sm" />
-                          <div className="w-4/5 h-1 bg-slate-600 rounded-sm" />
+                          <div className="w-3/4 h-1.5 bg-[#4B91FF]/60 rounded-sm" />
+                          <div className="w-full h-1 bg-[#71839E] rounded-sm" />
+                          <div className="w-5/6 h-1 bg-[#71839E] rounded-sm" />
+                          <div className="w-4/5 h-1 bg-[#71839E] rounded-sm" />
                         </div>
 
-                        <div className="text-[9px] text-slate-500 font-mono text-center my-auto">
+                        <div className="text-[9px] text-[#71839E] font-mono text-center my-auto">
                           Blank Canvas
                         </div>
 
                         <div className="space-y-1 opacity-30">
-                          <div className="w-full h-1 bg-slate-600 rounded-sm" />
-                          <div className="w-2/3 h-1 bg-slate-600 rounded-sm" />
+                          <div className="w-full h-1 bg-[#71839E] rounded-sm" />
+                          <div className="w-2/3 h-1 bg-[#71839E] rounded-sm" />
                         </div>
                       </>
                     );
@@ -329,7 +329,7 @@ export const PDFPageThumbnailList = ({
 
                 {/* Footer Page Label */}
                 <div className="flex items-center justify-between mt-2 px-1 text-xs">
-                  <span className={`font-mono font-medium truncate max-w-[120px] ${isSelected ? 'text-blue-400 font-semibold' : 'text-gray-400'}`}>
+                  <span className={`font-mono font-medium truncate max-w-[120px] ${isSelected ? 'text-[#4B91FF] font-semibold' : 'text-[#71839E]'}`}>
                     {page.name ? page.name : `Page ${idx + 1}`}
                   </span>
                   {page.rotation > 0 && (

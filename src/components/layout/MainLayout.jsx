@@ -9,7 +9,7 @@ export const MainLayout = ({ children }) => {
   const { previewFile, setPreviewFile } = useApp();
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0b0f19] text-gray-100">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#06101F] text-[#F4F7FF]">
       {/* Sidebar Navigation */}
       <Sidebar />
 
@@ -17,8 +17,8 @@ export const MainLayout = ({ children }) => {
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <TopNav />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
-          <div className="w-full max-w-[1360px] mx-auto px-1 sm:px-2">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar bg-[#06101F]">
+          <div className="w-full max-w-[1400px] mx-auto px-1 sm:px-2">
             {children}
           </div>
         </main>

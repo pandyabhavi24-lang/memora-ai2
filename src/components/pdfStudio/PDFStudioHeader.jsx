@@ -34,15 +34,15 @@ export const PDFStudioHeader = ({
   isExporting = false
 }) => {
   return (
-    <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 glass-panel p-4 px-5 rounded-2xl border border-gray-800/80 bg-gray-900/70 backdrop-blur-md shadow-xl select-none">
+    <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 px-5 rounded-2xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629]/90 backdrop-blur-md shadow-xl select-none">
       {/* Title & Status */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 border border-blue-500/30 shrink-0">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#3478F6] to-[#7566F6] flex items-center justify-center text-white shadow-lg shadow-[#3478F6]/25 border border-[#3478F6]/40 shrink-0">
           <FileText className="w-5 h-5" />
         </div>
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-lg font-bold text-white tracking-wide truncate max-w-xs md:max-w-md">
+            <h1 className="text-lg font-bold text-[#F4F7FF] tracking-wide truncate max-w-xs md:max-w-md">
               {hasDocument ? documentTitle : 'PDF Studio'}
             </h1>
             {hasDocument ? (
@@ -62,7 +62,7 @@ export const PDFStudioHeader = ({
               </Badge>
             )}
           </div>
-          <p className="text-[11px] text-gray-400 font-medium">
+          <p className="text-[11px] text-[#A7B7D0] font-medium">
             Create, edit, organize, annotate, and convert your documents with precision.
           </p>
         </div>
@@ -74,7 +74,7 @@ export const PDFStudioHeader = ({
         <button
           onClick={onNewPDF}
           title="New PDF Document"
-          className="group relative flex items-center h-9 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-md shadow-blue-600/25 transition-all duration-300 cursor-pointer overflow-hidden"
+          className="group relative flex items-center h-9 px-3 rounded-xl bg-[#3478F6] hover:bg-[#4B91FF] text-white font-medium text-xs shadow-md shadow-[#3478F6]/25 transition-all duration-300 cursor-pointer overflow-hidden"
         >
           <FilePlus className="w-4 h-4 shrink-0" />
           <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-out">
@@ -86,9 +86,9 @@ export const PDFStudioHeader = ({
         <button
           onClick={onOpenPDF}
           title="Open Local PDF File"
-          className="group relative flex items-center h-9 px-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 border border-gray-700/60 font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
+          className="group relative flex items-center h-9 px-3 rounded-xl bg-[#0E1D35] hover:bg-[#132642] text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
         >
-          <FolderOpen className="w-4 h-4 shrink-0 text-blue-400" />
+          <FolderOpen className="w-4 h-4 shrink-0 text-[#4B91FF]" />
           <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-out">
             Open PDF
           </span>
@@ -99,7 +99,7 @@ export const PDFStudioHeader = ({
           <button
             onClick={onOpenDrafts}
             title="Open Saved Workspace Drafts"
-            className="group relative flex items-center h-9 px-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 border border-gray-700/60 font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
+            className="group relative flex items-center h-9 px-3 rounded-xl bg-[#0E1D35] hover:bg-[#132642] text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
           >
             <Save className="w-4 h-4 shrink-0 text-emerald-400" />
             <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-out">
@@ -112,9 +112,9 @@ export const PDFStudioHeader = ({
         <button
           onClick={onAddFromMemora}
           title="Add Indexed Document from Memora Store"
-          className="group relative flex items-center h-9 px-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 border border-gray-700/60 font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
+          className="group relative flex items-center h-9 px-3 rounded-xl bg-[#0E1D35] hover:bg-[#132642] text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
         >
-          <Layers className="w-4 h-4 shrink-0 text-purple-400" />
+          <Layers className="w-4 h-4 shrink-0 text-[#7566F6]" />
           <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-out">
             Add from Memora
           </span>
@@ -124,9 +124,9 @@ export const PDFStudioHeader = ({
         <button
           onClick={onOpenAlternate || onOpenConvert}
           title="Alternate & Interleave 2 PDFs"
-          className="group relative flex items-center h-9 px-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 border border-gray-700/60 font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
+          className="group relative flex items-center h-9 px-3 rounded-xl bg-[#0E1D35] hover:bg-[#132642] text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
         >
-          <ArrowRightLeft className="w-4 h-4 shrink-0 text-indigo-400" />
+          <ArrowRightLeft className="w-4 h-4 shrink-0 text-[#4B91FF]" />
           <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-out">
             Alternate Pages
           </span>
@@ -136,7 +136,7 @@ export const PDFStudioHeader = ({
         <button
           onClick={onOpenConvert}
           title="Merge, Split & Conversion Tools"
-          className="group relative flex items-center h-9 px-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 border border-gray-700/60 font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
+          className="group relative flex items-center h-9 px-3 rounded-xl bg-[#0E1D35] hover:bg-[#132642] text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
         >
           <Sparkles className="w-4 h-4 shrink-0 text-amber-400" />
           <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-out">
@@ -150,7 +150,7 @@ export const PDFStudioHeader = ({
             <button
               onClick={onSaveDraft}
               title="Save Draft State"
-              className="group relative flex items-center h-9 px-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 border border-gray-700/60 font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
+              className="group relative flex items-center h-9 px-3 rounded-xl bg-[#0E1D35] hover:bg-[#132642] text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
             >
               <Save className="w-4 h-4 shrink-0 text-emerald-400" />
               <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-out">
@@ -162,9 +162,9 @@ export const PDFStudioHeader = ({
             <button
               onClick={onOpenPreview}
               title="Full-screen Document Preview"
-              className="group relative flex items-center h-9 px-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 border border-gray-700/60 font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
+              className="group relative flex items-center h-9 px-3 rounded-xl bg-[#0E1D35] hover:bg-[#132642] text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] font-medium text-xs shadow-sm transition-all duration-300 cursor-pointer overflow-hidden"
             >
-              <Eye className="w-4 h-4 shrink-0 text-cyan-400" />
+              <Eye className="w-4 h-4 shrink-0 text-[#4B91FF]" />
               <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-out">
                 Preview
               </span>
@@ -180,7 +180,7 @@ export const PDFStudioHeader = ({
           className={`group relative flex items-center h-9 px-3.5 rounded-xl font-medium text-xs shadow-md transition-all duration-300 cursor-pointer overflow-hidden ${
             hasDocument && !isExporting
               ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/25 border border-emerald-500/40'
-              : 'bg-gray-800/50 text-gray-500 border border-gray-800 cursor-not-allowed'
+              : 'bg-[#0E1D35]/50 text-[#71839E] border border-[rgba(139,170,215,0.1)] cursor-not-allowed'
           }`}
         >
           {isExporting ? (
@@ -196,5 +196,3 @@ export const PDFStudioHeader = ({
     </header>
   );
 };
-
-

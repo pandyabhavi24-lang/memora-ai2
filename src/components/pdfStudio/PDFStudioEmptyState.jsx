@@ -21,14 +21,14 @@ export const PDFStudioEmptyState = ({
   return (
     <div className="space-y-6">
       {/* Primary Empty State Hero */}
-      <div className="glass-panel p-12 rounded-2xl border border-gray-800/80 bg-gray-900/60 backdrop-blur-md text-center flex flex-col items-center justify-center space-y-6 shadow-xl">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600/20 to-indigo-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-500/10">
+      <div className="p-12 rounded-2xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629]/90 backdrop-blur-md text-center flex flex-col items-center justify-center space-y-6 shadow-xl">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#3478F6]/20 to-[#7566F6]/20 border border-[#3478F6]/30 flex items-center justify-center text-[#4B91FF] shadow-lg shadow-[#3478F6]/10">
           <FileText className="w-8 h-8" />
         </div>
 
         <div className="max-w-md space-y-2">
-          <h2 className="text-xl font-bold text-white tracking-wide">PDF Studio</h2>
-          <p className="text-sm text-gray-400 leading-relaxed">
+          <h2 className="text-xl font-bold text-[#F4F7FF] tracking-wide">PDF Studio</h2>
+          <p className="text-sm text-[#A7B7D0] leading-relaxed">
             Create or open a document to get started.
           </p>
         </div>
@@ -77,37 +77,37 @@ export const PDFStudioEmptyState = ({
 
       {/* Studio Capabilities Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="glass-panel p-5 rounded-xl border border-gray-800/60 bg-gray-900/40 space-y-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+        <div className="p-5 rounded-xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629]/70 space-y-3">
+          <div className="w-9 h-9 rounded-lg bg-[#3478F6]/15 border border-[#3478F6]/30 flex items-center justify-center text-[#4B91FF]">
             <Merge className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-white">Page Management</h4>
-            <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+            <h4 className="text-sm font-semibold text-[#F4F7FF]">Page Management</h4>
+            <p className="text-xs text-[#A7B7D0] mt-1 leading-relaxed">
               Reorder, split, rotate, and merge pages seamlessly within your PDF workspace.
             </p>
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-xl border border-gray-800/60 bg-gray-900/40 space-y-3">
-          <div className="w-9 h-9 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+        <div className="p-5 rounded-xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629]/70 space-y-3">
+          <div className="w-9 h-9 rounded-lg bg-[#7566F6]/15 border border-[#7566F6]/30 flex items-center justify-center text-[#C4B5FD]">
             <Type className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-white">Text & Annotations</h4>
-            <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+            <h4 className="text-sm font-semibold text-[#F4F7FF]">Text & Annotations</h4>
+            <p className="text-xs text-[#A7B7D0] mt-1 leading-relaxed">
               Add custom text overlays, highlight text, insert stamps, and annotate pages.
             </p>
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-xl border border-gray-800/60 bg-gray-900/40 space-y-3">
-          <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+        <div className="p-5 rounded-xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629]/70 space-y-3">
+          <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
             <FileOutput className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-white">Memora Pipeline Sync</h4>
-            <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+            <h4 className="text-sm font-semibold text-[#F4F7FF]">Memora Pipeline Sync</h4>
+            <p className="text-xs text-[#A7B7D0] mt-1 leading-relaxed">
               Exported PDFs can be automatically registered and indexed into Memora's search system.
             </p>
           </div>

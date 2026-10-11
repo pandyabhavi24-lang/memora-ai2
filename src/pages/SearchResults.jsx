@@ -81,8 +81,8 @@ const FilterPopover = ({ name, title, activeCount = 0, activeLabel = '', isOpen,
         onClick={() => onToggle(name)}
         className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
           isActive
-            ? 'bg-blue-600/20 text-blue-300 border-blue-500/50 font-bold shadow-sm'
-            : 'bg-gray-900 text-gray-300 border-gray-800 hover:bg-gray-800'
+            ? 'bg-[#3478F6]/20 text-[#4B91FF] border-[#3478F6]/50 font-bold shadow-sm'
+            : 'bg-[#0E1D35] text-[#A7B7D0] border-[rgba(139,170,215,0.18)] hover:bg-[#132642] hover:text-[#F4F7FF]'
         }`}
       >
         <span>
@@ -90,9 +90,9 @@ const FilterPopover = ({ name, title, activeCount = 0, activeLabel = '', isOpen,
           {activeCount > 0 ? ` • ${activeCount}` : activeLabel ? `: ${activeLabel} ✓` : ''}
         </span>
         {isOpen ? (
-          <ChevronUp className="w-3.5 h-3.5 text-blue-400 font-bold" />
+          <ChevronUp className="w-3.5 h-3.5 text-[#4B91FF] font-bold" />
         ) : (
-          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+          <ChevronDown className="w-3.5 h-3.5 text-[#71839E]" />
         )}
       </button>
 
@@ -107,7 +107,7 @@ const FilterPopover = ({ name, title, activeCount = 0, activeLabel = '', isOpen,
               left: `${popoverPos.left}px`,
               zIndex: 9999
             }}
-            className={`${widthClass} p-2 bg-gray-950/95 backdrop-blur-md border border-gray-800 rounded-xl shadow-2xl text-xs space-y-1.5 animate-fadeIn`}
+            className={`${widthClass} p-2 bg-[#0A1629] backdrop-blur-md border border-[rgba(139,170,215,0.22)] rounded-xl shadow-2xl text-xs space-y-1.5 animate-fadeIn`}
           >
             {children}
           </div>,
@@ -570,7 +570,7 @@ export const SearchResults = () => {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <button
           onClick={() => navigate('/search')}
-          className="p-2.5 text-gray-400 hover:text-white rounded-xl glass-panel border-gray-800 transition-colors shrink-0 flex items-center justify-center cursor-pointer"
+          className="p-2.5 text-[#A7B7D0] hover:text-[#F4F7FF] rounded-xl glass-panel bg-[#0E1D35] border-[rgba(139,170,215,0.18)] hover:bg-[#132642] transition-colors shrink-0 flex items-center justify-center cursor-pointer"
           title="Back to Search Setup"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -585,13 +585,13 @@ export const SearchResults = () => {
           }}
           className="flex-1 relative"
         >
-          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#71839E] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="What are you looking for?"
-            className="w-full pl-10 pr-28 py-2.5 text-sm rounded-xl glass-input text-white font-medium"
+            className="w-full pl-10 pr-28 py-2.5 text-sm rounded-xl glass-input text-[#F4F7FF] font-medium"
           />
           <Button type="submit" variant="primary" size="sm" className="absolute right-1.5 top-1/2 -translate-y-1/2">
             Search
@@ -599,14 +599,14 @@ export const SearchResults = () => {
         </form>
 
         {/* Search Mode Toggle (Semantic vs Exact) */}
-        <div className="flex items-center p-1 rounded-xl bg-gray-900 border border-gray-800 shrink-0">
+        <div className="flex items-center p-1 rounded-xl bg-[#0E1D35] border border-[rgba(139,170,215,0.14)] shrink-0">
           <button
             type="button"
             onClick={() => setSearchMode('semantic')}
             className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
               searchMode === 'semantic'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                : 'text-gray-400 hover:text-gray-200'
+                ? 'bg-[#3478F6] text-white shadow-md shadow-[#3478F6]/25'
+                : 'text-[#A7B7D0] hover:text-[#F4F7FF]'
             }`}
             title="Semantic Mode: Finds conceptually related files even if exact words differ"
           >
@@ -618,8 +618,8 @@ export const SearchResults = () => {
             onClick={() => setSearchMode('exact')}
             className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
               searchMode === 'exact'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
-                : 'text-gray-400 hover:text-gray-200'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25'
+                : 'text-[#A7B7D0] hover:text-[#F4F7FF]'
             }`}
             title="Exact Mode: Prioritizes files where the exact search phrase appears"
           >
@@ -630,11 +630,11 @@ export const SearchResults = () => {
 
         {/* Sort Selector Dropdown */}
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-gray-400 font-semibold">Sort:</span>
+          <span className="text-xs text-[#71839E] font-semibold">Sort:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-medium"
+            className="bg-[#0E1D35] border border-[rgba(139,170,215,0.18)] rounded-xl px-3 py-1.5 text-xs text-[#F4F7FF] focus:outline-none focus:border-[#3478F6] font-medium"
           >
             <option value="relevant">Most Relevant</option>
             <option value="newest">Newest Modified</option>
@@ -645,16 +645,16 @@ export const SearchResults = () => {
       </div>
 
       {/* FILTER TOOLBAR: [ Category ] [ Type ] [ Date ] [ Smart Tags ] [ Size ] [ Reset Filters ] */}
-      <div className="p-3 rounded-2xl glass-panel border-gray-800/80 space-y-2.5 relative">
+      <div className="p-3 rounded-2xl glass-panel bg-[#0A1629] border-[rgba(139,170,215,0.14)] space-y-2.5 relative">
         <div className="flex items-center justify-between flex-wrap gap-2">
           
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filters Counter Indicator */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-900 border border-gray-800 text-xs font-bold text-gray-200">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0E1D35] border border-[rgba(139,170,215,0.18)] text-xs font-bold text-[#F4F7FF]">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#4B91FF]" />
               <span>Filters</span>
               {activeFiltersCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-extrabold shadow-sm">
+                <span className="px-1.5 py-0.2 rounded-full bg-[#3478F6] text-white text-[10px] font-extrabold shadow-sm">
                   ({activeFiltersCount})
                 </span>
               )}
@@ -682,7 +682,7 @@ export const SearchResults = () => {
                     className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
                       (filters.category || 'all').toLowerCase() === item.id.toLowerCase()
                         ? 'bg-emerald-600 text-white font-bold'
-                        : 'text-gray-300 hover:bg-gray-800'
+                        : 'text-[#A7B7D0] hover:bg-[#132642]'
                     }`}
                   >
                     <span>{item.label}</span>
@@ -701,7 +701,7 @@ export const SearchResults = () => {
               onToggle={togglePopover}
               widthClass="w-48"
             >
-              <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase tracking-wider">File Type</div>
+              <div className="text-[10px] font-bold text-[#71839E] px-2 py-1 uppercase tracking-wider">File Type</div>
               {fileTypeOptions.map((item) => (
                 <button
                   key={item.id}
@@ -711,7 +711,7 @@ export const SearchResults = () => {
                     setOpenPopover(null);
                   }}
                   className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                    filters.fileType === item.id ? 'bg-blue-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
+                    filters.fileType === item.id ? 'bg-[#3478F6] text-white font-bold' : 'text-[#A7B7D0] hover:bg-[#132642]'
                   }`}
                 >
                   <span>{item.label}</span>
@@ -729,7 +729,7 @@ export const SearchResults = () => {
               onToggle={togglePopover}
               widthClass="w-48"
             >
-              <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase tracking-wider">Modified Date</div>
+              <div className="text-[10px] font-bold text-[#71839E] px-2 py-1 uppercase tracking-wider">Modified Date</div>
               {dateRangeOptions.map((item) => (
                 <button
                   key={item.id}
@@ -739,7 +739,7 @@ export const SearchResults = () => {
                     setOpenPopover(null);
                   }}
                   className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                    filters.dateRange === item.id ? 'bg-purple-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
+                    filters.dateRange === item.id ? 'bg-[#7566F6] text-white font-bold' : 'text-[#A7B7D0] hover:bg-[#132642]'
                   }`}
                 >
                   <span>{item.label}</span>
@@ -757,7 +757,7 @@ export const SearchResults = () => {
               onToggle={togglePopover}
               widthClass="w-72"
             >
-              <div className="text-[10px] font-bold text-purple-300 px-2 py-1 uppercase tracking-wider">Smart Tags</div>
+              <div className="text-[10px] font-bold text-indigo-300 px-2 py-1 uppercase tracking-wider">Smart Tags</div>
               
               <div className="px-1 py-1" onClick={(e) => e.stopPropagation()}>
                 <input
@@ -771,7 +771,7 @@ export const SearchResults = () => {
                     if (e.key === 'Enter') e.preventDefault();
                   }}
                   placeholder="Filter by Smart Tags..."
-                  className="w-full px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 font-medium"
+                  className="w-full px-2.5 py-1.5 bg-[#06101F] border border-[rgba(139,170,215,0.18)] rounded-lg text-xs text-[#F4F7FF] placeholder-[#71839E] focus:outline-none focus:border-[#7566F6] font-medium"
                 />
               </div>
 
@@ -788,7 +788,7 @@ export const SearchResults = () => {
                           toggleSelectLabel(item.label);
                         }}
                         className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                          isChecked ? 'bg-purple-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
+                          isChecked ? 'bg-[#7566F6] text-white font-bold' : 'text-[#A7B7D0] hover:bg-[#132642]'
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -796,7 +796,7 @@ export const SearchResults = () => {
                             type="checkbox"
                             checked={isChecked}
                             readOnly
-                            className="rounded border-gray-700 bg-gray-900 text-purple-500 focus:ring-purple-500/30 cursor-pointer"
+                            className="rounded border-[rgba(139,170,215,0.25)] bg-[#06101F] text-[#7566F6] focus:ring-[#7566F6]/30 cursor-pointer"
                           />
                           <span>{item.label}</span>
                         </div>
@@ -805,7 +805,7 @@ export const SearchResults = () => {
                     );
                   })
                 ) : (
-                  <div className="px-2 py-2 text-[11px] text-gray-500 italic">No matching Smart Tags found</div>
+                  <div className="px-2 py-2 text-[11px] text-[#71839E] italic">No matching Smart Tags found</div>
                 )}
               </div>
             </FilterPopover>
@@ -829,7 +829,7 @@ export const SearchResults = () => {
                     setOpenPopover(null);
                   }}
                   className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium transition-colors cursor-pointer ${
-                    filters.size === item.id ? 'bg-amber-600 text-white font-bold' : 'text-gray-300 hover:bg-gray-800'
+                    filters.size === item.id ? 'bg-amber-600 text-white font-bold' : 'text-[#A7B7D0] hover:bg-[#132642]'
                   }`}
                 >
                   <span>{item.label}</span>
@@ -844,7 +844,7 @@ export const SearchResults = () => {
             <button
               type="button"
               onClick={resetFilters}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-900 hover:bg-gray-800 text-blue-400 hover:text-blue-300 border border-gray-800 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#0E1D35] hover:bg-[#132642] text-[#4B91FF] hover:text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset Filters</span>
@@ -855,8 +855,8 @@ export const SearchResults = () => {
 
         {/* ACTIVE FILTER CHIPS ROW */}
         {activeFiltersCount > 0 && (
-          <div className="pt-2 border-t border-gray-800/80 flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] text-gray-400 font-medium">Active filters:</span>
+          <div className="pt-2 border-t border-[rgba(139,170,215,0.14)] flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-[#A7B7D0] font-medium">Active filters:</span>
 
             {filters.category && filters.category !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px]">
@@ -899,18 +899,18 @@ export const SearchResults = () => {
 
       {/* Results Summary Header */}
       {searchQuery && (
-        <div className="flex items-center justify-between pb-2 border-b border-gray-800/80">
+        <div className="flex items-center justify-between pb-2 border-b border-[rgba(139,170,215,0.14)]">
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <h2 className="text-lg font-bold text-[#F4F7FF] flex items-center gap-2">
               <span>Search Results for</span>
-              <span className="text-blue-400 italic">"{searchQuery}"</span>
+              <span className="text-[#4B91FF] italic">"{searchQuery}"</span>
               {searchMode === 'exact' && (
                 <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
                   Exact Mode
                 </span>
               )}
             </h2>
-            <p className="text-xs text-gray-400 font-medium mt-0.5">
+            <p className="text-xs text-[#71839E] font-medium mt-0.5">
               {activeFiltersCount > 0
                 ? `Showing ${filteredResults.length} of ${searchResults.length} matching file(s) (${searchExecutionTime}ms)`
                 : `${filteredResults.length} results found (${searchExecutionTime}ms)`}
@@ -923,8 +923,8 @@ export const SearchResults = () => {
       {searchError && (
         <div className="p-6 rounded-2xl glass-panel border-red-500/30 bg-red-950/20 text-center space-y-3">
           <AlertTriangle className="w-8 h-8 text-red-400 mx-auto" />
-          <h3 className="text-sm font-semibold text-white">Unable to query local files</h3>
-          <p className="text-xs text-gray-300 max-w-md mx-auto">
+          <h3 className="text-sm font-semibold text-[#F4F7FF]">Unable to query local files</h3>
+          <p className="text-xs text-[#A7B7D0] max-w-md mx-auto">
             Please check that the local backend server is running and try again.
           </p>
         </div>
@@ -934,13 +934,13 @@ export const SearchResults = () => {
       {isSearching && (
         <div className="space-y-4">
           {[1, 2, 3].map(i => (
-            <div key={i} className="p-5 rounded-2xl glass-panel border-gray-800 space-y-3">
+            <div key={i} className="p-5 rounded-2xl bg-[#0A1629] border border-[rgba(139,170,215,0.14)] space-y-3">
               <div className="flex items-center justify-between">
-                <div className="h-5 w-48 rounded-lg bg-gray-800 animate-pulse" />
-                <div className="h-5 w-24 rounded-full bg-gray-800 animate-pulse" />
+                <div className="h-5 w-48 rounded-lg bg-[#0E1D35] animate-pulse" />
+                <div className="h-5 w-24 rounded-full bg-[#0E1D35] animate-pulse" />
               </div>
-              <div className="h-4 w-full rounded-lg bg-gray-800 animate-pulse" />
-              <div className="h-4 w-3/4 rounded-lg bg-gray-800 animate-pulse" />
+              <div className="h-4 w-full rounded-lg bg-[#0E1D35] animate-pulse" />
+              <div className="h-4 w-3/4 rounded-lg bg-[#0E1D35] animate-pulse" />
             </div>
           ))}
         </div>
@@ -948,12 +948,12 @@ export const SearchResults = () => {
 
       {/* Empty Search Results */}
       {!isSearching && !searchError && searchQuery && filteredResults.length === 0 && (
-        <div className="p-12 rounded-2xl glass-panel border-gray-800 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center mx-auto text-gray-500">
+        <div className="p-12 rounded-2xl bg-[#0A1629] border border-[rgba(139,170,215,0.14)] text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#06101F] border border-[rgba(139,170,215,0.18)] flex items-center justify-center mx-auto text-[#71839E]">
             <Search className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-white">No files match your query</h3>
-          <p className="text-xs text-gray-400 max-w-md mx-auto">
+          <h3 className="text-base font-bold text-[#F4F7FF]">No files match your query</h3>
+          <p className="text-xs text-[#A7B7D0] max-w-md mx-auto">
             Try adjusting your search query, clearing active filters, or scanning additional folders.
           </p>
           {activeFiltersCount > 0 && (
@@ -987,14 +987,14 @@ export const SearchResults = () => {
             return (
               <div
                 key={gIdx}
-                className="p-5 rounded-2xl glass-panel border-gray-800/80 hover:border-gray-700/80 transition-all space-y-4 shadow-xl"
+                className="p-5 rounded-2xl bg-[#0A1629] border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.28)] transition-all space-y-4 shadow-xl"
               >
                 {/* Result Card Main Header */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0">
                     {/* Icon or Media Thumbnail */}
                     {primaryResult.thumbnailUrl ? (
-                      <div className="w-12 h-12 rounded-xl bg-gray-900 border border-gray-800 overflow-hidden shrink-0 mt-0.5">
+                      <div className="w-12 h-12 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.18)] overflow-hidden shrink-0 mt-0.5">
                         <img
                           src={primaryResult.thumbnailUrl}
                           alt={group.filename}
@@ -1003,16 +1003,16 @@ export const SearchResults = () => {
                         />
                       </div>
                     ) : (
-                      <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0 mt-0.5">
+                      <div className="p-2.5 rounded-xl bg-[rgba(52,120,246,0.12)] border border-[rgba(52,120,246,0.25)] text-[#4B91FF] shrink-0 mt-0.5">
                         <FileText className="w-5 h-5" />
                       </div>
                     )}
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base font-bold text-white truncate hover:text-blue-300 transition-colors">
+                        <h3 className="text-base font-bold text-[#F4F7FF] truncate hover:text-[#4B91FF] transition-colors">
                           {group.filename}
                         </h3>
-                        <span className="px-2 py-0.5 rounded-md bg-gray-900 text-gray-400 border border-gray-800 text-[10px] font-mono">
+                        <span className="px-2 py-0.5 rounded-md bg-[#06101F] text-[#A7B7D0] border border-[rgba(139,170,215,0.18)] text-[10px] font-mono">
                           {(primaryFile.fileExtension || primaryFile.extension || 'FILE').toUpperCase().replace('.', '')}
                         </span>
 
@@ -1042,9 +1042,9 @@ export const SearchResults = () => {
                       {/* Smart Tags Chips */}
                       {fileSmartTags.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                          <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mr-1">Smart Tags:</span>
+                          <span className="text-[10px] font-bold text-[#7566F6] uppercase tracking-wider mr-1">Smart Tags:</span>
                           {fileSmartTags.map((tag, tIdx) => (
-                            <span key={tIdx} className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                            <span key={tIdx} className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[rgba(117,102,246,0.15)] text-indigo-300 border border-[rgba(117,102,246,0.3)]">
                               {tag}
                             </span>
                           ))}
@@ -1060,7 +1060,7 @@ export const SearchResults = () => {
                           <button
                             type="button"
                             onClick={() => toggleGroupExpand(group.filename)}
-                            className="text-xs text-blue-400 hover:text-blue-300 font-semibold underline cursor-pointer"
+                            className="text-xs text-[#4B91FF] hover:text-[#F4F7FF] font-semibold underline cursor-pointer"
                           >
                             {isGroupExpanded ? 'Collapse locations' : 'Expand all locations'}
                           </button>
@@ -1075,14 +1075,14 @@ export const SearchResults = () => {
                       relevance.variant === 'success'
                         ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                         : relevance.variant === 'violet'
-                        ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                        : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                        ? 'bg-[rgba(117,102,246,0.15)] text-indigo-300 border-[rgba(117,102,246,0.3)]'
+                        : 'bg-[rgba(52,120,246,0.15)] text-blue-300 border-[rgba(52,120,246,0.3)]'
                     }`}>
                       {relevance.text}
                     </span>
                     {typeof primaryResult.semanticScore === 'number' && (
-                      <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-mono">
-                        <span className="text-purple-300 font-semibold" title="Semantic Score (90% weight)">
+                      <div className="flex items-center gap-1.5 text-[10px] text-[#71839E] font-mono">
+                        <span className="text-indigo-300 font-semibold" title="Semantic Score (90% weight)">
                           Sem: {(primaryResult.semanticScore * 100).toFixed(1)}%
                         </span>
                         <span>•</span>
@@ -1096,7 +1096,7 @@ export const SearchResults = () => {
 
 
                 {/* PHYSICAL LOCATIONS LIST */}
-                <div className="space-y-2 pl-2 border-l-2 border-gray-800/80">
+                <div className="space-y-2 pl-2 border-l-2 border-[rgba(139,170,215,0.14)]">
                   {group.results.map((resItem, rIdx) => {
                     const itemFile = resItem.file || {};
                     const isMultiLocation = group.results.length > 1;
@@ -1108,37 +1108,37 @@ export const SearchResults = () => {
                     return (
                       <div
                         key={rIdx}
-                        className="p-3 rounded-xl bg-gray-950/60 border border-gray-800/60 space-y-2 text-xs"
+                        className="p-3 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.14)] space-y-2 text-xs"
                       >
                         <div className="flex items-center justify-between gap-3 flex-wrap">
                           <div className="space-y-1 min-w-0">
                             {/* Directory Location Header */}
-                            <div className="flex items-center gap-1.5 font-medium text-gray-300 flex-wrap">
-                              <span className="font-bold text-gray-200 flex items-center gap-1">
-                                <Folder className="w-3.5 h-3.5 text-blue-400" />
+                            <div className="flex items-center gap-1.5 font-medium text-[#A7B7D0] flex-wrap">
+                              <span className="font-bold text-[#F4F7FF] flex items-center gap-1">
+                                <Folder className="w-3.5 h-3.5 text-[#4B91FF]" />
                                 {isMultiLocation ? `Location ${rIdx + 1}:` : 'Location:'}
                               </span>
                               
                               {/* Folder Breadcrumbs Tree View (EXCLUDES FILENAME) */}
-                              <div className="flex items-center gap-1 text-gray-300 font-mono flex-wrap">
+                              <div className="flex items-center gap-1 text-[#A7B7D0] font-mono flex-wrap">
                                 {breadcrumbs.map((b, bIdx) => (
-                                  <React.Fragment key={bIdx}>
-                                    <span className="text-gray-200 font-semibold">{b}</span>
-                                    {bIdx < breadcrumbs.length - 1 && <span className="text-gray-600 font-bold">›</span>}
+                                   <React.Fragment key={bIdx}>
+                                    <span className="text-[#F4F7FF] font-semibold">{b}</span>
+                                    {bIdx < breadcrumbs.length - 1 && <span className="text-[#71839E] font-bold">›</span>}
                                   </React.Fragment>
                                 ))}
                               </div>
                             </div>
 
                             {/* Optional Full Windows Directory Path Toggle */}
-                            <div className="text-[11px] text-gray-400 font-mono">
+                            <div className="text-[11px] text-[#71839E] font-mono">
                               {isShowingFullPath ? (
-                                <span className="text-blue-300 break-all">📁 Path: {folderPath}</span>
+                                <span className="text-[#4B91FF] break-all">📁 Path: {folderPath}</span>
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => toggleFullPathShow(itemFile.id || `${gIdx}-${rIdx}`)}
-                                  className="text-gray-500 hover:text-gray-300 transition-colors underline cursor-pointer text-[10px]"
+                                  className="text-[#71839E] hover:text-[#A7B7D0] transition-colors underline cursor-pointer text-[10px]"
                                 >
                                   Show full directory path
                                 </button>
@@ -1184,7 +1184,7 @@ export const SearchResults = () => {
                         </div>
 
                         {/* File Details (Modified Date & Size) */}
-                        <div className="flex items-center gap-4 text-[11px] text-gray-400 font-medium pt-1 border-t border-gray-900">
+                        <div className="flex items-center gap-4 text-[11px] text-[#71839E] font-medium pt-1 border-t border-[rgba(139,170,215,0.08)]">
                           {itemFile.modifiedAt && (
                             <span>📅 Modified: {formatDateFormatted(itemFile.modifiedAt)}</span>
                           )}
@@ -1199,16 +1199,16 @@ export const SearchResults = () => {
 
                 {/* WHY THIS MATCHES CARD */}
                 {(primaryResult.matchedSnippet || primaryResult.aiExplanation) && (
-                  <div className="p-4 rounded-xl bg-gray-950/90 border border-purple-500/20 space-y-2 text-xs">
+                  <div className="p-4 rounded-xl bg-[#0E1D35] border border-[rgba(117,102,246,0.25)] space-y-2 text-xs">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-bold text-purple-300 flex items-center gap-1.5">
-                        <Brain className="w-4 h-4 text-purple-400" />
+                      <span className="font-bold text-indigo-300 flex items-center gap-1.5">
+                        <Brain className="w-4 h-4 text-[#7566F6]" />
                         <span>Why this matches</span>
                       </span>
 
                       <div className="flex items-center gap-1.5">
                         {primaryResult.matchSource && (
-                          <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] font-bold font-mono uppercase">
+                          <span className="px-2 py-0.5 rounded bg-[rgba(117,102,246,0.15)] text-indigo-300 border border-[rgba(117,102,246,0.3)] text-[10px] font-bold font-mono uppercase">
                             ✓ {primaryResult.matchSource} Match
                           </span>
                         )}
@@ -1216,22 +1216,22 @@ export const SearchResults = () => {
                     </div>
 
                     <div className="space-y-1.5 pl-1">
-                      <div className="text-[11px] text-gray-400">
-                        <strong className="text-gray-300 font-semibold">Search Query:</strong> <span className="italic text-blue-300">"{searchQuery}"</span>
+                      <div className="text-[11px] text-[#A7B7D0]">
+                        <strong className="text-[#F4F7FF] font-semibold">Search Query:</strong> <span className="italic text-[#4B91FF]">"{searchQuery}"</span>
                       </div>
 
                       {/* Visual Content Highlights if available */}
                       {primaryResult.visualMatchDetails && (
                         <div className="space-y-1 pt-1">
-                          <span className="text-[11px] text-gray-400 font-semibold block">Detected Visual Elements:</span>
+                          <span className="text-[11px] text-[#A7B7D0] font-semibold block">Detected Visual Elements:</span>
                           <div className="flex flex-wrap gap-1">
                             {(primaryResult.visualMatchDetails.objects || []).map((obj, i) => (
-                              <span key={i} className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold">
+                              <span key={i} className="px-2 py-0.5 rounded-lg bg-[rgba(52,120,246,0.2)] text-blue-300 border border-[rgba(52,120,246,0.3)] text-[10px] font-semibold">
                                 #{obj}
                               </span>
                             ))}
                             {(primaryResult.visualMatchDetails.scenes || []).map((scn, i) => (
-                              <span key={i} className="px-2 py-0.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-semibold">
+                              <span key={i} className="px-2 py-0.5 rounded-lg bg-[rgba(117,102,246,0.2)] text-indigo-300 border border-[rgba(117,102,246,0.3)] text-[10px] font-semibold">
                                 {scn}
                               </span>
                             ))}
@@ -1239,13 +1239,13 @@ export const SearchResults = () => {
                         </div>
                       )}
 
-                      <div className="text-[11px] text-gray-300 leading-relaxed">
-                        <strong className="text-gray-200 block mb-0.5 font-semibold">Relevant Content / Description:</strong>
-                        <p className="p-2.5 rounded-lg bg-gray-900/90 border border-gray-800 text-gray-300 text-xs italic">
+                      <div className="text-[11px] text-[#A7B7D0] leading-relaxed">
+                        <strong className="text-[#F4F7FF] block mb-0.5 font-semibold">Relevant Content / Description:</strong>
+                        <p className="p-2.5 rounded-lg bg-[#06101F] border border-[rgba(139,170,215,0.14)] text-[#A7B7D0] text-xs italic">
                           "{primaryResult.matchedSnippet || primaryResult.aiExplanation}"
                         </p>
                       </div>
-                      <p className="text-[11px] text-purple-200/90 leading-snug">
+                      <p className="text-[11px] text-indigo-200/90 leading-snug">
                         <strong>Match Explanation:</strong> {primaryResult.aiExplanation || `This document contains concepts closely aligned with your search context.`}
                       </p>
                     </div>

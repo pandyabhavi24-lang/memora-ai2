@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, ArrowLeftRight, Eye, X, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Info, FolderOpen, ExternalLink, FileText } from 'lucide-react';
+import { 
+  Copy, 
+  ArrowLeftRight, 
+  X, 
+  Loader2, 
+  RefreshCw, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Info, 
+  Trash2,
+  ShieldAlert,
+  FolderOpen,
+  ExternalLink,
+  Check,
+  Layers
+} from 'lucide-react';
 import { organizationService } from '../../services/organizationService';
 import { apiService } from '../../services/apiService';
 import { useApp } from '../../context/AppContext';
@@ -11,7 +26,16 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
   const [error, setError] = useState(null);
   const [activeDuplicate, setActiveDuplicate] = useState(null);
   const [activeTooltip, setActiveTooltip] = useState(null);
-  const { setPreviewFile, recordOpenedFile } = useApp();
+  const { recordOpenedFile, addToast } = useApp();
+
+  const [copiedPath, setCopiedPath] = useState(null);
+  const [fileToDelete, setFileToDelete] = useState(null); // { id, filename, path }
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState(null);
+
+  // One-click Open Both Files state
+  const [isOpeningBoth, setIsOpeningBoth] = useState(false);
+  const [openBothError, setOpenBothError] = useState(null);
 
   const fetchDuplicates = async () => {
     setLoading(true);
@@ -31,19 +55,26 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
     fetchDuplicates();
   }, [refreshTrigger]);
 
-  const [fileToDelete, setFileToDelete] = useState(null); // { id, filename, path }
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteMessage, setDeleteMessage] = useState(null);
+  const handleCopyPath = (filePath) => {
+    if (!filePath) return;
+    navigator.clipboard.writeText(filePath);
+    setCopiedPath(filePath);
+    if (addToast) addToast('File path copied to clipboard', 'info');
+    setTimeout(() => setCopiedPath(null), 2000);
+  };
 
   const handleOpenReview = (dup) => {
     setActiveDuplicate(dup);
     setDeleteMessage(null);
+    setFileToDelete(null);
+    setOpenBothError(null);
   };
 
   const handleCloseReview = () => {
     setActiveDuplicate(null);
     setFileToDelete(null);
     setDeleteMessage(null);
+    setOpenBothError(null);
   };
 
   const handleKeepBoth = (id) => {
@@ -53,15 +84,86 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
     setActiveDuplicate(null);
   };
 
-  const handleOpenNative = (filePath, fileObj) => {
-    apiService.openFile(filePath);
-    if (fileObj && recordOpenedFile) {
-      recordOpenedFile(fileObj);
+  const handleOpenNative = async (filePath, fileObj) => {
+    if (!filePath) return;
+    try {
+      const res = await apiService.openFile(filePath);
+      if (res && typeof res === 'string' && res.length > 0) {
+        if (addToast) addToast(`Could not open file: ${res}`, 'error');
+      } else {
+        if (fileObj && recordOpenedFile) {
+          recordOpenedFile(fileObj);
+        }
+      }
+    } catch (err) {
+      if (addToast) addToast(`Failed to launch file: ${err.message || 'Unknown error'}`, 'error');
     }
   };
 
   const handleLocateNative = (filePath) => {
+    if (!filePath) return;
     apiService.locateFile(filePath);
+  };
+
+  /**
+   * One-Click Open Both Files
+   * Launches both original duplicate files simultaneously in default desktop applications.
+   * Throttled against rapid clicks with isolated error handling per file.
+   */
+  const handleOpenBoth = async () => {
+    if (isOpeningBoth || !activeDuplicate) return;
+    setIsOpeningBoth(true);
+    setOpenBothError(null);
+
+    const pathA = activeDuplicate.fileA?.path;
+    const pathB = activeDuplicate.fileB?.path;
+    const errors = [];
+
+    // Attempt to open File A
+    if (pathA) {
+      try {
+        const resA = await apiService.openFile(pathA);
+        if (resA && typeof resA === 'string' && resA.length > 0) {
+          errors.push(`File A: ${resA}`);
+        } else if (recordOpenedFile) {
+          recordOpenedFile(activeDuplicate.fileA);
+        }
+      } catch (err) {
+        errors.push(`File A: ${err.message || 'Launch error'}`);
+      }
+    } else {
+      errors.push('File A: Local path is unavailable.');
+    }
+
+    // Attempt to open File B
+    if (pathB) {
+      try {
+        const resB = await apiService.openFile(pathB);
+        if (resB && typeof resB === 'string' && resB.length > 0) {
+          errors.push(`File B: ${resB}`);
+        } else if (recordOpenedFile) {
+          recordOpenedFile(activeDuplicate.fileB);
+        }
+      } catch (err) {
+        errors.push(`File B: ${err.message || 'Launch error'}`);
+      }
+    } else {
+      errors.push('File B: Local path is unavailable.');
+    }
+
+    if (errors.length > 0) {
+      setOpenBothError(errors.join(' | '));
+      if (addToast) addToast(errors[0], 'error');
+    } else {
+      if (addToast) {
+        addToast('Opened both files in your default desktop applications', 'success');
+      }
+    }
+
+    // Cooldown prevents repeated rapid launches
+    setTimeout(() => {
+      setIsOpeningBoth(false);
+    }, 1500);
   };
 
   const handleConfirmDeleteFile = async () => {
@@ -106,19 +208,19 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
   }
 
   return (
-    <div className="glass-panel rounded-2xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-md p-6 mb-8 shadow-xl">
+    <div className="rounded-2xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] p-6 mb-8 shadow-xl select-none">
       {/* Section Header */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-4 mb-4">
+      <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.14)] pb-4 mb-4">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
             <Copy className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white tracking-tight">
+            <h2 className="text-base font-bold text-[#F4F7FF] tracking-tight">
               Possible Duplicates
             </h2>
-            <p className="text-xs text-slate-400">
-              Files with identical or near-identical text content detected.
+            <p className="text-xs text-[#A7B7D0]">
+              Files with matching content, hashes, or visual presentation structures.
             </p>
           </div>
         </div>
@@ -134,21 +236,21 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
       {loading && (
         <div className="py-12 text-center flex flex-col items-center justify-center space-y-3">
           <Loader2 className="w-7 h-7 text-amber-400 animate-spin" />
-          <p className="text-xs font-medium text-slate-400">Checking for duplicates...</p>
+          <p className="text-xs font-medium text-[#A7B7D0]">Checking for duplicates...</p>
         </div>
       )}
 
       {/* Error State */}
       {!loading && error && (
-        <div className="py-10 text-center flex flex-col items-center justify-center space-y-3 bg-slate-950/40 rounded-xl border border-red-500/20 p-6">
+        <div className="py-10 text-center flex flex-col items-center justify-center space-y-3 bg-[#06101F] rounded-xl border border-red-500/20 p-6">
           <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
             <AlertTriangle className="w-5 h-5" />
           </div>
-          <p className="text-xs font-semibold text-slate-300">{error}</p>
+          <p className="text-xs font-semibold text-[#F4F7FF]">{error}</p>
           <button
             type="button"
             onClick={fetchDuplicates}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-slate-700/80 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0E1D35] hover:bg-[#132642] text-[#F4F7FF] text-xs font-semibold border border-[rgba(139,170,215,0.18)] transition-colors cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Try Again</span>
@@ -156,16 +258,13 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
         </div>
       )}
 
-      {/* Empty State - omit entire section if no duplicates */}
-      {!loading && !error && duplicates.length === 0 && null}
-
-      {/* Duplicate Pairs Cards (Real API Data) */}
+      {/* Duplicate Pairs Cards */}
       {!loading && !error && duplicates.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {duplicates.map((dup) => (
             <div
               key={dup.id}
-              className="p-4 bg-slate-950/70 rounded-xl border border-slate-800/80 hover:border-amber-500/30 transition-all flex flex-col justify-between"
+              className="p-4 bg-[#06101F] rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.28)] transition-all flex flex-col justify-between"
             >
               <div>
                 {/* Top Badge */}
@@ -173,8 +272,8 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                   <span
                     className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
                       dup.detectionType === 'Exact duplicate'
-                        ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                        : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                        ? 'bg-[rgba(117,102,246,0.15)] text-indigo-300 border-[rgba(117,102,246,0.3)]'
+                        : 'bg-[rgba(52,120,246,0.15)] text-blue-300 border-[rgba(52,120,246,0.3)]'
                     }`}
                   >
                     {dup.detectionType}
@@ -187,33 +286,33 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
 
                 {/* Pair Visualization */}
                 <div className="space-y-2 mb-4">
-                  <div className="p-2.5 bg-slate-900/90 rounded-lg border border-slate-800 font-mono text-xs text-slate-200 font-semibold truncate" title={dup.fileA?.filename}>
+                  <div className="p-2.5 bg-[#0A1629] rounded-lg border border-[rgba(139,170,215,0.14)] font-mono text-xs text-[#F4F7FF] font-semibold truncate" title={dup.fileA?.filename}>
                     {dup.fileA?.filename}
                   </div>
 
-                  <div className="flex items-center justify-center text-slate-500">
+                  <div className="flex items-center justify-center text-[#71839E]">
                     <ArrowLeftRight className="w-3.5 h-3.5" />
                   </div>
 
-                  <div className="p-2.5 bg-slate-900/90 rounded-lg border border-slate-800 font-mono text-xs text-slate-200 font-semibold truncate" title={dup.fileB?.filename}>
+                  <div className="p-2.5 bg-[#0A1629] rounded-lg border border-[rgba(139,170,215,0.14)] font-mono text-xs text-[#F4F7FF] font-semibold truncate" title={dup.fileB?.filename}>
                     {dup.fileB?.filename}
                   </div>
                 </div>
               </div>
 
               {/* Bottom Action */}
-              <div className="flex items-center justify-between border-t border-slate-800/80 pt-3">
-                <span className="text-[11px] font-medium text-slate-400">
-                  Status: <strong className="text-slate-200">{dup.status}</strong>
+              <div className="flex items-center justify-between border-t border-[rgba(139,170,215,0.1)] pt-3">
+                <span className="text-[11px] font-medium text-[#71839E]">
+                  Status: <strong className="text-[#A7B7D0]">{dup.status}</strong>
                 </span>
 
                 <button
                   type="button"
                   onClick={() => handleOpenReview(dup)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 hover:text-white font-medium text-xs border border-slate-700/60 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#3478F6]/15 hover:bg-[#3478F6]/25 text-[#4B91FF] border border-[#3478F6]/30 font-semibold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
                 >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>Review Pair</span>
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  <span>Compare Both Files</span>
                 </button>
               </div>
             </div>
@@ -221,57 +320,82 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
         </div>
       )}
 
-      {/* Review Modal rendered via React Portal on document.body for viewport centering */}
+      {/* Simplified Compact Duplicate File Comparison Modal */}
       {activeDuplicate && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fadeIn">
           <div
-            className="w-full max-w-2xl glass-panel bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scaleUp"
+            className="w-full max-w-3xl bg-[#0A1629] border border-[rgba(139,170,215,0.22)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/90 shrink-0">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[rgba(139,170,215,0.14)] bg-[#0E1D35] shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  <Copy className="w-4 h-4" />
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#3478F6] to-[#7566F6] flex items-center justify-center text-white shadow-xs shrink-0 border border-[#4B91FF]/30">
+                  <ArrowLeftRight className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Compare Duplicate Files</h3>
-                  <p className="text-xs text-slate-400">Review paths and decide which copy to keep</p>
+                  <h3 className="text-sm sm:text-base font-bold text-[#F4F7FF] flex items-center gap-2">
+                    <span>Duplicate File Comparison</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#3478F6]/15 text-[#4B91FF] border border-[#3478F6]/30">
+                      Quick Inspector
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-[#A7B7D0]">
+                    Review duplicate details or launch both original files simultaneously in your desktop applications.
+                  </p>
                 </div>
               </div>
               <button
                 onClick={handleCloseReview}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-[#71839E] hover:text-[#F4F7FF] hover:bg-[#132642] rounded-lg transition-colors cursor-pointer"
+                title="Close comparison"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Scrollable Modal Content */}
-            <div className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
-              <div className="flex items-center justify-between p-3.5 bg-amber-500/10 rounded-xl border border-amber-500/20 text-xs font-semibold text-amber-300 relative">
-                <span className="flex items-center gap-1.5">
-                  <span>Detection: <strong>{activeDuplicate.detectionType}</strong></span>
-                </span>
+            {/* Modal Body */}
+            <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
+              
+              {/* Detection Information Strip */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 text-xs font-semibold text-amber-300">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30 font-mono text-[11px]">
+                    {activeDuplicate.detectionType}
+                  </span>
+                  <span className="text-[11px] text-[#A7B7D0]">
+                    {activeDuplicate.detectionType === 'Exact duplicate' 
+                      ? 'Files share identical binary SHA-256 cryptographic hash' 
+                      : 'Files contain matching text and structural similarities'}
+                  </span>
+                </div>
 
-                <div className="relative inline-flex items-center gap-1">
+                <div className="relative inline-flex items-center gap-1 shrink-0">
                   <span
                     onMouseEnter={() => setActiveTooltip(activeDuplicate.id)}
                     onMouseLeave={() => setActiveTooltip(null)}
-                    className="font-mono text-amber-400 cursor-help flex items-center gap-1"
+                    className="font-mono text-amber-300 cursor-help flex items-center gap-1 bg-[#06101F] px-2.5 py-1 rounded-lg border border-amber-500/30"
                   >
-                    <span>{activeDuplicate.similarity}% Content Similarity</span>
+                    <span>{activeDuplicate.similarity}% Similarity</span>
                     <Info className="w-3.5 h-3.5 text-amber-400" />
                   </span>
 
                   {activeTooltip === activeDuplicate.id && (
-                    <div className="absolute right-0 bottom-full mb-2 w-72 p-3 bg-gray-950 border border-gray-700 rounded-xl text-[11px] text-gray-200 shadow-2xl z-30 font-sans leading-snug animate-fadeIn">
-                      <strong className="text-amber-300 block mb-1">Duplicate Similarity Score</strong>
-                      This percentage represents how similar the detected files are based on Memora's duplicate-detection comparison. It is not a percentage of identical filenames.
+                    <div className="absolute right-0 bottom-full mb-2 w-72 p-3 bg-[#06101F] border border-[rgba(139,170,215,0.2)] rounded-xl text-[11px] text-[#A7B7D0] shadow-2xl z-30 font-sans leading-snug animate-fadeIn">
+                      <strong className="text-amber-300 block mb-1">Duplicate Score</strong>
+                      Calculated from exact binary hash or extracted content similarity. Both files can be inspected externally below.
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* Status or Error Notifications */}
+              {openBothError && (
+                <div className="p-3 bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-semibold rounded-xl flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{openBothError}</span>
+                </div>
+              )}
 
               {deleteMessage && (
                 <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold rounded-xl flex items-center gap-2">
@@ -280,146 +404,231 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                 </div>
               )}
 
-              {/* Side-by-Side File Comparison */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* File A Card */}
-                <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800/80 flex flex-col justify-between space-y-3">
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                      FILE COPY A
-                    </span>
-                    <p className="text-xs font-bold text-white font-mono truncate" title={activeDuplicate.fileA?.filename}>
-                      {activeDuplicate.fileA?.filename}
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-mono break-all leading-tight">
-                      📁 {activeDuplicate.fileA?.path}
-                    </p>
-                    <span className="inline-block text-[10px] font-mono text-slate-500 mt-1">
-                      Size: {activeDuplicate.fileA?.size || 'Unknown size'}
+              {/* Primary Action Hero: Open Both Files */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-[#0E1D35] to-[#132642] border border-[#3478F6]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-[#F4F7FF]">Simultaneous External Launch</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      Desktop Native
                     </span>
                   </div>
+                  <p className="text-[11px] text-[#A7B7D0]">
+                    Launch both original files simultaneously in your default viewers (PowerPoint, Acrobat, Word, Photos).
+                  </p>
+                  <p className="text-[10px] text-[#71839E] font-mono">
+                    💡 Tip: Arrange windows side by side using <kbd className="px-1 py-0.5 rounded bg-[#06101F] border border-[rgba(139,170,215,0.2)] text-[#DCE5F3]">Win + ←</kbd> and <kbd className="px-1 py-0.5 rounded bg-[#06101F] border border-[rgba(139,170,215,0.2)] text-[#DCE5F3]">Win + →</kbd>
+                  </p>
+                </div>
 
-                  <div className="space-y-2 pt-2 border-t border-slate-800/80">
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewFile({ name: activeDuplicate.fileA?.filename, path: activeDuplicate.fileA?.path })}
-                        className="py-1 px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <Eye className="w-3 h-3" />
-                        <span>Preview</span>
-                      </button>
+                <button
+                  type="button"
+                  onClick={handleOpenBoth}
+                  disabled={isOpeningBoth}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#3478F6] to-[#4B91FF] hover:from-[#2563EB] hover:to-[#3478F6] text-white text-xs font-bold shadow-lg shadow-blue-500/25 transition-all cursor-pointer shrink-0 disabled:opacity-60 active:scale-95"
+                >
+                  {isOpeningBoth ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Opening Both Files...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Layers className="w-4 h-4" />
+                      <span>Open Both Files</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Compact Comparison Cards Grid (File A vs File B) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                
+                {/* ---------------- FILE COPY A ---------------- */}
+                <div className="p-3.5 bg-[#06101F] rounded-xl border border-[rgba(139,170,215,0.16)] flex flex-col justify-between space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.12)] pb-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#3478F6]/20 text-[#60A5FA] border border-[#3478F6]/40 uppercase tracking-wider font-mono">
+                        File Copy A
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-[#71839E] px-1.5 py-0.5 rounded bg-[#0A1629] border border-[rgba(139,170,215,0.1)]">
+                        {activeDuplicate.fileA?.filename?.split('.').pop()?.toUpperCase() || 'FILE'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-bold text-[#F4F7FF] font-mono truncate" title={activeDuplicate.fileA?.filename}>
+                        {activeDuplicate.fileA?.filename}
+                      </p>
+                      <p className="text-[11px] text-[#8BAAD7] font-mono mt-0.5">
+                        Size: <strong className="text-white">{activeDuplicate.fileA?.size || 'Unknown'}</strong>
+                      </p>
+
+                      {/* Path Bar with Copy & Locate */}
+                      <div className="mt-2 flex items-center justify-between gap-1.5 p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.12)] text-[10px] font-mono text-[#A7B7D0]">
+                        <span className="truncate" title={activeDuplicate.fileA?.path}>
+                          {activeDuplicate.fileA?.path}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPath(activeDuplicate.fileA?.path)}
+                            className="p-1 rounded hover:bg-[#132642] text-[#8BAAD7] hover:text-white transition-colors cursor-pointer"
+                            title="Copy path to clipboard"
+                          >
+                            {copiedPath === activeDuplicate.fileA?.path ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLocateNative(activeDuplicate.fileA?.path)}
+                            className="p-1 rounded hover:bg-[#132642] text-[#8BAAD7] hover:text-white transition-colors cursor-pointer"
+                            title="Locate in File Explorer"
+                          >
+                            <FolderOpen className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* File A Action Controls */}
+                  <div className="space-y-2 pt-2 border-t border-[rgba(139,170,215,0.1)]">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleOpenNative(activeDuplicate.fileA?.path, activeDuplicate.fileA)}
-                        className="py-1 px-2 rounded bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
+                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] text-[#4B91FF] border border-[rgba(139,170,215,0.14)] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                       >
-                        <ExternalLink className="w-3 h-3" />
-                        <span>Open</span>
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleLocateNative(activeDuplicate.fileA?.path)}
-                        className="py-1 px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <FolderOpen className="w-3 h-3" />
-                        <span>Show Folder</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Open File A</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setFileToDelete(activeDuplicate.fileA)}
-                        className="py-1 px-2 rounded bg-red-950/50 hover:bg-red-900/70 text-red-300 border border-red-500/30 text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
+                        className="py-1.5 px-3 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                        title="Delete Copy A"
                       >
-                        <X className="w-3 h-3" />
-                        <span>Delete Copy</span>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Copy A</span>
                       </button>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setFileToDelete(activeDuplicate.fileB)}
+                      className="w-full py-2 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Keep File A (Delete Copy B)</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* File B Card */}
-                <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800/80 flex flex-col justify-between space-y-3">
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                      FILE COPY B
-                    </span>
-                    <p className="text-xs font-bold text-white font-mono truncate" title={activeDuplicate.fileB?.filename}>
-                      {activeDuplicate.fileB?.filename}
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-mono break-all leading-tight">
-                      📁 {activeDuplicate.fileB?.path}
-                    </p>
-                    <span className="inline-block text-[10px] font-mono text-slate-500 mt-1">
-                      Size: {activeDuplicate.fileB?.size || 'Unknown size'}
-                    </span>
+                {/* ---------------- FILE COPY B ---------------- */}
+                <div className="p-3.5 bg-[#06101F] rounded-xl border border-[rgba(139,170,215,0.16)] flex flex-col justify-between space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.12)] pb-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#7566F6]/20 text-[#A78BFA] border border-[#7566F6]/40 uppercase tracking-wider font-mono">
+                        File Copy B
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-[#71839E] px-1.5 py-0.5 rounded bg-[#0A1629] border border-[rgba(139,170,215,0.1)]">
+                        {activeDuplicate.fileB?.filename?.split('.').pop()?.toUpperCase() || 'FILE'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-bold text-[#F4F7FF] font-mono truncate" title={activeDuplicate.fileB?.filename}>
+                        {activeDuplicate.fileB?.filename}
+                      </p>
+                      <p className="text-[11px] text-[#8BAAD7] font-mono mt-0.5">
+                        Size: <strong className="text-white">{activeDuplicate.fileB?.size || 'Unknown'}</strong>
+                      </p>
+
+                      {/* Path Bar with Copy & Locate */}
+                      <div className="mt-2 flex items-center justify-between gap-1.5 p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.12)] text-[10px] font-mono text-[#A7B7D0]">
+                        <span className="truncate" title={activeDuplicate.fileB?.path}>
+                          {activeDuplicate.fileB?.path}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPath(activeDuplicate.fileB?.path)}
+                            className="p-1 rounded hover:bg-[#132642] text-[#8BAAD7] hover:text-white transition-colors cursor-pointer"
+                            title="Copy path to clipboard"
+                          >
+                            {copiedPath === activeDuplicate.fileB?.path ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLocateNative(activeDuplicate.fileB?.path)}
+                            className="p-1 rounded hover:bg-[#132642] text-[#8BAAD7] hover:text-white transition-colors cursor-pointer"
+                            title="Locate in File Explorer"
+                          >
+                            <FolderOpen className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-2 pt-2 border-t border-slate-800/80">
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewFile({ name: activeDuplicate.fileB?.filename, path: activeDuplicate.fileB?.path })}
-                        className="py-1 px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <Eye className="w-3 h-3" />
-                        <span>Preview</span>
-                      </button>
+                  {/* File B Action Controls */}
+                  <div className="space-y-2 pt-2 border-t border-[rgba(139,170,215,0.1)]">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleOpenNative(activeDuplicate.fileB?.path, activeDuplicate.fileB)}
-                        className="py-1 px-2 rounded bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
+                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] text-[#4B91FF] border border-[rgba(139,170,215,0.14)] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                       >
-                        <ExternalLink className="w-3 h-3" />
-                        <span>Open</span>
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleLocateNative(activeDuplicate.fileB?.path)}
-                        className="py-1 px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <FolderOpen className="w-3 h-3" />
-                        <span>Show Folder</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Open File B</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setFileToDelete(activeDuplicate.fileB)}
-                        className="py-1 px-2 rounded bg-red-950/50 hover:bg-red-900/70 text-red-300 border border-red-500/30 text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
+                        className="py-1.5 px-3 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                        title="Delete Copy B"
                       >
-                        <X className="w-3 h-3" />
-                        <span>Delete Copy</span>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Copy B</span>
                       </button>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setFileToDelete(activeDuplicate.fileA)}
+                      className="w-full py-2 px-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Keep File B (Delete Copy A)</span>
+                    </button>
                   </div>
                 </div>
+
               </div>
 
-              {/* Explicit Path Confirmation Dialog */}
+              {/* Permanent Deletion Safety Confirmation Dialog */}
               {fileToDelete && (
-                <div className="p-4 bg-red-950/40 rounded-xl border border-red-500/40 space-y-3 animate-fadeIn">
-                  <div className="flex items-start gap-2 text-red-200">
-                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div className="p-4 bg-red-950/40 rounded-xl border border-red-500/40 space-y-3 animate-fadeIn my-1">
+                  <div className="flex items-start gap-2.5 text-red-200">
+                    <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-xs font-bold text-red-200">Confirm Deletion</h4>
+                      <h4 className="text-xs font-bold text-red-200 uppercase tracking-wide">
+                        Confirm Permanent Deletion of Duplicate Copy
+                      </h4>
                       <p className="text-[11px] text-red-300/90 mt-0.5">
-                        Are you sure you want to delete this file? This action will permanently remove the file copy.
+                        This action will permanently delete this physical file from your local disk storage. This cannot be undone.
                       </p>
                     </div>
                   </div>
-                  <div className="p-2 bg-slate-950 rounded border border-red-500/30 text-[11px] font-mono text-red-300 break-all">
-                    {fileToDelete.path || fileToDelete.filename}
+                  <div className="p-2.5 bg-[#06101F] rounded-lg border border-red-500/30 text-xs font-mono text-red-300 break-all select-all">
+                    📁 {fileToDelete.path || fileToDelete.filename}
                   </div>
                   <div className="flex items-center justify-end gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => setFileToDelete(null)}
                       disabled={isDeleting}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] text-[#A7B7D0] text-xs font-semibold transition-colors cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -427,10 +636,10 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                       type="button"
                       onClick={handleConfirmDeleteFile}
                       disabled={isDeleting}
-                      className="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-md transition-colors flex items-center gap-1 cursor-pointer"
+                      className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
-                      {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                      <span>{isDeleting ? 'Deleting...' : 'Yes, Delete File'}</span>
+                      {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      <span>{isDeleting ? 'Deleting...' : 'Yes, Permanently Delete File'}</span>
                     </button>
                   </div>
                 </div>
@@ -438,21 +647,27 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
             </div>
 
             {/* Sticky Actions Footer */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-slate-950/90 border-t border-slate-800 shrink-0">
-              <button
-                type="button"
-                onClick={handleCloseReview}
-                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-xl transition-colors cursor-pointer"
-              >
-                Done
-              </button>
-              <button
-                type="button"
-                onClick={() => handleKeepBoth(activeDuplicate.id)}
-                className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-lg shadow-blue-500/25 border border-blue-500/30 transition-all cursor-pointer"
-              >
-                Keep Both Copies
-              </button>
+            <div className="flex items-center justify-between px-5 py-3.5 bg-[#0E1D35] border-t border-[rgba(139,170,215,0.14)] shrink-0">
+              <span className="text-[11px] text-[#71839E]">
+                Both files are preserved until you explicitly confirm deletion.
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleKeepBoth(activeDuplicate.id)}
+                  className="px-4 py-1.5 text-xs font-semibold text-[#F4F7FF] bg-[#0A1629] hover:bg-[#132642] rounded-xl border border-[rgba(139,170,215,0.20)] transition-all cursor-pointer"
+                >
+                  Keep Both Copies
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseReview}
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-[#3478F6] hover:bg-[#2563EB] rounded-xl shadow-md border border-blue-400/30 transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>,

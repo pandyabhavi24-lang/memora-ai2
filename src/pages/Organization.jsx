@@ -28,19 +28,19 @@ class OrganizationErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="glass-panel p-12 rounded-2xl border border-red-500/30 bg-slate-900/90 text-center flex flex-col items-center justify-center my-6 space-y-4 shadow-xl">
+        <div className="p-12 rounded-2xl border border-red-500/30 bg-[#0A1629] text-center flex flex-col items-center justify-center my-6 space-y-4 shadow-xl">
           <div className="w-16 h-16 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400">
             <Sparkles className="w-8 h-8" />
           </div>
           <div className="max-w-md space-y-1">
-            <h3 className="text-lg font-bold text-white">Something went wrong on the Organize page</h3>
-            <p className="text-xs text-slate-400">
+            <h3 className="text-lg font-bold text-[#F4F7FF]">Something went wrong on the Organize page</h3>
+            <p className="text-xs text-[#A7B7D0]">
               An unexpected display error occurred. You can click below to reload the page safely.
             </p>
           </div>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#3478F6] hover:bg-[#2563EB] text-white font-semibold text-xs shadow-lg transition-all cursor-pointer"
           >
             <span>Reset & Reload Page View</span>
           </button>
@@ -269,21 +269,21 @@ export const Organization = () => {
 
         {/* Initial Empty State (before analysis) */}
         {analysisStatus === 'idle' && (
-          <div className="glass-panel p-12 rounded-2xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-md text-center flex flex-col items-center justify-center my-6 space-y-4 shadow-xl">
-            <div className="w-16 h-16 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-500/10">
+          <div className="p-12 rounded-2xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] text-center flex flex-col items-center justify-center my-6 space-y-4 shadow-xl">
+            <div className="w-16 h-16 rounded-2xl bg-[rgba(52,120,246,0.15)] border border-[rgba(52,120,246,0.3)] flex items-center justify-center text-[#4B91FF] shadow-lg shadow-blue-500/10">
               <FolderSearch className="w-8 h-8" />
             </div>
             <div className="max-w-md space-y-1">
-              <h3 className="text-lg font-bold text-white">No files analyzed yet</h3>
-              <p className="text-xs text-slate-400">
+              <h3 className="text-lg font-bold text-[#F4F7FF]">No files analyzed yet</h3>
+              <p className="text-xs text-[#A7B7D0]">
                 Select a folder and let Memora analyze your files to suggest intelligent category mappings and flag potential duplicates.
               </p>
             </div>
             <button
               onClick={handleStartAnalysis}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-lg shadow-blue-500/20 border border-blue-500/30 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#3478F6] hover:bg-[#2563EB] active:scale-95 text-white font-semibold text-xs shadow-lg shadow-blue-500/20 border border-blue-400/30 transition-all cursor-pointer"
             >
-              <Sparkles className="w-4 h-4 text-blue-200" />
+              <Sparkles className="w-4 h-4 text-white" />
               <span>Analyze Files</span>
             </button>
           </div>

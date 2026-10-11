@@ -206,21 +206,21 @@ export const LockScreen = () => {
   const isDisabled = isLoading || lockoutSeconds > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0b0f19] select-none">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-radial from-blue-900/10 via-transparent to-transparent pointer-events-none" />
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#06101F] select-none p-4">
+      {/* Subtle background ambiance */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-[#06101F]/80 to-[#06101F] pointer-events-none" />
 
-      <div className="relative w-full max-w-sm px-6">
+      <div className="relative w-full max-w-sm p-8 rounded-2xl bg-[#0A1629] border border-[rgba(139,170,215,0.18)] shadow-2xl shadow-black/80">
         {/* Logo / branding */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-2xl shadow-blue-500/30 mb-4">
-            <Lock className="w-8 h-8 text-white" />
+        <div className="flex flex-col items-center mb-7">
+          <div className="w-14 h-14 rounded-2xl bg-[#3478F6]/15 border border-[#3478F6]/30 flex items-center justify-center shadow-lg shadow-blue-900/20 mb-3.5">
+            <Lock className="w-7 h-7 text-[#38BDF8]" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-wide">
-            MEMORA <span className="text-blue-400">AI</span>
+          <h1 className="text-xl font-bold text-white tracking-tight">
+            MEMORA <span className="text-[#38BDF8] font-mono">AI</span>
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {mode === 'setup' && 'Secure your Memora'}
+          <p className="text-xs text-[#A7B7D0] mt-1 font-medium">
+            {mode === 'setup' && 'Secure your local workspace'}
             {mode === 'unlock' && 'Enter your PIN to unlock'}
             {mode === 'forgot_email' && 'Forgot your PIN?'}
             {mode === 'forgot_code' && 'Enter Reset Code'}
@@ -233,10 +233,10 @@ export const LockScreen = () => {
            =================================================================== */}
         {mode === 'setup' && (
           <form onSubmit={handleFirstTimeSetup} className="space-y-4">
-            <div className="text-xs font-semibold text-gray-300 mb-1">Create your PIN</div>
+            <div className="text-xs font-semibold text-[#DCE5F3] mb-1">Create your PIN</div>
 
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-gray-900/80 border border-gray-700/80 focus-within:border-blue-500/60 transition-colors">
-              <Shield className="w-4 h-4 text-gray-500 shrink-0" />
+            <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] focus-within:border-[#3478F6] focus-within:ring-1 focus-within:ring-[#3478F6]/30 transition-all">
+              <Shield className="w-4 h-4 text-[#7E93B3] shrink-0" />
               <input
                 ref={inputRef}
                 id="setup-new-pin"
@@ -247,20 +247,20 @@ export const LockScreen = () => {
                 minLength={4}
                 maxLength={32}
                 required
-                className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm outline-none"
+                className="flex-1 bg-transparent text-white placeholder-[#7E93B3] text-sm outline-none"
               />
               <button
                 type="button"
                 onClick={() => setShowPin((v) => !v)}
-                className="text-gray-500 hover:text-gray-300"
+                className="text-[#7E93B3] hover:text-white transition-colors cursor-pointer"
                 tabIndex={-1}
               >
                 {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-gray-900/80 border border-gray-700/80 focus-within:border-blue-500/60 transition-colors">
-              <Shield className="w-4 h-4 text-gray-500 shrink-0" />
+            <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] focus-within:border-[#3478F6] focus-within:ring-1 focus-within:ring-[#3478F6]/30 transition-all">
+              <Shield className="w-4 h-4 text-[#7E93B3] shrink-0" />
               <input
                 id="setup-confirm-pin"
                 type={showPin ? 'text' : 'password'}
@@ -269,14 +269,14 @@ export const LockScreen = () => {
                 placeholder="Confirm PIN"
                 maxLength={32}
                 required
-                className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm outline-none"
+                className="flex-1 bg-transparent text-white placeholder-[#7E93B3] text-sm outline-none"
               />
             </div>
 
-            <div className="pt-2">
-              <div className="text-xs font-semibold text-gray-300 mb-1">Recovery Email</div>
-              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-gray-900/80 border border-gray-700/80 focus-within:border-blue-500/60 transition-colors">
-                <Mail className="w-4 h-4 text-gray-500 shrink-0" />
+            <div className="pt-1">
+              <div className="text-xs font-semibold text-[#DCE5F3] mb-1">Recovery Email</div>
+              <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] focus-within:border-[#3478F6] focus-within:ring-1 focus-within:ring-[#3478F6]/30 transition-all">
+                <Mail className="w-4 h-4 text-[#7E93B3] shrink-0" />
                 <input
                   id="setup-recovery-email"
                   type="email"
@@ -284,13 +284,13 @@ export const LockScreen = () => {
                   onChange={(e) => setRecoveryEmail(e.target.value)}
                   placeholder="email@example.com"
                   required
-                  className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm outline-none"
+                  className="flex-1 bg-transparent text-white placeholder-[#7E93B3] text-sm outline-none"
                 />
               </div>
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3.5 py-2.5">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -300,14 +300,13 @@ export const LockScreen = () => {
               id="setup-submit-btn"
               type="submit"
               disabled={isLoading || !pin || !confirmPin || !recoveryEmail}
-              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold transition-all shadow-lg shadow-blue-500/20"
+              className="w-full py-2.5 rounded-xl bg-[#3478F6] hover:bg-[#2563EB] disabled:opacity-40 text-white text-sm font-semibold transition-all shadow-md shadow-blue-900/30 cursor-pointer"
             >
               {isLoading ? 'Creating PIN…' : 'Create PIN & Continue'}
             </button>
 
-            <p className="text-[11px] text-gray-400 text-center leading-relaxed mt-2">
-              Your PIN is securely protected and cannot be viewed later.
-              A recovery email is required if you forget your PIN.
+            <p className="text-[11px] text-[#7E93B3] text-center leading-relaxed mt-2">
+              Your PIN is hashed locally with PBKDF2-HMAC-SHA256 and cannot be recovered without a recovery email.
             </p>
           </form>
         )}
@@ -318,8 +317,8 @@ export const LockScreen = () => {
         {mode === 'unlock' && (
           <form onSubmit={handleUnlockSubmit} className="space-y-4">
             <div className="relative">
-              <div className="flex items-center gap-2 px-4 py-3.5 rounded-xl bg-gray-900/80 border border-gray-700/80 focus-within:border-blue-500/60 transition-colors">
-                <Shield className="w-4 h-4 text-gray-500 shrink-0" />
+              <div className="flex items-center gap-2 px-3.5 py-3 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] focus-within:border-[#3478F6] focus-within:ring-1 focus-within:ring-[#3478F6]/30 transition-all">
+                <Shield className="w-4 h-4 text-[#7E93B3] shrink-0" />
                 <input
                   ref={inputRef}
                   id="lock-screen-pin"
@@ -330,12 +329,12 @@ export const LockScreen = () => {
                   disabled={isDisabled}
                   maxLength={32}
                   autoComplete="off"
-                  className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm outline-none disabled:opacity-50"
+                  className="flex-1 bg-transparent text-white placeholder-[#7E93B3] text-sm outline-none disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPin((v) => !v)}
-                  className="text-gray-500 hover:text-gray-300 transition-colors"
+                  className="text-[#7E93B3] hover:text-white transition-colors cursor-pointer"
                   tabIndex={-1}
                 >
                   {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -344,7 +343,7 @@ export const LockScreen = () => {
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3.5 py-2.5">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span>{lockoutSeconds > 0 ? `Locked out — try again in ${lockoutSeconds}s` : error}</span>
               </div>
@@ -354,7 +353,7 @@ export const LockScreen = () => {
               id="lock-screen-unlock-btn"
               type="submit"
               disabled={isDisabled || !pin}
-              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-lg shadow-blue-500/20"
+              className="w-full py-2.5 rounded-xl bg-[#3478F6] hover:bg-[#2563EB] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-md shadow-blue-900/30 cursor-pointer"
             >
               {isLoading ? 'Verifying…' : lockoutSeconds > 0 ? `Wait ${lockoutSeconds}s` : 'Unlock'}
             </button>
@@ -368,7 +367,7 @@ export const LockScreen = () => {
                   setInfoMessage('');
                   setMode('forgot_email');
                 }}
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
+                className="text-xs text-[#38BDF8] hover:text-white transition-colors underline cursor-pointer"
               >
                 Forgot PIN?
               </button>
@@ -381,12 +380,12 @@ export const LockScreen = () => {
            =================================================================== */}
         {mode === 'forgot_email' && (
           <form onSubmit={handleSendResetCode} className="space-y-4">
-            <p className="text-xs text-gray-400 mb-2">
+            <p className="text-xs text-[#A7B7D0] mb-2">
               Enter your recovery email to receive a 6-digit reset code:
             </p>
 
-            <div className="flex items-center gap-2 px-4 py-3.5 rounded-xl bg-gray-900/80 border border-gray-700/80 focus-within:border-blue-500/60 transition-colors">
-              <Mail className="w-4 h-4 text-gray-500 shrink-0" />
+            <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] focus-within:border-[#3478F6] focus-within:ring-1 focus-within:ring-[#3478F6]/30 transition-all">
+              <Mail className="w-4 h-4 text-[#7E93B3] shrink-0" />
               <input
                 ref={inputRef}
                 id="forgot-email-input"
@@ -395,12 +394,12 @@ export const LockScreen = () => {
                 onChange={(e) => setRecoveryEmail(e.target.value)}
                 placeholder="Enter recovery email"
                 required
-                className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm outline-none"
+                className="flex-1 bg-transparent text-white placeholder-[#7E93B3] text-sm outline-none"
               />
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3.5 py-2.5">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -410,7 +409,7 @@ export const LockScreen = () => {
               id="send-reset-code-btn"
               type="submit"
               disabled={isLoading || !recoveryEmail}
-              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold transition-all shadow-lg shadow-blue-500/20"
+              className="w-full py-2.5 rounded-xl bg-[#3478F6] hover:bg-[#2563EB] disabled:opacity-40 text-white text-sm font-semibold transition-all shadow-md shadow-blue-900/30 cursor-pointer"
             >
               {isLoading ? 'Sending Code…' : 'Send Reset Code'}
             </button>
@@ -422,7 +421,7 @@ export const LockScreen = () => {
                   setError('');
                   setMode('unlock');
                 }}
-                className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs text-[#A7B7D0] hover:text-white transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" /> Back to Unlock
               </button>
@@ -436,18 +435,18 @@ export const LockScreen = () => {
         {mode === 'forgot_code' && (
           <form onSubmit={handleVerifyResetCode} className="space-y-4">
             {infoMessage && (
-              <div className="flex items-center gap-2 text-xs text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 text-xs text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3.5 py-2.5">
                 <CheckCircle2 className="w-4 h-4 shrink-0 text-blue-400" />
                 <span>{infoMessage}</span>
               </div>
             )}
 
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-[#A7B7D0]">
               Enter the 6-digit code sent to your recovery email:
             </p>
 
-            <div className="flex items-center gap-2 px-4 py-3.5 rounded-xl bg-gray-900/80 border border-gray-700/80 focus-within:border-blue-500/60 transition-colors">
-              <KeyRound className="w-4 h-4 text-gray-500 shrink-0" />
+            <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] focus-within:border-[#3478F6] focus-within:ring-1 focus-within:ring-[#3478F6]/30 transition-all">
+              <KeyRound className="w-4 h-4 text-[#7E93B3] shrink-0" />
               <input
                 ref={inputRef}
                 id="reset-code-input"
@@ -457,12 +456,12 @@ export const LockScreen = () => {
                 placeholder="6-digit code (e.g. 123456)"
                 maxLength={6}
                 required
-                className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm font-mono tracking-widest outline-none"
+                className="flex-1 bg-transparent text-white placeholder-[#7E93B3] text-sm font-mono tracking-widest outline-none"
               />
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3.5 py-2.5">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -472,7 +471,7 @@ export const LockScreen = () => {
               id="verify-code-btn"
               type="submit"
               disabled={isLoading || resetCode.length !== 6}
-              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold transition-all shadow-lg shadow-blue-500/20"
+              className="w-full py-2.5 rounded-xl bg-[#3478F6] hover:bg-[#2563EB] disabled:opacity-40 text-white text-sm font-semibold transition-all shadow-md shadow-blue-900/30 cursor-pointer"
             >
               {isLoading ? 'Verifying Code…' : 'Verify Code'}
             </button>
@@ -484,7 +483,7 @@ export const LockScreen = () => {
                   setError('');
                   setMode('forgot_email');
                 }}
-                className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs text-[#A7B7D0] hover:text-white transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" /> Back to Email
               </button>
@@ -497,12 +496,12 @@ export const LockScreen = () => {
            =================================================================== */}
         {mode === 'forgot_new_pin' && (
           <form onSubmit={handleResetPinSubmit} className="space-y-4">
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-[#A7B7D0]">
               Code verified! Create your new PIN:
             </p>
 
-            <div className="flex items-center gap-2 px-4 py-3.5 rounded-xl bg-gray-900/80 border border-gray-700/80 focus-within:border-blue-500/60 transition-colors">
-              <Shield className="w-4 h-4 text-gray-500 shrink-0" />
+            <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] focus-within:border-[#3478F6] focus-within:ring-1 focus-within:ring-[#3478F6]/30 transition-all">
+              <Shield className="w-4 h-4 text-[#7E93B3] shrink-0" />
               <input
                 ref={inputRef}
                 id="reset-new-pin"
@@ -513,20 +512,20 @@ export const LockScreen = () => {
                 minLength={4}
                 maxLength={32}
                 required
-                className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm outline-none"
+                className="flex-1 bg-transparent text-white placeholder-[#7E93B3] text-sm outline-none"
               />
               <button
                 type="button"
                 onClick={() => setShowPin((v) => !v)}
-                className="text-gray-500 hover:text-gray-300"
+                className="text-[#7E93B3] hover:text-white cursor-pointer"
                 tabIndex={-1}
               >
                 {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-3.5 rounded-xl bg-gray-900/80 border border-gray-700/80 focus-within:border-blue-500/60 transition-colors">
-              <Shield className="w-4 h-4 text-gray-500 shrink-0" />
+            <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] focus-within:border-[#3478F6] focus-within:ring-1 focus-within:ring-[#3478F6]/30 transition-all">
+              <Shield className="w-4 h-4 text-[#7E93B3] shrink-0" />
               <input
                 id="reset-confirm-new-pin"
                 type={showPin ? 'text' : 'password'}
@@ -535,12 +534,12 @@ export const LockScreen = () => {
                 placeholder="Confirm New PIN"
                 maxLength={32}
                 required
-                className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm outline-none"
+                className="flex-1 bg-transparent text-white placeholder-[#7E93B3] text-sm outline-none"
               />
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3.5 py-2.5">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -550,7 +549,7 @@ export const LockScreen = () => {
               id="reset-pin-submit-btn"
               type="submit"
               disabled={isLoading || !newPin || !confirmNewPin}
-              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold transition-all shadow-lg shadow-blue-500/20"
+              className="w-full py-2.5 rounded-xl bg-[#3478F6] hover:bg-[#2563EB] disabled:opacity-40 text-white text-sm font-semibold transition-all shadow-md shadow-blue-900/30 cursor-pointer"
             >
               {isLoading ? 'Resetting PIN…' : 'Reset PIN'}
             </button>
@@ -558,8 +557,8 @@ export const LockScreen = () => {
         )}
 
         {/* Privacy note */}
-        <p className="mt-8 text-center text-xs text-gray-600 leading-relaxed px-2">
-          Email recovery requires sending a one-time reset code to your configured recovery email. Your files, OCR data, embeddings, search data and audit data are not sent.
+        <p className="mt-8 text-center text-xs text-[#7E93B3] leading-relaxed px-2">
+          Email recovery requires sending a one-time reset code to your configured recovery email. Your files, OCR data, embeddings, search data and audit data never leave your device.
         </p>
       </div>
     </div>

@@ -102,7 +102,7 @@ export const FileExpiry = () => {
     try {
       setScanning(true);
       setError(null);
-      const res = await apiService.scanExpiries();
+      await apiService.scanExpiries();
       await fetchData();
     } catch (err) {
       console.error('Scanning failed:', err);
@@ -289,13 +289,16 @@ export const FileExpiry = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-gray-100 p-6 space-y-6">
+    <div className="space-y-5 pb-8 select-none">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800/80 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[rgba(139,170,215,0.14)] pb-5">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-white tracking-wide flex items-center gap-2.5">
-              <CalendarClock className="w-7 h-7 text-blue-500" /> Expiry & Reminders
+            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-[#3478F6]/15 border border-[#3478F6]/30 flex items-center justify-center text-[#38BDF8]">
+                <CalendarClock className="w-5 h-5" />
+              </div>
+              Expiry & Reminders
             </h1>
             {ollamaStatus.available ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -308,19 +311,19 @@ export const FileExpiry = () => {
                 title="Local Ollama AI offline. Using safe rule-based date detection fallback."
               >
                 <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
-                Ollama Offline (Rule-based Fallback)
+                Rule-based Fallback Active
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-400 mt-1">
-            Track important document dates and manage renewal reminders locally.
+          <p className="text-sm text-[#A7B7D0] mt-1.5">
+            Track critical document renewal deadlines and manage intelligent local alerts.
           </p>
         </div>
 
         <button
           onClick={handleScan}
           disabled={scanning}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 cursor-pointer"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#3478F6] hover:bg-[#2563EB] text-white font-medium text-sm transition-all shadow-lg shadow-blue-900/30 border border-blue-400/20 disabled:opacity-50 cursor-pointer"
         >
           <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
           {scanning ? 'Scanning Documents...' : 'Scan Documents'}
@@ -332,87 +335,87 @@ export const FileExpiry = () => {
         {/* Upcoming Card */}
         <div
           onClick={() => setStatusFilter('upcoming')}
-          className={`p-4 rounded-2xl bg-gray-900/90 border transition-all cursor-pointer ${
+          className={`p-4 rounded-2xl bg-[#0A1629] border transition-all cursor-pointer ${
             statusFilter === 'upcoming'
-              ? 'border-blue-500 shadow-lg shadow-blue-500/10'
-              : 'border-gray-800 hover:border-gray-700'
+              ? 'border-[#3478F6] shadow-lg shadow-blue-500/10 ring-1 ring-[#3478F6]/30'
+              : 'border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.3)] hover:bg-[#0E1D35]/40'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Upcoming</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-[#7E93B3] uppercase tracking-wider font-mono">Upcoming</span>
+            <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-[#38BDF8] flex items-center justify-center border border-blue-500/20">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-white mt-2">{summary.upcoming}</div>
-          <p className="text-xs text-gray-400 mt-1">Valid documents</p>
+          <div className="text-3xl font-mono font-extrabold text-white mt-2">{summary.upcoming}</div>
+          <p className="text-xs text-[#A7B7D0] mt-1">Valid documents tracked</p>
         </div>
 
         {/* Due Soon Card */}
         <div
           onClick={() => setStatusFilter('due_soon')}
-          className={`p-4 rounded-2xl bg-gray-900/90 border transition-all cursor-pointer ${
+          className={`p-4 rounded-2xl bg-[#0A1629] border transition-all cursor-pointer ${
             statusFilter === 'due_soon'
-              ? 'border-amber-500 shadow-lg shadow-amber-500/10'
-              : 'border-gray-800 hover:border-gray-700'
+              ? 'border-amber-500 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30'
+              : 'border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.3)] hover:bg-[#0E1D35]/40'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Due Soon</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-[#7E93B3] uppercase tracking-wider font-mono">Due Soon</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/20">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-amber-400 mt-2">{summary.due_soon}</div>
-          <p className="text-xs text-gray-400 mt-1">Expiring within reminder window</p>
+          <div className="text-3xl font-mono font-extrabold text-amber-400 mt-2">{summary.due_soon}</div>
+          <p className="text-xs text-[#A7B7D0] mt-1">Expiring within reminder window</p>
         </div>
 
         {/* Expired Card */}
         <div
           onClick={() => setStatusFilter('expired')}
-          className={`p-4 rounded-2xl bg-gray-900/90 border transition-all cursor-pointer ${
+          className={`p-4 rounded-2xl bg-[#0A1629] border transition-all cursor-pointer ${
             statusFilter === 'expired'
-              ? 'border-red-500 shadow-lg shadow-red-500/10'
-              : 'border-gray-800 hover:border-gray-700'
+              ? 'border-red-500 shadow-lg shadow-red-500/10 ring-1 ring-red-500/30'
+              : 'border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.3)] hover:bg-[#0E1D35]/40'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Expired</span>
-            <div className="w-8 h-8 rounded-lg bg-red-500/15 text-red-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-[#7E93B3] uppercase tracking-wider font-mono">Expired</span>
+            <div className="w-8 h-8 rounded-lg bg-red-500/15 text-red-400 flex items-center justify-center border border-red-500/20">
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-red-400 mt-2">{summary.expired}</div>
-          <p className="text-xs text-gray-400 mt-1">Past expiration date</p>
+          <div className="text-3xl font-mono font-extrabold text-red-400 mt-2">{summary.expired}</div>
+          <p className="text-xs text-[#A7B7D0] mt-1">Past expiration date</p>
         </div>
 
         {/* Needs Review Card */}
         <div
           onClick={() => setStatusFilter('needs_review')}
-          className={`p-4 rounded-2xl bg-gray-900/90 border transition-all cursor-pointer ${
+          className={`p-4 rounded-2xl bg-[#0A1629] border transition-all cursor-pointer ${
             statusFilter === 'needs_review'
-              ? 'border-purple-500 shadow-lg shadow-purple-500/10'
-              : 'border-gray-800 hover:border-gray-700'
+              ? 'border-purple-500 shadow-lg shadow-purple-500/10 ring-1 ring-purple-500/30'
+              : 'border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.3)] hover:bg-[#0E1D35]/40'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Needs Review</span>
-            <div className="w-8 h-8 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-[#7E93B3] uppercase tracking-wider font-mono">Needs Review</span>
+            <div className="w-8 h-8 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center border border-purple-500/20">
               <AlertCircle className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-purple-400 mt-2">{summary.needs_review}</div>
-          <p className="text-xs text-gray-400 mt-1">Unconfirmed extractions</p>
+          <div className="text-3xl font-mono font-extrabold text-purple-400 mt-2">{summary.needs_review}</div>
+          <p className="text-xs text-[#A7B7D0] mt-1">Unconfirmed extractions</p>
         </div>
       </div>
 
       {/* Review Banner Alert */}
       {summary.needs_review > 0 && statusFilter !== 'needs_review' && (
-        <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between gap-3">
+        <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between gap-3 shadow-sm">
           <div className="flex items-center gap-2.5">
             <AlertCircle className="w-5 h-5 text-purple-400 shrink-0" />
             <p className="text-sm text-purple-200">
-              <span className="font-semibold">{summary.needs_review} document dates</span> need user confirmation to ensure accuracy.
+              <span className="font-semibold text-white">{summary.needs_review} document dates</span> need confirmation to ensure alert accuracy.
             </p>
           </div>
           <button
@@ -425,16 +428,16 @@ export const FileExpiry = () => {
       )}
 
       {/* Filters Toolbar */}
-      <div className="p-4 rounded-2xl bg-gray-900/60 border border-gray-800 flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+      <div className="p-4 rounded-2xl bg-[#0A1629] border border-[rgba(139,170,215,0.14)] flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#7E93B3] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search document name or date text..."
+            placeholder="Search document title or extracted date text..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-950 border border-gray-800 rounded-xl text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full pl-10 pr-4 py-2 bg-[#06101F] border border-[rgba(139,170,215,0.16)] rounded-xl text-sm text-[#DCE5F3] placeholder-[#7E93B3] focus:outline-none focus:border-[#3478F6] transition-colors"
           />
         </div>
 
@@ -444,10 +447,10 @@ export const FileExpiry = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-gray-950 border border-gray-800 rounded-xl text-xs text-gray-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+            className="px-3 py-2 bg-[#06101F] border border-[rgba(139,170,215,0.16)] rounded-xl text-xs text-[#DCE5F3] focus:outline-none focus:border-[#3478F6] cursor-pointer"
           >
             {statusTypes.map((st) => (
-              <option key={st.value} value={st.value}>{st.label}</option>
+              <option key={st.value} value={st.value} className="bg-[#0A1629] text-[#DCE5F3]">{st.label}</option>
             ))}
           </select>
 
@@ -455,10 +458,10 @@ export const FileExpiry = () => {
           <select
             value={docTypeFilter}
             onChange={(e) => setDocTypeFilter(e.target.value)}
-            className="px-3 py-2 bg-gray-950 border border-gray-800 rounded-xl text-xs text-gray-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+            className="px-3 py-2 bg-[#06101F] border border-[rgba(139,170,215,0.16)] rounded-xl text-xs text-[#DCE5F3] focus:outline-none focus:border-[#3478F6] cursor-pointer"
           >
             {documentTypes.map((dt) => (
-              <option key={dt} value={dt}>{dt === 'All' ? 'All Document Types' : dt}</option>
+              <option key={dt} value={dt} className="bg-[#0A1629] text-[#DCE5F3]">{dt === 'All' ? 'All Document Types' : dt}</option>
             ))}
           </select>
 
@@ -466,31 +469,31 @@ export const FileExpiry = () => {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="px-3 py-2 bg-gray-950 border border-gray-800 rounded-xl text-xs text-gray-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+            className="px-3 py-2 bg-[#06101F] border border-[rgba(139,170,215,0.16)] rounded-xl text-xs text-[#DCE5F3] focus:outline-none focus:border-[#3478F6] cursor-pointer"
           >
-            <option value="date_asc">Sort: Earliest Date</option>
-            <option value="date_desc">Sort: Latest Date</option>
-            <option value="name_asc">Sort: Name (A-Z)</option>
-            <option value="status">Sort: Status</option>
+            <option value="date_asc" className="bg-[#0A1629] text-[#DCE5F3]">Sort: Earliest Date</option>
+            <option value="date_desc" className="bg-[#0A1629] text-[#DCE5F3]">Sort: Latest Date</option>
+            <option value="name_asc" className="bg-[#0A1629] text-[#DCE5F3]">Sort: Name (A-Z)</option>
+            <option value="status" className="bg-[#0A1629] text-[#DCE5F3]">Sort: Status</option>
           </select>
         </div>
       </div>
 
       {/* Expiry Records Table */}
-      <div className="bg-gray-900/80 border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
+      <div className="bg-[#0A1629] border border-[rgba(139,170,215,0.14)] rounded-2xl overflow-hidden shadow-xl">
         {loading ? (
-          <div className="p-12 text-center text-gray-400 space-y-3">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-500" />
+          <div className="p-12 text-center text-[#A7B7D0] space-y-3">
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[#3478F6]" />
             <p className="text-sm">Loading document expiry records...</p>
           </div>
         ) : expiries.length === 0 ? (
           <div className="p-16 text-center space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-gray-800/60 text-gray-500 flex items-center justify-center mx-auto">
+            <div className="w-16 h-16 rounded-2xl bg-[#0E1D35] text-[#7E93B3] flex items-center justify-center mx-auto border border-[rgba(139,170,215,0.12)]">
               <CalendarClock className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-200">No expiry dates found</h3>
-              <p className="text-sm text-gray-400 mt-1 max-w-md mx-auto">
+              <h3 className="text-lg font-semibold text-white">No expiry dates found</h3>
+              <p className="text-sm text-[#A7B7D0] mt-1 max-w-md mx-auto">
                 {searchQuery || statusFilter !== 'all' || docTypeFilter !== 'all'
                   ? 'No documents match your filter criteria. Try resetting search or filters.'
                   : 'Click "Scan Documents" to analyze your indexed files for expiration and renewal dates.'}
@@ -500,7 +503,7 @@ export const FileExpiry = () => {
               <button
                 onClick={handleScan}
                 disabled={scanning}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs rounded-xl transition-colors cursor-pointer"
+                className="px-4 py-2 bg-[#3478F6] hover:bg-[#2563EB] text-white font-medium text-xs rounded-xl transition-colors cursor-pointer shadow-md shadow-blue-900/30"
               >
                 Scan Documents Now
               </button>
@@ -510,7 +513,7 @@ export const FileExpiry = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-gray-800 text-xs font-semibold text-gray-400 bg-gray-950/40 uppercase tracking-wider">
+                <tr className="border-b border-[rgba(139,170,215,0.14)] text-[11px] font-mono font-semibold text-[#7E93B3] bg-[#06101F]/80 uppercase tracking-wider">
                   <th className="py-3.5 px-4">Document</th>
                   <th className="py-3.5 px-4">Type</th>
                   <th className="py-3.5 px-4">Relevant Date</th>
@@ -521,7 +524,7 @@ export const FileExpiry = () => {
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/60 text-sm">
+              <tbody className="divide-y divide-[rgba(139,170,215,0.1)] text-sm">
                 {expiries.map((record) => {
                   const dateObj = record.extracted_date ? new Date(record.extracted_date) : null;
                   const isValidDate = dateObj && !isNaN(dateObj.getTime());
@@ -538,19 +541,19 @@ export const FileExpiry = () => {
                     <tr
                       key={record.id}
                       onClick={() => openEditModal(record)}
-                      className="hover:bg-gray-800/40 transition-colors cursor-pointer group"
+                      className="hover:bg-[#0E1D35]/50 transition-colors cursor-pointer group"
                     >
                       {/* Document Name */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-gray-800 flex items-center justify-center text-blue-400 shrink-0">
+                          <div className="w-9 h-9 rounded-xl bg-[#0E1D35] border border-[rgba(139,170,215,0.14)] flex items-center justify-center text-[#38BDF8] shrink-0">
                             <FileText className="w-4 h-4" />
                           </div>
                           <div className="min-w-0">
-                            <div className="font-semibold text-gray-200 group-hover:text-blue-400 transition-colors truncate max-w-xs" title={record.file_name}>
+                            <div className="font-semibold text-white group-hover:text-[#4B91FF] transition-colors truncate max-w-xs" title={record.file_name}>
                               {record.file_name}
                             </div>
-                            <div className="text-[11px] text-gray-500 truncate max-w-xs" title={record.file_path}>
+                            <div className="text-[11px] text-[#7E93B3] font-mono truncate max-w-xs" title={record.file_path}>
                               {record.file_path}
                             </div>
                           </div>
@@ -559,20 +562,20 @@ export const FileExpiry = () => {
 
                       {/* Type Badge */}
                       <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700/60">
+                        <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-[#06101F] text-[#DCE5F3] border border-[rgba(139,170,215,0.16)]">
                           {record.document_type}
                         </span>
                       </td>
 
                       {/* Relevant Date */}
                       <td className="py-3.5 px-4">
-                        <div className="font-mono text-gray-200 font-semibold">{dateFormatted}</div>
-                        <div className="text-xs text-gray-400 leading-tight">{remainingText}</div>
+                        <div className="font-mono text-white font-bold">{dateFormatted}</div>
+                        <div className="text-xs text-[#7E93B3] leading-tight font-medium mt-0.5">{remainingText}</div>
                       </td>
 
                       {/* Date Type */}
                       <td className="py-3.5 px-4">
-                        <span className="text-xs text-gray-300 font-medium">
+                        <span className="text-xs text-[#DCE5F3] font-medium">
                           {record.date_type}
                         </span>
                       </td>
@@ -593,11 +596,11 @@ export const FileExpiry = () => {
                               Manual
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-gray-800 text-gray-400 border border-gray-700">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[#0E1D35] text-[#A7B7D0] border border-[rgba(139,170,215,0.14)]">
                               Rule-based
                             </span>
                           )}
-                          <span className="text-[10px] text-gray-500 font-mono">
+                          <span className="text-[10px] text-[#7E93B3] font-mono">
                             {Math.round((record.confidence || 0.85) * 100)}% conf
                           </span>
                         </div>
@@ -616,8 +619,8 @@ export const FileExpiry = () => {
                           title={record.reminder_enabled ? `Reminder set (${record.reminder_days_before} days before)` : 'Reminder disabled'}
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
                             record.reminder_enabled
-                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 hover:bg-blue-500/20'
-                              : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'
+                              ? 'bg-[#3478F6]/15 text-[#38BDF8] border-[#3478F6]/40 hover:bg-[#3478F6]/25'
+                              : 'bg-[#0E1D35] text-[#7E93B3] border-[rgba(139,170,215,0.12)] hover:text-white'
                           }`}
                         >
                           {record.reminder_enabled ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
@@ -642,7 +645,7 @@ export const FileExpiry = () => {
                             type="button"
                             onClick={() => openEditModal(record)}
                             title="Edit Date Details"
-                            className="p-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 border border-gray-700 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg bg-[#0E1D35] text-[#A7B7D0] hover:text-white hover:bg-[#162746] border border-[rgba(139,170,215,0.16)] transition-colors cursor-pointer"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
@@ -650,7 +653,7 @@ export const FileExpiry = () => {
                             type="button"
                             onClick={(e) => handleOpenFile(e, record.file_path)}
                             title="Open Document"
-                            className="p-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 border border-gray-700 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg bg-[#0E1D35] text-[#A7B7D0] hover:text-white hover:bg-[#162746] border border-[rgba(139,170,215,0.16)] transition-colors cursor-pointer"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </button>
@@ -667,19 +670,19 @@ export const FileExpiry = () => {
 
       {/* Edit / Detail Modal */}
       {isModalOpen && selectedRecord && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0f1422] border border-gray-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl space-y-0">
+        <div className="fixed inset-0 z-50 bg-[#06101F]/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0A1629] border border-[rgba(139,170,215,0.2)] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl space-y-0">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-[rgba(139,170,215,0.14)] flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-[#3478F6]/15 border border-[#3478F6]/30 text-[#38BDF8] flex items-center justify-center">
                   <CalendarClock className="w-4 h-4" />
                 </div>
                 <h3 className="text-base font-bold text-white">Date Details & Settings</h3>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-[#7E93B3] hover:text-white hover:bg-[#0E1D35] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -688,38 +691,38 @@ export const FileExpiry = () => {
             {/* Modal Body */}
             <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
               {/* Document File Info */}
-              <div className="p-3.5 rounded-xl bg-gray-900/80 border border-gray-800 space-y-1">
-                <div className="text-xs text-gray-400 font-medium">Document File</div>
-                <div className="text-sm font-semibold text-gray-200 truncate">{selectedRecord.file_name}</div>
-                <div className="text-xs text-gray-500 font-mono truncate">{selectedRecord.file_path}</div>
+              <div className="p-3.5 rounded-xl bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)] space-y-1">
+                <div className="text-xs text-[#7E93B3] font-semibold uppercase tracking-wider font-mono">Document File</div>
+                <div className="text-sm font-semibold text-white truncate">{selectedRecord.file_name}</div>
+                <div className="text-xs text-[#A7B7D0] font-mono truncate">{selectedRecord.file_path}</div>
               </div>
 
               {/* Form Controls Grid */}
               <div className="grid grid-cols-2 gap-3">
                 {/* Document Type */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 mb-1">Document Type</label>
+                  <label className="block text-xs font-semibold text-[#DCE5F3] mb-1">Document Type</label>
                   <select
                     value={editForm.document_type}
                     onChange={(e) => setEditForm({ ...editForm, document_type: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-xl text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-[#06101F] border border-[rgba(139,170,215,0.16)] rounded-xl text-sm text-[#DCE5F3] focus:outline-none focus:border-[#3478F6]"
                   >
                     {documentTypes.filter(t => t !== 'All').map((dt) => (
-                      <option key={dt} value={dt}>{dt}</option>
+                      <option key={dt} value={dt} className="bg-[#0A1629] text-[#DCE5F3]">{dt}</option>
                     ))}
                   </select>
                 </div>
 
                 {/* Date Type */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 mb-1">Date Type</label>
+                  <label className="block text-xs font-semibold text-[#DCE5F3] mb-1">Date Type</label>
                   <select
                     value={editForm.date_type}
                     onChange={(e) => setEditForm({ ...editForm, date_type: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-xl text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-[#06101F] border border-[rgba(139,170,215,0.16)] rounded-xl text-sm text-[#DCE5F3] focus:outline-none focus:border-[#3478F6]"
                   >
                     {['Expiry', 'Renewal', 'Due', 'Issue', 'Start', 'Other'].map((dt) => (
-                      <option key={dt} value={dt}>{dt}</option>
+                      <option key={dt} value={dt} className="bg-[#0A1629] text-[#DCE5F3]">{dt}</option>
                     ))}
                   </select>
                 </div>
@@ -727,42 +730,42 @@ export const FileExpiry = () => {
 
               {/* Extracted Date Picker */}
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1">Tracked Date</label>
+                <label className="block text-xs font-semibold text-[#DCE5F3] mb-1">Tracked Date</label>
                 <input
                   type="date"
                   value={editForm.extracted_date}
                   onChange={(e) => setEditForm({ ...editForm, extracted_date: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-xl text-sm text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
+                  className="w-full px-3 py-2 bg-[#06101F] border border-[rgba(139,170,215,0.16)] rounded-xl text-sm text-[#DCE5F3] focus:outline-none focus:border-[#3478F6] font-mono"
                 />
               </div>
 
               {/* Reminder Settings */}
-              <div className="p-3.5 rounded-xl bg-gray-900/60 border border-gray-800 space-y-3">
+              <div className="p-3.5 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Bell className="w-4 h-4 text-blue-400" />
-                    <span className="text-xs font-semibold text-gray-200">Enable Reminders</span>
+                    <Bell className="w-4 h-4 text-[#38BDF8]" />
+                    <span className="text-xs font-semibold text-white">Enable Reminders</span>
                   </div>
                   <input
                     type="checkbox"
                     checked={editForm.reminder_enabled}
                     onChange={(e) => setEditForm({ ...editForm, reminder_enabled: e.target.checked })}
-                    className="w-4 h-4 rounded bg-gray-950 border-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    className="w-4 h-4 rounded bg-[#06101F] border-[rgba(139,170,215,0.3)] text-[#3478F6] focus:ring-0 cursor-pointer"
                   />
                 </div>
 
                 {editForm.reminder_enabled && (
-                  <div className="flex items-center justify-between pt-2 border-t border-gray-800/60">
-                    <label className="text-xs text-gray-400">Reminder Timing</label>
+                  <div className="flex items-center justify-between pt-2 border-t border-[rgba(139,170,215,0.12)]">
+                    <label className="text-xs text-[#A7B7D0]">Reminder Timing</label>
                     <select
                       value={editForm.reminder_days_before}
                       onChange={(e) => setEditForm({ ...editForm, reminder_days_before: Number(e.target.value) })}
-                      className="px-2.5 py-1 bg-gray-950 border border-gray-800 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+                      className="px-2.5 py-1 bg-[#06101F] border border-[rgba(139,170,215,0.16)] rounded-lg text-xs text-[#DCE5F3] focus:outline-none focus:border-[#3478F6] cursor-pointer"
                     >
-                      <option value={30}>30 days before</option>
-                      <option value={14}>14 days before</option>
-                      <option value={7}>7 days before</option>
-                      <option value={1}>1 day before</option>
+                      <option value={30} className="bg-[#0A1629]">30 days before</option>
+                      <option value={14} className="bg-[#0A1629]">14 days before</option>
+                      <option value={7} className="bg-[#0A1629]">7 days before</option>
+                      <option value={1} className="bg-[#0A1629]">1 day before</option>
                     </select>
                   </div>
                 )}
@@ -770,11 +773,11 @@ export const FileExpiry = () => {
 
               {/* AI Understanding & Reasoning */}
               {selectedRecord.reason && (
-                <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1">
-                  <div className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-400" /> AI Understanding & Context
+                <div className="p-3.5 rounded-xl bg-[#3478F6]/10 border border-[#3478F6]/25 space-y-1">
+                  <div className="text-[11px] font-semibold text-[#38BDF8] uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                    <Sparkles className="w-3.5 h-3.5 text-[#38BDF8]" /> AI Understanding & Context
                   </div>
-                  <p className="text-xs text-blue-200 leading-relaxed font-sans">
+                  <p className="text-xs text-[#93C5FD] leading-relaxed">
                     {selectedRecord.reason}
                   </p>
                 </div>
@@ -782,22 +785,22 @@ export const FileExpiry = () => {
 
               {/* Original Context Snippet */}
               {selectedRecord.original_text && (
-                <div className="p-3.5 rounded-xl bg-gray-950 border border-gray-800/80 space-y-1">
-                  <div className="flex items-center justify-between text-[11px] text-gray-400 font-semibold uppercase tracking-wider">
+                <div className="p-3.5 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.14)] space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-[#7E93B3] font-semibold uppercase tracking-wider font-mono">
                     <span>Extracted Evidence</span>
-                    <span className="text-blue-400 font-mono">
+                    <span className="text-[#38BDF8]">
                       {selectedRecord.extraction_method === 'ollama' ? 'Ollama AI' : 'Rule-based'} • {Math.round((selectedRecord.confidence || 0.85) * 100)}% Confidence
                     </span>
                   </div>
-                  <p className="text-xs text-gray-300 font-mono italic leading-relaxed bg-gray-900/60 p-2 rounded-lg border border-gray-800">
+                  <p className="text-xs text-[#DCE5F3] font-mono italic leading-relaxed bg-[#0A1629] p-2.5 rounded-lg border border-[rgba(139,170,215,0.1)]">
                     "{selectedRecord.original_text}"
                   </p>
                 </div>
               )}
 
               {/* Confirmation Status */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-gray-900/40 border border-gray-800">
-                <span className="text-xs text-gray-400">Verification State</span>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)]">
+                <span className="text-xs text-[#A7B7D0]">Verification State</span>
                 <button
                   type="button"
                   onClick={() => setEditForm({ ...editForm, user_confirmed: !editForm.user_confirmed })}
@@ -813,12 +816,12 @@ export const FileExpiry = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-gray-800 bg-gray-950/60 flex items-center justify-between gap-3">
+            <div className="px-6 py-4 border-t border-[rgba(139,170,215,0.14)] bg-[#06101F]/80 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={handleDeleteRecord}
                 disabled={modalSaving}
-                className="px-3 py-2 rounded-xl text-xs font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors cursor-pointer flex items-center gap-1.5"
+                className="px-3 py-2 rounded-xl text-xs font-medium text-red-400 hover:bg-red-500/10 border border-red-500/25 transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Remove
               </button>
@@ -829,7 +832,7 @@ export const FileExpiry = () => {
                   onClick={(e) => handleReanalyzeRecord(e, selectedRecord.id)}
                   disabled={modalSaving}
                   title="Re-run Ollama AI + Rule-based detection"
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-colors cursor-pointer flex items-center gap-1.5"
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/25 transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   <Sparkles className={`w-3.5 h-3.5 ${modalSaving ? 'animate-spin' : ''}`} /> Re-analyze AI
                 </button>
@@ -837,7 +840,7 @@ export const FileExpiry = () => {
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   disabled={modalSaving}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-[#A7B7D0] hover:text-white hover:bg-[#0E1D35] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -845,7 +848,7 @@ export const FileExpiry = () => {
                   type="button"
                   onClick={handleSaveModal}
                   disabled={modalSaving}
-                  className="px-4 py-2 rounded-xl text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer shadow-lg shadow-blue-600/20 flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl text-xs font-medium bg-[#3478F6] hover:bg-[#2563EB] text-white transition-colors cursor-pointer shadow-lg shadow-blue-900/30 border border-blue-400/20 flex items-center gap-1.5"
                 >
                   {modalSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FileCheck className="w-3.5 h-3.5" />}
                   Save Changes

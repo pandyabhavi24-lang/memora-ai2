@@ -39,19 +39,19 @@ class PDFStudioErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="glass-panel p-12 rounded-2xl border border-red-500/30 bg-slate-900/90 text-center flex flex-col items-center justify-center my-6 space-y-4 shadow-xl">
+        <div className="p-12 rounded-2xl border border-red-500/30 bg-[#0A1629]/95 text-center flex flex-col items-center justify-center my-6 space-y-4 shadow-xl">
           <div className="w-16 h-16 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400">
             <FileText className="w-8 h-8" />
           </div>
           <div className="max-w-md space-y-1">
-            <h3 className="text-lg font-bold text-white">Display Error in PDF Studio</h3>
-            <p className="text-xs text-slate-400">
+            <h3 className="text-lg font-bold text-[#F4F7FF]">Display Error in PDF Studio</h3>
+            <p className="text-xs text-[#A7B7D0]">
               An unexpected display error occurred in the PDF Studio shell. Click below to safely reset the view.
             </p>
           </div>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#3478F6] hover:bg-[#4B91FF] text-white font-semibold text-xs shadow-lg transition-all cursor-pointer"
           >
             <span>Reset & Reload PDF Studio</span>
           </button>

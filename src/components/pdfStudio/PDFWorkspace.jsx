@@ -308,17 +308,17 @@ export const PDFWorkspace = ({
   }, [activeSelectedId, editingTextId, handleDelete]);
 
   return (
-    <main ref={workspaceContainerRef} className="flex-1 flex flex-col items-center justify-start glass-panel rounded-2xl p-6 border border-gray-800/80 bg-gray-950/90 backdrop-blur-md overflow-auto relative custom-scrollbar select-none">
+    <main ref={workspaceContainerRef} className="flex-1 flex flex-col items-center justify-start rounded-2xl p-6 border border-[rgba(139,170,215,0.14)] bg-[#06101F]/90 backdrop-blur-md overflow-auto relative custom-scrollbar select-none">
       {/* Viewport Top Info Bar */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-900/90 border border-gray-800/80 backdrop-blur-md text-xs text-gray-300 font-mono shadow-lg">
-        <span className="flex items-center gap-1.5 text-blue-400 font-semibold">
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0A1629]/90 border border-[rgba(139,170,215,0.14)] backdrop-blur-md text-xs text-[#A7B7D0] font-mono shadow-lg">
+        <span className="flex items-center gap-1.5 text-[#4B91FF] font-semibold">
           {viewMode === 'view' && <Eye className="w-3.5 h-3.5" />}
           {viewMode === 'edit' && <Edit3 className="w-3.5 h-3.5" />}
           <span className="capitalize">{viewMode} Mode</span>
         </span>
-        <span className="text-gray-700">|</span>
-        <span>Page {activePageIndex + 1} of {totalPages}</span>
-        <span className="text-gray-700">|</span>
+        <span className="text-[#71839E]/40">|</span>
+        <span className="text-[#F4F7FF]">Page {activePageIndex + 1} of {totalPages}</span>
+        <span className="text-[#71839E]/40">|</span>
         <span>{pageSize} ({orientation}) • {dimensions.width}×{dimensions.height} pt</span>
       </div>
 
