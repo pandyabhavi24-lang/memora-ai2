@@ -474,10 +474,10 @@ export const StorageOptimization = () => {
             </div>
             {loadingFiles
               ? <div className="flex items-center justify-center gap-2 py-10 text-[#71839E] text-sm"><Loader2 className="w-4 h-4 animate-spin text-[#4B91FF]" /> Loading…</div>
-              : optimizableLargeFiles.length === 0
-                ? <div className="py-10 text-center text-[#71839E] text-sm">No optimizable files above {minSizeMb} MB.</div>
+              : largeFiles.length === 0
+                ? <div className="py-10 text-center text-[#71839E] text-sm">No large files above {minSizeMb} MB.</div>
                 : <div className="divide-y divide-[rgba(139,170,215,0.1)] max-h-[380px] overflow-y-auto custom-scrollbar">
-                    {optimizableLargeFiles.map(file => {
+                    {largeFiles.map(file => {
                       const isSel = selectedFileIds.includes(file.id);
                       return (
                         <div key={file.id}
