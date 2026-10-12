@@ -291,6 +291,12 @@ class DuplicateGroupResponse(BaseModel):
     similarity: float
     detectionType: str
     status: str
+    is_hash_match: bool = False
+    is_text_match: bool = False
+    lexical_similarity: Optional[float] = None
+    semantic_similarity: Optional[float] = None
+    reason: Optional[str] = None
+
 
 
 class FileOperationResponse(BaseModel):
@@ -526,6 +532,11 @@ class PDFWorkspaceElementSchema(BaseModel):
     font_style: Optional[str] = None
     textAlign: Optional[str] = "left"  # 'left' | 'center' | 'right' | 'justify'
     text_align: Optional[str] = None
+    align: Optional[str] = None
+    isBold: Optional[bool] = None
+    isItalic: Optional[bool] = None
+    isUnderline: Optional[bool] = None
+    textDecoration: Optional[str] = None
     color: Optional[str] = "#1e293b"
     lineHeight: Optional[float] = 1.3
     # Image properties

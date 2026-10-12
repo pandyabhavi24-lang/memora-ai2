@@ -29,8 +29,19 @@ export const PDFTextFormattingBar = ({
     { name: 'Purple', hex: '#9333ea' }
   ];
 
+  // Normalized formatting state resolution
+  const isBold = Boolean(selectedText.isBold || selectedText.fontWeight === 'bold');
+  const isItalic = Boolean(selectedText.isItalic || selectedText.fontStyle === 'italic');
+  const isUnderline = Boolean(selectedText.isUnderline || selectedText.textDecoration === 'underline');
+  const currentAlign = (selectedText.align || selectedText.textAlign || 'left').toLowerCase();
+  const currentSize = parseInt(selectedText.fontSize || selectedText.font_size || 16, 10) || 16;
+  const currentColor = (selectedText.color || '#1e293b').toLowerCase();
+
   return (
-    <div className="flex flex-wrap items-center gap-2 p-2 rounded-xl glass-panel border border-blue-500/40 bg-gray-950/95 shadow-2xl backdrop-blur-md select-none text-xs text-gray-200 animate-fadeIn">
+    <div 
+      onMouseDown={(e) => e.preventDefault()}
+      className="flex flex-wrap items-center gap-2 p-2 rounded-xl glass-panel border border-blue-500/40 bg-gray-950/95 shadow-2xl backdrop-blur-md select-none text-xs text-gray-200 animate-fadeIn"
+    >
       <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-400 font-semibold font-mono text-[11px]">
         <Type className="w-3.5 h-3.5" />
         <span>Text Formatting</span>
@@ -42,8 +53,12 @@ export const PDFTextFormattingBar = ({
       <div className="flex items-center gap-1">
         <label className="text-[10px] text-gray-400">Size:</label>
         <select
-          value={selectedText.fontSize || 16}
-          onChange={(e) => onUpdateText({ fontSize: parseInt(e.target.value) })}
+          value={currentSize}
+          onMouseDown={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            const sz = parseInt(e.target.value, 10) || 16;
+            onUpdateText({ fontSize: sz, font_size: sz });
+          }}
           className="bg-gray-900 border border-gray-800 rounded px-1.5 py-1 text-xs font-mono text-gray-200"
         >
           {fontSizes.map(size => (
@@ -57,9 +72,14 @@ export const PDFTextFormattingBar = ({
       {/* Style Toggles: Bold, Italic, Underline */}
       <div className="flex items-center gap-0.5 bg-gray-900 p-0.5 rounded border border-gray-800">
         <button
-          onClick={() => onUpdateText({ isBold: !selectedText.isBold })}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onUpdateText({ 
+            isBold: !isBold, 
+            fontWeight: !isBold ? 'bold' : 'normal' 
+          })}
           className={`p-1 rounded cursor-pointer transition-colors ${
-            selectedText.isBold ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+            isBold ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
           title="Bold"
           aria-label="Toggle Bold Text"
@@ -68,9 +88,14 @@ export const PDFTextFormattingBar = ({
         </button>
 
         <button
-          onClick={() => onUpdateText({ isItalic: !selectedText.isItalic })}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onUpdateText({ 
+            isItalic: !isItalic, 
+            fontStyle: !isItalic ? 'italic' : 'normal' 
+          })}
           className={`p-1 rounded cursor-pointer transition-colors ${
-            selectedText.isItalic ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+            isItalic ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
           title="Italic"
           aria-label="Toggle Italic Text"
@@ -79,9 +104,14 @@ export const PDFTextFormattingBar = ({
         </button>
 
         <button
-          onClick={() => onUpdateText({ isUnderline: !selectedText.isUnderline })}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onUpdateText({ 
+            isUnderline: !isUnderline, 
+            textDecoration: !isUnderline ? 'underline' : 'none' 
+          })}
           className={`p-1 rounded cursor-pointer transition-colors ${
-            selectedText.isUnderline ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+            isUnderline ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
           title="Underline"
           aria-label="Toggle Underline Text"
@@ -95,9 +125,11 @@ export const PDFTextFormattingBar = ({
       {/* Alignment Controls */}
       <div className="flex items-center gap-0.5 bg-gray-900 p-0.5 rounded border border-gray-800">
         <button
-          onClick={() => onUpdateText({ align: 'left' })}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onUpdateText({ align: 'left', textAlign: 'left' })}
           className={`p-1 rounded cursor-pointer transition-colors ${
-            selectedText.align === 'left' || !selectedText.align ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+            currentAlign === 'left' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
           title="Align Left"
           aria-label="Align Left"
@@ -106,9 +138,11 @@ export const PDFTextFormattingBar = ({
         </button>
 
         <button
-          onClick={() => onUpdateText({ align: 'center' })}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onUpdateText({ align: 'center', textAlign: 'center' })}
           className={`p-1 rounded cursor-pointer transition-colors ${
-            selectedText.align === 'center' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+            currentAlign === 'center' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
           title="Align Center"
           aria-label="Align Center"
@@ -117,9 +151,11 @@ export const PDFTextFormattingBar = ({
         </button>
 
         <button
-          onClick={() => onUpdateText({ align: 'right' })}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onUpdateText({ align: 'right', textAlign: 'right' })}
           className={`p-1 rounded cursor-pointer transition-colors ${
-            selectedText.align === 'right' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+            currentAlign === 'right' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
           title="Align Right"
           aria-label="Align Right"
@@ -135,10 +171,12 @@ export const PDFTextFormattingBar = ({
         {colorPresets.map((c) => (
           <button
             key={c.hex}
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => onUpdateText({ color: c.hex })}
             style={{ backgroundColor: c.hex }}
             className={`w-4 h-4 rounded-full border cursor-pointer transition-transform ${
-              selectedText.color === c.hex ? 'ring-2 ring-blue-500 scale-110 border-white' : 'border-gray-700 hover:scale-105'
+              currentColor === c.hex.toLowerCase() ? 'ring-2 ring-blue-500 scale-110 border-white' : 'border-gray-700 hover:scale-105'
             }`}
             title={c.name}
             aria-label={`Select Color ${c.name}`}
@@ -150,6 +188,8 @@ export const PDFTextFormattingBar = ({
 
       {/* Delete Text Box */}
       <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={onDeleteText}
         className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded cursor-pointer transition-colors"
         title="Delete Text Box"

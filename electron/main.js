@@ -142,3 +142,75 @@ ipcMain.handle('shell:showItemInFolder', (event, filePath) => {
   if (!filePath) return;
   shell.showItemInFolder(filePath);
 });
+
+ipcMain.handle('shell:openBothAndArrange', async (event, { pathA, pathB }) => {
+  if (!pathA || !pathB) {
+    return { success: false, error: 'Both file paths are required.' };
+  }
+  if (!fs.existsSync(pathA) || !fs.existsSync(pathB)) {
+    return { success: false, error: 'One or both files do not exist on disk.' };
+  }
+
+  // Launch File A
+  const errA = await shell.openPath(pathA);
+  // Stagger slightly so the OS process initializes
+  await new Promise(resolve => setTimeout(resolve, 600));
+  // Launch File B
+  const errB = await shell.openPath(pathB);
+
+  if (errA || errB) {
+    const errMsg = [errA, errB].filter(Boolean).join('; ');
+    return { success: false, error: `Failed to open files: ${errMsg}` };
+  }
+
+  // Windows 50/50 window arrangement
+  if (process.platform === 'win32') {
+    return new Promise((resolve) => {
+      const scriptPath = path.join(__dirname, 'scripts', 'arrangeWindows.ps1');
+      if (!fs.existsSync(scriptPath)) {
+        return resolve({ success: true, arranged: false, message: 'Opened both files.' });
+      }
+
+      const ps = spawn('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        '-PathA', pathA,
+        '-PathB', pathB
+      ]);
+
+      let stdout = '';
+      ps.stdout.on('data', d => { stdout += d.toString(); });
+      ps.on('close', () => {
+        try {
+          const parsed = JSON.parse(stdout.trim());
+          resolve({
+            success: true,
+            arranged: !!parsed.arranged,
+            isSingleInstanceTabbed: !!parsed.isSingleInstanceTabbed,
+            message: parsed.message || 'Opened both files.'
+          });
+        } catch (e) {
+          resolve({
+            success: true,
+            arranged: false,
+            message: 'Opened both files in your default desktop applications.'
+          });
+        }
+      });
+      ps.on('error', () => {
+        resolve({
+          success: true,
+          arranged: false,
+          message: 'Opened both files in your default desktop applications.'
+        });
+      });
+    });
+  }
+
+  return { success: true, arranged: false, message: 'Opened both files in your default desktop applications.' };
+});
+

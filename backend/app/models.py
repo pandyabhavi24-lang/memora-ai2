@@ -179,9 +179,14 @@ class DuplicateGroup(Base):
     group_key = Column(String, unique=True, index=True, nullable=False)
     file_a_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"), nullable=False)
     file_b_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"), nullable=False)
-    detection_type = Column(String, nullable=False)  # exact, similar
-    similarity = Column(Float, nullable=False)  # e.g., 96.0 or 100.0
+    detection_type = Column(String, nullable=False)  # Exact duplicate, Identical text content, Highly similar, Similar content
+    similarity = Column(Float, nullable=False)  # 0.0 to 100.0
     status = Column(String, default="unresolved", index=True)  # unresolved, kept_both, resolved
+    is_hash_match = Column(Boolean, default=False)
+    is_text_match = Column(Boolean, default=False)
+    lexical_similarity = Column(Float, nullable=True)
+    semantic_similarity = Column(Float, nullable=True)
+    reason = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     file_a = relationship("File", foreign_keys=[file_a_id])

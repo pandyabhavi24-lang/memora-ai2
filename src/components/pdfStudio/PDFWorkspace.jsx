@@ -52,6 +52,8 @@ export const PDFWorkspace = ({
 
   // Inline Text Editing State
   const [editingTextId, setEditingTextId] = useState(null);
+  const [activeSelectionRange, setActiveSelectionRange] = useState({ start: 0, end: 0, text: '' });
+  const activeEditorRef = useRef(null);
 
   // Dynamic dimensions based on standard page sizes (Points: 1pt = 1px at 100% zoom)
   const dimensions = {
@@ -135,9 +137,14 @@ export const PDFWorkspace = ({
           height: Math.max(30, (t.fontSize || 16) * 2),
           text: t.text || '',
           fontSize: t.fontSize || 16,
-          fontWeight: t.isBold ? 'bold' : 'normal',
-          fontStyle: t.isItalic ? 'italic' : 'normal',
-          textAlign: t.align || 'left',
+          fontWeight: (t.isBold || t.fontWeight === 'bold') ? 'bold' : 'normal',
+          fontStyle: (t.isItalic || t.fontStyle === 'italic') ? 'italic' : 'normal',
+          textDecoration: (t.isUnderline || t.textDecoration === 'underline') ? 'underline' : 'none',
+          textAlign: t.align || t.textAlign || 'left',
+          align: t.align || t.textAlign || 'left',
+          isBold: Boolean(t.isBold || t.fontWeight === 'bold'),
+          isItalic: Boolean(t.isItalic || t.fontStyle === 'italic'),
+          isUnderline: Boolean(t.isUnderline || t.textDecoration === 'underline'),
           color: t.color || '#1e293b',
           zIndex: 10
         });
@@ -163,6 +170,107 @@ export const PDFWorkspace = ({
   }, [activePage, dimensions.width, dimensions.height]);
 
   const selectedElement = elements.find(e => e.id === activeSelectedId);
+
+  // Synchronized text formatting update handler (handles both element-level and text-range)
+  const handleTextFormattingUpdate = (elementId, updates) => {
+    const targetElem = elements.find(e => e.id === elementId);
+    if (!targetElem) return;
+
+    // Check if there is an active text range selected in the text editor
+    const hasSubRange = editingTextId === elementId && 
+      activeSelectionRange && 
+      activeSelectionRange.start !== activeSelectionRange.end &&
+      activeSelectionRange.end <= (targetElem.text || '').length;
+
+    if (hasSubRange) {
+      const fullText = targetElem.text || '';
+      const start = activeSelectionRange.start;
+      const end = activeSelectionRange.end;
+      const selectedSub = fullText.slice(start, end);
+
+      let newText = fullText;
+      let handledRange = false;
+
+      if (updates.isBold !== undefined) {
+        handledRange = true;
+        if (selectedSub.startsWith('<b>') && selectedSub.endsWith('</b>')) {
+          const unwrapped = selectedSub.slice(3, -4);
+          newText = fullText.slice(0, start) + unwrapped + fullText.slice(end);
+        } else if (updates.isBold) {
+          newText = fullText.slice(0, start) + `<b>${selectedSub}</b>` + fullText.slice(end);
+        } else {
+          const unwrapped = selectedSub.replace(/<\/?b>/gi, '');
+          newText = fullText.slice(0, start) + unwrapped + fullText.slice(end);
+        }
+      }
+
+      if (updates.isItalic !== undefined) {
+        handledRange = true;
+        if (selectedSub.startsWith('<i>') && selectedSub.endsWith('</i>')) {
+          const unwrapped = selectedSub.slice(3, -4);
+          newText = fullText.slice(0, start) + unwrapped + fullText.slice(end);
+        } else if (updates.isItalic) {
+          newText = fullText.slice(0, start) + `<i>${selectedSub}</i>` + fullText.slice(end);
+        } else {
+          const unwrapped = selectedSub.replace(/<\/?i>/gi, '');
+          newText = fullText.slice(0, start) + unwrapped + fullText.slice(end);
+        }
+      }
+
+      if (updates.isUnderline !== undefined) {
+        handledRange = true;
+        if (selectedSub.startsWith('<u>') && selectedSub.endsWith('</u>')) {
+          const unwrapped = selectedSub.slice(3, -4);
+          newText = fullText.slice(0, start) + unwrapped + fullText.slice(end);
+        } else if (updates.isUnderline) {
+          newText = fullText.slice(0, start) + `<u>${selectedSub}</u>` + fullText.slice(end);
+        } else {
+          const unwrapped = selectedSub.replace(/<\/?u>/gi, '');
+          newText = fullText.slice(0, start) + unwrapped + fullText.slice(end);
+        }
+      }
+
+      if (updates.color !== undefined) {
+        handledRange = true;
+        newText = fullText.slice(0, start) + `<font color="${updates.color}">${selectedSub.replace(/<\/?font[^>]*>/gi, '')}</font>` + fullText.slice(end);
+      }
+
+      if (handledRange) {
+        handleUpdate(elementId, { 
+          text: newText,
+          ...(updates.align ? { align: updates.align, textAlign: updates.align } : {})
+        });
+        return;
+      }
+    }
+
+    // Apply to whole element
+    const normalized = { ...updates };
+    if (updates.isBold !== undefined) {
+      normalized.fontWeight = updates.isBold ? 'bold' : 'normal';
+    } else if (updates.fontWeight !== undefined) {
+      normalized.isBold = updates.fontWeight === 'bold';
+    }
+    if (updates.isItalic !== undefined) {
+      normalized.fontStyle = updates.isItalic ? 'italic' : 'normal';
+    } else if (updates.fontStyle !== undefined) {
+      normalized.isItalic = updates.fontStyle === 'italic';
+    }
+    if (updates.isUnderline !== undefined) {
+      normalized.textDecoration = updates.isUnderline ? 'underline' : 'none';
+    } else if (updates.textDecoration !== undefined) {
+      normalized.isUnderline = updates.textDecoration === 'underline';
+    }
+    if (updates.align !== undefined) {
+      normalized.textAlign = updates.align;
+    } else if (updates.textAlign !== undefined) {
+      normalized.align = updates.textAlign;
+    }
+    if (updates.fontSize !== undefined) {
+      normalized.font_size = updates.fontSize;
+    }
+    handleUpdate(elementId, normalized);
+  };
 
   // Handle Page Canvas Click / Double-Click
   const handlePageCanvasClick = (e) => {
@@ -327,7 +435,7 @@ export const PDFWorkspace = ({
         <div className="absolute top-4 right-4 z-30 animate-fadeIn">
           <PDFTextFormattingBar
             selectedText={selectedElement}
-            onUpdateText={(updates) => handleUpdate(selectedElement.id, updates)}
+            onUpdateText={(updates) => handleTextFormattingUpdate(selectedElement.id, updates)}
             onDeleteText={() => handleDelete(selectedElement.id)}
           />
         </div>
@@ -490,15 +598,38 @@ export const PDFWorkspace = ({
                   <div className="w-full h-full relative">
                     {isEditing ? (
                       <textarea
+                        ref={activeEditorRef}
                         autoFocus
                         value={elem.text || ''}
                         onChange={(e) => handleUpdate(elem.id, { text: e.target.value })}
+                        onSelect={(e) => {
+                          setActiveSelectionRange({
+                            start: e.target.selectionStart,
+                            end: e.target.selectionEnd,
+                            text: (elem.text || '').substring(e.target.selectionStart, e.target.selectionEnd)
+                          });
+                        }}
+                        onKeyUp={(e) => {
+                          setActiveSelectionRange({
+                            start: e.target.selectionStart,
+                            end: e.target.selectionEnd,
+                            text: (elem.text || '').substring(e.target.selectionStart, e.target.selectionEnd)
+                          });
+                        }}
+                        onMouseUp={(e) => {
+                          setActiveSelectionRange({
+                            start: e.target.selectionStart,
+                            end: e.target.selectionEnd,
+                            text: (elem.text || '').substring(e.target.selectionStart, e.target.selectionEnd)
+                          });
+                        }}
                         onBlur={() => setEditingTextId(null)}
                         style={{
-                          fontSize: `${elem.fontSize || 14}px`,
-                          fontWeight: elem.fontWeight || 'normal',
-                          fontStyle: elem.fontStyle || 'normal',
-                          textAlign: elem.textAlign || 'left',
+                          fontSize: `${elem.fontSize || elem.font_size || 14}px`,
+                          fontWeight: (elem.isBold || elem.fontWeight === 'bold') ? 'bold' : 'normal',
+                          fontStyle: (elem.isItalic || elem.fontStyle === 'italic') ? 'italic' : 'normal',
+                          textDecoration: (elem.isUnderline || elem.textDecoration === 'underline') ? 'underline' : 'none',
+                          textAlign: elem.textAlign || elem.align || 'left',
                           color: elem.color || '#1e293b',
                           lineHeight: elem.lineHeight || 1.3
                         }}
@@ -508,16 +639,23 @@ export const PDFWorkspace = ({
                     ) : (
                       <div
                         style={{
-                          fontSize: `${elem.fontSize || 14}px`,
-                          fontWeight: elem.fontWeight || 'normal',
-                          fontStyle: elem.fontStyle || 'normal',
-                          textAlign: elem.textAlign || 'left',
+                          fontSize: `${elem.fontSize || elem.font_size || 14}px`,
+                          fontWeight: (elem.isBold || elem.fontWeight === 'bold') ? 'bold' : 'normal',
+                          fontStyle: (elem.isItalic || elem.fontStyle === 'italic') ? 'italic' : 'normal',
+                          textDecoration: (elem.isUnderline || elem.textDecoration === 'underline') ? 'underline' : 'none',
+                          textAlign: elem.textAlign || elem.align || 'left',
                           color: elem.color || '#1e293b',
                           lineHeight: elem.lineHeight || 1.3
                         }}
                         className="w-full h-full p-1 whitespace-pre-wrap break-words font-sans cursor-text leading-tight"
                       >
-                        {elem.text || (
+                        {elem.text ? (
+                          elem.text.includes('<') && elem.text.includes('>') ? (
+                            <span dangerouslySetInnerHTML={{ __html: elem.text }} />
+                          ) : (
+                            elem.text
+                          )
+                        ) : (
                           <span className="text-slate-400 italic">Double-click to type text...</span>
                         )}
                       </div>

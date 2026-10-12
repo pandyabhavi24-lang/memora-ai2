@@ -356,105 +356,141 @@ export const PDFPropertiesPanel = ({
               </div>
             ) : isTextSelected ? (
               /* CONTEXTUAL TEXT PROPERTIES */
-              <div className="p-3.5 rounded-xl bg-[#3478F6]/10 border border-[#3478F6]/30 space-y-3">
-                <div className="flex items-center justify-between font-semibold text-[#4B91FF]">
-                  <span className="flex items-center gap-1.5">
-                    <Type className="w-4 h-4 text-[#4B91FF]" />
-                    <span>Text Properties</span>
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => onDeleteText(selectedTextObj.id)}
-                      className="p-1 text-red-400 hover:text-red-300 rounded hover:bg-red-500/10 cursor-pointer"
-                      title="Delete Text Box"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+              (() => {
+                const isBold = Boolean(selectedTextObj.isBold || selectedTextObj.fontWeight === 'bold');
+                const isItalic = Boolean(selectedTextObj.isItalic || selectedTextObj.fontStyle === 'italic');
+                const isUnderline = Boolean(selectedTextObj.isUnderline || selectedTextObj.textDecoration === 'underline');
+                const currentAlign = (selectedTextObj.align || selectedTextObj.textAlign || 'left').toLowerCase();
+                const currentSize = parseInt(selectedTextObj.fontSize || selectedTextObj.font_size || 16, 10) || 16;
+                const currentColor = (selectedTextObj.color || '#1e293b').toLowerCase();
 
-                {/* Font Size & Alignment */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[#A7B7D0] text-[11px] mb-1">Font Size</label>
-                    <select
-                      value={selectedTextObj.fontSize || 16}
-                      onChange={(e) => onUpdateText(selectedTextObj.id, { fontSize: parseInt(e.target.value) })}
-                      className="w-full bg-[#06101F] border border-[rgba(139,170,215,0.18)] rounded-lg p-1.5 text-xs text-[#F4F7FF]"
-                    >
-                      {fontSizes.map(sz => (
-                        <option key={sz} value={sz}>{sz} pt</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[#A7B7D0] text-[11px] mb-1">Align</label>
-                    <div className="flex items-center gap-0.5 bg-[#06101F] p-1 rounded-lg border border-[rgba(139,170,215,0.18)]">
-                      {['left', 'center', 'right'].map(align => (
+                return (
+                  <div className="p-3.5 rounded-xl bg-[#3478F6]/10 border border-[#3478F6]/30 space-y-3">
+                    <div className="flex items-center justify-between font-semibold text-[#4B91FF]">
+                      <span className="flex items-center gap-1.5">
+                        <Type className="w-4 h-4 text-[#4B91FF]" />
+                        <span>Text Properties</span>
+                      </span>
+                      <div className="flex items-center gap-1">
                         <button
-                          key={align}
-                          onClick={() => onUpdateText(selectedTextObj.id, { align })}
-                          className={`flex-1 py-1 rounded capitalize text-[10px] cursor-pointer ${
-                            (selectedTextObj.align || 'left') === align ? 'bg-[#3478F6] text-white' : 'text-[#71839E]'
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => onDeleteText(selectedTextObj.id)}
+                          className="p-1 text-red-400 hover:text-red-300 rounded hover:bg-red-500/10 cursor-pointer"
+                          title="Delete Text Box"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Font Size & Alignment */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[#A7B7D0] text-[11px] mb-1">Font Size</label>
+                        <select
+                          value={currentSize}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const sz = parseInt(e.target.value, 10) || 16;
+                            onUpdateText(selectedTextObj.id, { fontSize: sz, font_size: sz });
+                          }}
+                          className="w-full bg-[#06101F] border border-[rgba(139,170,215,0.18)] rounded-lg p-1.5 text-xs text-[#F4F7FF]"
+                        >
+                          {fontSizes.map(sz => (
+                            <option key={sz} value={sz}>{sz} pt</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[#A7B7D0] text-[11px] mb-1">Align</label>
+                        <div className="flex items-center gap-0.5 bg-[#06101F] p-1 rounded-lg border border-[rgba(139,170,215,0.18)]">
+                          {['left', 'center', 'right'].map(align => (
+                            <button
+                              key={align}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => onUpdateText(selectedTextObj.id, { align, textAlign: align })}
+                              className={`flex-1 py-1 rounded capitalize text-[10px] cursor-pointer ${
+                                currentAlign === align ? 'bg-[#3478F6] text-white' : 'text-[#71839E]'
+                              }`}
+                            >
+                              {align[0].toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Styling Toggles */}
+                    <div>
+                      <label className="block text-[#A7B7D0] text-[11px] mb-1">Typography Style</label>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => onUpdateText(selectedTextObj.id, { 
+                            isBold: !isBold, 
+                            fontWeight: !isBold ? 'bold' : 'normal' 
+                          })}
+                          className={`flex-1 py-1.5 rounded-lg border text-center font-bold text-xs cursor-pointer ${
+                            isBold ? 'bg-[#3478F6] text-white border-[#3478F6]' : 'bg-[#06101F] text-[#A7B7D0] border-[rgba(139,170,215,0.18)]'
                           }`}
                         >
-                          {align[0].toUpperCase()}
+                          B
                         </button>
-                      ))}
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => onUpdateText(selectedTextObj.id, { 
+                            isItalic: !isItalic, 
+                            fontStyle: !isItalic ? 'italic' : 'normal' 
+                          })}
+                          className={`flex-1 py-1.5 rounded-lg border text-center italic text-xs cursor-pointer ${
+                            isItalic ? 'bg-[#3478F6] text-white border-[#3478F6]' : 'bg-[#06101F] text-[#A7B7D0] border-[rgba(139,170,215,0.18)]'
+                          }`}
+                        >
+                          I
+                        </button>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => onUpdateText(selectedTextObj.id, { 
+                            isUnderline: !isUnderline, 
+                            textDecoration: !isUnderline ? 'underline' : 'none' 
+                          })}
+                          className={`flex-1 py-1.5 rounded-lg border text-center underline text-xs cursor-pointer ${
+                            isUnderline ? 'bg-[#3478F6] text-white border-[#3478F6]' : 'bg-[#06101F] text-[#A7B7D0] border-[rgba(139,170,215,0.18)]'
+                          }`}
+                        >
+                          U
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Text Color Swatches */}
+                    <div>
+                      <label className="block text-[#A7B7D0] text-[11px] mb-1">Text Color</label>
+                      <div className="flex items-center gap-1.5">
+                        {colorPresets.map(c => (
+                          <button
+                            key={c.hex}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => onUpdateText(selectedTextObj.id, { color: c.hex })}
+                            style={{ backgroundColor: c.hex }}
+                            className={`w-5 h-5 rounded-full border cursor-pointer transition-transform ${
+                              currentColor === c.hex.toLowerCase() ? 'ring-2 ring-[#4B91FF] scale-110 border-white' : 'border-gray-700'
+                            }`}
+                            title={c.name}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Styling Toggles */}
-                <div>
-                  <label className="block text-[#A7B7D0] text-[11px] mb-1">Typography Style</label>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => onUpdateText(selectedTextObj.id, { isBold: !selectedTextObj.isBold })}
-                      className={`flex-1 py-1.5 rounded-lg border text-center font-bold text-xs cursor-pointer ${
-                        selectedTextObj.isBold ? 'bg-[#3478F6] text-white border-[#3478F6]' : 'bg-[#06101F] text-[#A7B7D0] border-[rgba(139,170,215,0.18)]'
-                      }`}
-                    >
-                      B
-                    </button>
-                    <button
-                      onClick={() => onUpdateText(selectedTextObj.id, { isItalic: !selectedTextObj.isItalic })}
-                      className={`flex-1 py-1.5 rounded-lg border text-center italic text-xs cursor-pointer ${
-                        selectedTextObj.isItalic ? 'bg-[#3478F6] text-white border-[#3478F6]' : 'bg-[#06101F] text-[#A7B7D0] border-[rgba(139,170,215,0.18)]'
-                      }`}
-                    >
-                      I
-                    </button>
-                    <button
-                      onClick={() => onUpdateText(selectedTextObj.id, { isUnderline: !selectedTextObj.isUnderline })}
-                      className={`flex-1 py-1.5 rounded-lg border text-center underline text-xs cursor-pointer ${
-                        selectedTextObj.isUnderline ? 'bg-[#3478F6] text-white border-[#3478F6]' : 'bg-[#06101F] text-[#A7B7D0] border-[rgba(139,170,215,0.18)]'
-                      }`}
-                    >
-                      U
-                    </button>
-                  </div>
-                </div>
-
-                {/* Text Color Swatches */}
-                <div>
-                  <label className="block text-[#A7B7D0] text-[11px] mb-1">Text Color</label>
-                  <div className="flex items-center gap-1.5">
-                    {colorPresets.map(c => (
-                      <button
-                        key={c.hex}
-                        onClick={() => onUpdateText(selectedTextObj.id, { color: c.hex })}
-                        style={{ backgroundColor: c.hex }}
-                        className={`w-5 h-5 rounded-full border cursor-pointer transition-transform ${
-                          selectedTextObj.color === c.hex ? 'ring-2 ring-[#4B91FF] scale-110 border-white' : 'border-gray-700'
-                        }`}
-                        title={c.name}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
+                );
+              })()
             ) : (
               <div>
                 <h4 className="text-xs font-semibold text-[#A7B7D0] mb-2 uppercase tracking-wider">

@@ -677,7 +677,8 @@ def run_pdf_studio_tests():
             print(f"  Module 2 Smart Tags generated: {tags}")
 
             # Create an exact duplicate PDF in target folder to verify Module 2 duplicate detection
-            dup_pdf_path = os.path.join(target_folder.path, "Module2_Course_Report_Copy.pdf")
+            dup_test_name = f"Module2_Test_Dup_{uuid.uuid4().hex[:6]}.pdf"
+            dup_pdf_path = os.path.join(target_folder.path, dup_test_name)
             shutil.copy2(pdf_mod2_path, dup_pdf_path)
             dup_file_id = pdf_service.register_file_in_memora_db(db_mod2, dup_pdf_path, folder_id=target_folder.id)
             assert dup_file_id is not None
@@ -687,6 +688,22 @@ def run_pdf_studio_tests():
             dups = duplicate_service.find_and_record_duplicates(db_mod2)
             assert len(dups) >= 1
             print(f"  Verified Module 2 Duplicate Detection found {len(dups)} duplicate group(s).")
+
+            # Clean up test files so they do not pollute live folder or DB
+            try:
+                if os.path.exists(pdf_mod2_path):
+                    os.remove(pdf_mod2_path)
+                if os.path.exists(dup_pdf_path):
+                    os.remove(dup_pdf_path)
+                db_mod2.query(DuplicateGroup).filter(
+                    (DuplicateGroup.file_a_id.in_([file_id_mod2, dup_file_id])) |
+                    (DuplicateGroup.file_b_id.in_([file_id_mod2, dup_file_id]))
+                ).delete(synchronize_session=False)
+                db_mod2.query(File).filter(File.id.in_([file_id_mod2, dup_file_id])).delete(synchronize_session=False)
+                db_mod2.commit()
+                duplicate_service.find_and_record_duplicates(db_mod2)
+            except Exception as e:
+                print(f"Cleanup warning in test 29: {e}")
         finally:
             db_mod2.close()
 

@@ -317,9 +317,15 @@ export const PDFStudio = () => {
       height: 48,
       text: 'Double-click to edit text',
       fontSize: 18,
-      fontWeight: 'bold',
+      font_size: 18,
+      fontWeight: 'normal',
       fontStyle: 'normal',
+      textDecoration: 'none',
       textAlign: 'left',
+      align: 'left',
+      isBold: false,
+      isItalic: false,
+      isUnderline: false,
       color: '#1e293b',
       lineHeight: 1.3,
       zIndex: 10
@@ -341,7 +347,10 @@ export const PDFStudio = () => {
           yPct: (newTextObj.y / 842) * 100,
           widthPct: (newTextObj.width / 595) * 100,
           fontSize: newTextObj.fontSize,
-          isBold: true,
+          isBold: false,
+          isItalic: false,
+          isUnderline: false,
+          align: 'left',
           color: newTextObj.color
         }]
       };
@@ -464,6 +473,34 @@ export const PDFStudio = () => {
 
   const handleUpdateElement = (elementId, updates) => {
     if (!activeDocument) return;
+
+    const normalized = { ...updates };
+    if (updates.isBold !== undefined) {
+      normalized.fontWeight = updates.isBold ? 'bold' : 'normal';
+    } else if (updates.fontWeight !== undefined) {
+      normalized.isBold = updates.fontWeight === 'bold';
+    }
+    if (updates.isItalic !== undefined) {
+      normalized.fontStyle = updates.isItalic ? 'italic' : 'normal';
+    } else if (updates.fontStyle !== undefined) {
+      normalized.isItalic = updates.fontStyle === 'italic';
+    }
+    if (updates.isUnderline !== undefined) {
+      normalized.textDecoration = updates.isUnderline ? 'underline' : 'none';
+    } else if (updates.textDecoration !== undefined) {
+      normalized.isUnderline = updates.textDecoration === 'underline';
+    }
+    if (updates.align !== undefined) {
+      normalized.textAlign = updates.align;
+    } else if (updates.textAlign !== undefined) {
+      normalized.align = updates.textAlign;
+    }
+    if (updates.fontSize !== undefined) {
+      normalized.font_size = updates.fontSize;
+    } else if (updates.font_size !== undefined) {
+      normalized.fontSize = updates.font_size;
+    }
+
     setActiveDocument((prev) => {
       if (!prev) return prev;
       const updatedPages = [...prev.pages];
@@ -472,17 +509,17 @@ export const PDFStudio = () => {
 
       const curElements = curPage.elements || [];
       const updatedElements = curElements.map((el) =>
-        el.id === elementId ? { ...el, ...updates } : el
+        el.id === elementId ? { ...el, ...normalized } : el
       );
 
       const curTextOverlays = curPage.textOverlays || [];
       const updatedTextOverlays = curTextOverlays.map((t) =>
         t.id === elementId ? {
           ...t,
-          ...updates,
-          ...(updates.x ? { xPct: (updates.x / 595) * 100 } : {}),
-          ...(updates.y ? { yPct: (updates.y / 842) * 100 } : {}),
-          ...(updates.width ? { widthPct: (updates.width / 595) * 100 } : {})
+          ...normalized,
+          ...(normalized.x ? { xPct: (normalized.x / 595) * 100 } : {}),
+          ...(normalized.y ? { yPct: (normalized.y / 842) * 100 } : {}),
+          ...(normalized.width ? { widthPct: (normalized.width / 595) * 100 } : {})
         } : t
       );
 

@@ -1970,9 +1970,12 @@ class PdfService:
                                 "height": max(30.0, float(td.get("fontSize", 16.0)) * 2.5),
                                 "text": text_str,
                                 "fontSize": float(td.get("fontSize", 16.0) or 16.0),
-                                "fontWeight": "bold" if td.get("isBold") else "normal",
-                                "fontStyle": "italic" if td.get("isItalic") else "normal",
-                                "textAlign": td.get("align", "left"),
+                                "fontWeight": "bold" if (td.get("isBold") or td.get("fontWeight") == "bold") else "normal",
+                                "fontStyle": "italic" if (td.get("isItalic") or td.get("fontStyle") == "italic") else "normal",
+                                "textAlign": td.get("align") or td.get("textAlign") or "left",
+                                "isBold": bool(td.get("isBold") or td.get("fontWeight") == "bold"),
+                                "isItalic": bool(td.get("isItalic") or td.get("fontStyle") == "italic"),
+                                "isUnderline": bool(td.get("isUnderline") or td.get("textDecoration") == "underline"),
                                 "color": td.get("color", "#1e293b"),
                                 "zIndex": 10
                             })
@@ -2048,14 +2051,16 @@ class PdfService:
                     elif e_type == "text":
                         text_val = str(elem.get("text", "")).strip()
                         if text_val:
+                            import re
                             font_size = float(elem.get("fontSize") or elem.get("font_size") or 14.0)
-                            font_weight = str(elem.get("fontWeight") or elem.get("font_weight") or "normal").lower()
-                            font_style = str(elem.get("fontStyle") or elem.get("font_style") or "normal").lower()
-                            text_align_str = str(elem.get("textAlign") or elem.get("text_align") or "left").lower()
+                            font_weight = str(elem.get("fontWeight") or elem.get("font_weight") or ("bold" if elem.get("isBold") else "normal")).lower()
+                            font_style = str(elem.get("fontStyle") or elem.get("font_style") or ("italic" if elem.get("isItalic") else "normal")).lower()
+                            text_align_str = str(elem.get("textAlign") or elem.get("text_align") or elem.get("align") or "left").lower()
                             color_hex = str(elem.get("color", "#1e293b"))
+                            is_underline = bool(elem.get("isUnderline") or (str(elem.get("textDecoration", "")).lower() == "underline"))
 
-                            is_bold = "bold" in font_weight
-                            is_italic = "italic" in font_style
+                            is_bold = ("bold" in font_weight) or bool(elem.get("isBold"))
+                            is_italic = ("italic" in font_style) or bool(elem.get("isItalic"))
 
                             font_name = "Helvetica-Bold" if (is_bold and not is_italic) else \
                                         "Helvetica-Oblique" if (is_italic and not is_bold) else \
@@ -2067,7 +2072,42 @@ class PdfService:
                                          TA_JUSTIFY if text_align_str == "justify" else \
                                          TA_LEFT
 
-                            escaped_text = html.escape(text_val).replace("\n", "<br/>")
+                            formatted_text = text_val.replace("\r\n", "\n").replace("\r", "\n")
+
+                            tag_tokens = [
+                                (r'<b>', '___RL_B_START___', '<b>'),
+                                (r'</b>', '___RL_B_END___', '</b>'),
+                                (r'<strong>', '___RL_B_START___', '<b>'),
+                                (r'</strong>', '___RL_B_END___', '</b>'),
+                                (r'<i>', '___RL_I_START___', '<i>'),
+                                (r'</i>', '___RL_I_END___', '</i>'),
+                                (r'<em>', '___RL_I_START___', '<i>'),
+                                (r'</em>', '___RL_I_END___', '</i>'),
+                                (r'<u>', '___RL_U_START___', '<u>'),
+                                (r'</u>', '___RL_U_END___', '</u>')
+                            ]
+
+                            temp_text = formatted_text
+                            for pattern, token, _ in tag_tokens:
+                                temp_text = re.sub(pattern, token, temp_text, flags=re.IGNORECASE)
+
+                            font_color_matches = []
+                            def font_repl(m):
+                                idx_m = len(font_color_matches)
+                                font_color_matches.append(m.group(0))
+                                return f"___RL_FONT_{idx_m}___"
+                            temp_text = re.sub(r'</?font[^>]*>', font_repl, temp_text, flags=re.IGNORECASE)
+
+                            escaped_text = html.escape(temp_text).replace("\n", "<br/>")
+
+                            for _, token, replacement in tag_tokens:
+                                escaped_text = escaped_text.replace(token, replacement)
+
+                            for idx_m, match_str in enumerate(font_color_matches):
+                                escaped_text = escaped_text.replace(f"___RL_FONT_{idx_m}___", match_str)
+
+                            if is_underline and not ("<u>" in escaped_text and "</u>" in escaped_text):
+                                escaped_text = f"<u>{escaped_text}</u>"
 
                             try:
                                 hex_color = colors.HexColor(color_hex)

@@ -557,7 +557,8 @@ class OrganizationService:
         }
 
     def get_duplicates(self, db: Session) -> List[Dict[str, Any]]:
-        groups = db.query(DuplicateGroup).all()
+        # Refresh and sync duplicate groups to ensure clean, accurate records
+        groups = duplicate_service.find_and_record_duplicates(db)
         results = []
 
         for g in groups:
@@ -572,28 +573,31 @@ class OrganizationService:
             file_a_id = g.file_a_id if hasattr(g, 'file_a_id') and g.file_a_id else (g.file_a.id if g.file_a else None)
             file_b_id = g.file_b_id if hasattr(g, 'file_b_id') and g.file_b_id else (g.file_b.id if g.file_b else None)
 
+            if not g.file_a or not g.file_b:
+                continue
+
+            path_a = g.file_a.path or ""
+            path_b = g.file_b.path or ""
+
+            if is_temp_or_test_path(path_a) or is_temp_or_test_path(path_b):
+                continue
+
             file_a_detail = {
                 "id": file_a_id,
                 "file_id": file_a_id,
                 "db_id": file_a_id,
-                "filename": g.file_a.name if g.file_a else "File A",
-                "path": g.file_a.path if g.file_a else "",
-                "size": format_size(g.file_a.size) if (g.file_a and g.file_a.size) else "0 B"
+                "filename": g.file_a.name or "File A",
+                "path": path_a,
+                "size": format_size(g.file_a.size) if g.file_a.size else "0 B"
             }
             file_b_detail = {
                 "id": file_b_id,
                 "file_id": file_b_id,
                 "db_id": file_b_id,
-                "filename": g.file_b.name if g.file_b else "File B",
-                "path": g.file_b.path if g.file_b else "",
-                "size": format_size(g.file_b.size) if (g.file_b and g.file_b.size) else "0 B"
+                "filename": g.file_b.name or "File B",
+                "path": path_b,
+                "size": format_size(g.file_b.size) if g.file_b.size else "0 B"
             }
-
-            path_a = g.file_a.path if g.file_a else ""
-            path_b = g.file_b.path if g.file_b else ""
-
-            if is_temp_or_test_path(path_a) or is_temp_or_test_path(path_b):
-                continue
 
             results.append({
                 "id": g.group_key,
@@ -601,7 +605,12 @@ class OrganizationService:
                 "fileB": file_b_detail,
                 "similarity": g.similarity,
                 "detectionType": g.detection_type,
-                "status": g.status.capitalize() if g.status else "Unresolved"
+                "status": g.status.capitalize() if g.status else "Unresolved",
+                "is_hash_match": bool(getattr(g, "is_hash_match", False)),
+                "is_text_match": bool(getattr(g, "is_text_match", False)),
+                "lexical_similarity": getattr(g, "lexical_similarity", None),
+                "semantic_similarity": getattr(g, "semantic_similarity", None),
+                "reason": getattr(g, "reason", None) or "Analyzed file content and structure."
             })
 
         return results

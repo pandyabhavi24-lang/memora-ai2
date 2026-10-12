@@ -20,7 +20,23 @@ import { organizationService } from '../../services/organizationService';
 import { apiService } from '../../services/apiService';
 import { useApp } from '../../context/AppContext';
 
+export const getDetectionBadge = (type) => {
+  switch (type) {
+    case 'Exact duplicate':
+      return 'bg-[rgba(117,102,246,0.15)] text-indigo-300 border-[rgba(117,102,246,0.3)]';
+    case 'Identical text content':
+      return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30';
+    case 'Highly similar':
+      return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+    case 'Similar content':
+    case 'Possible duplicate':
+    default:
+      return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+  }
+};
+
 export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
+
   const [duplicates, setDuplicates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -117,53 +133,39 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
 
     const pathA = activeDuplicate.fileA?.path;
     const pathB = activeDuplicate.fileB?.path;
-    const errors = [];
 
-    // Attempt to open File A
-    if (pathA) {
-      try {
-        const resA = await apiService.openFile(pathA);
-        if (resA && typeof resA === 'string' && resA.length > 0) {
-          errors.push(`File A: ${resA}`);
-        } else if (recordOpenedFile) {
-          recordOpenedFile(activeDuplicate.fileA);
-        }
-      } catch (err) {
-        errors.push(`File A: ${err.message || 'Launch error'}`);
-      }
-    } else {
-      errors.push('File A: Local path is unavailable.');
+    if (!pathA || !pathB) {
+      const err = 'Both file paths must be available to open simultaneously.';
+      setOpenBothError(err);
+      if (addToast) addToast(err, 'error');
+      setIsOpeningBoth(false);
+      return;
     }
 
-    // Attempt to open File B
-    if (pathB) {
-      try {
-        const resB = await apiService.openFile(pathB);
-        if (resB && typeof resB === 'string' && resB.length > 0) {
-          errors.push(`File B: ${resB}`);
-        } else if (recordOpenedFile) {
+    try {
+      const result = await apiService.openBothFiles(pathA, pathB);
+      if (result && result.error) {
+        setOpenBothError(result.error);
+        if (addToast) addToast(result.error, 'error');
+      } else {
+        if (recordOpenedFile) {
+          recordOpenedFile(activeDuplicate.fileA);
           recordOpenedFile(activeDuplicate.fileB);
         }
-      } catch (err) {
-        errors.push(`File B: ${err.message || 'Launch error'}`);
+        const msg = result?.message || 'Opened both files in your default desktop applications';
+        if (addToast) {
+          addToast(msg, result?.arranged ? 'success' : 'info');
+        }
       }
-    } else {
-      errors.push('File B: Local path is unavailable.');
+    } catch (err) {
+      const errMsg = err.message || 'Failed to launch files';
+      setOpenBothError(errMsg);
+      if (addToast) addToast(errMsg, 'error');
+    } finally {
+      setTimeout(() => {
+        setIsOpeningBoth(false);
+      }, 1200);
     }
-
-    if (errors.length > 0) {
-      setOpenBothError(errors.join(' | '));
-      if (addToast) addToast(errors[0], 'error');
-    } else {
-      if (addToast) {
-        addToast('Opened both files in your default desktop applications', 'success');
-      }
-    }
-
-    // Cooldown prevents repeated rapid launches
-    setTimeout(() => {
-      setIsOpeningBoth(false);
-    }, 1500);
   };
 
   const handleConfirmDeleteFile = async () => {
@@ -270,11 +272,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                 {/* Top Badge */}
                 <div className="flex items-center justify-between mb-3">
                   <span
-                    className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
-                      dup.detectionType === 'Exact duplicate'
-                        ? 'bg-[rgba(117,102,246,0.15)] text-indigo-300 border-[rgba(117,102,246,0.3)]'
-                        : 'bg-[rgba(52,120,246,0.15)] text-blue-300 border-[rgba(52,120,246,0.3)]'
-                    }`}
+                    className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${getDetectionBadge(dup.detectionType)}`}
                   >
                     {dup.detectionType}
                   </span>
@@ -357,37 +355,73 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
             {/* Modal Body */}
             <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
               
-              {/* Detection Information Strip */}
-              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 text-xs font-semibold text-amber-300">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30 font-mono text-[11px]">
-                    {activeDuplicate.detectionType}
-                  </span>
-                  <span className="text-[11px] text-[#A7B7D0]">
-                    {activeDuplicate.detectionType === 'Exact duplicate' 
-                      ? 'Files share identical binary SHA-256 cryptographic hash' 
-                      : 'Files contain matching text and structural similarities'}
-                  </span>
+              {/* Detection Information & Evidence Strip */}
+              <div className="p-3.5 bg-[#06101F] rounded-xl border border-[rgba(139,170,215,0.18)] space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2.5 py-0.5 rounded-full font-mono text-[11px] font-bold border ${getDetectionBadge(activeDuplicate.detectionType)}`}>
+                      {activeDuplicate.detectionType}
+                    </span>
+                    <span className="text-xs text-[#F4F7FF] font-semibold">
+                      {activeDuplicate.reason || 'Calculated based on binary hash and extracted content.'}
+                    </span>
+                  </div>
+
+                  <div className="relative inline-flex items-center gap-1 shrink-0">
+                    <span
+                      onMouseEnter={() => setActiveTooltip(activeDuplicate.id)}
+                      onMouseLeave={() => setActiveTooltip(null)}
+                      className="font-mono text-amber-300 cursor-help flex items-center gap-1 bg-[#0A1629] px-2.5 py-1 rounded-lg border border-amber-500/30"
+                    >
+                      <span>{activeDuplicate.similarity}% Similarity</span>
+                      <Info className="w-3.5 h-3.5 text-amber-400" />
+                    </span>
+
+                    {activeTooltip === activeDuplicate.id && (
+                      <div className="absolute right-0 bottom-full mb-2 w-72 p-3 bg-[#06101F] border border-[rgba(139,170,215,0.2)] rounded-xl text-[11px] text-[#A7B7D0] shadow-2xl z-30 font-sans leading-snug animate-fadeIn">
+                        <strong className="text-amber-300 block mb-1">Duplicate Score</strong>
+                        Evaluated with multi-tier cryptographic SHA-256 verification, normalized text comparison, and semantic embeddings.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="relative inline-flex items-center gap-1 shrink-0">
-                  <span
-                    onMouseEnter={() => setActiveTooltip(activeDuplicate.id)}
-                    onMouseLeave={() => setActiveTooltip(null)}
-                    className="font-mono text-amber-300 cursor-help flex items-center gap-1 bg-[#06101F] px-2.5 py-1 rounded-lg border border-amber-500/30"
-                  >
-                    <span>{activeDuplicate.similarity}% Similarity</span>
-                    <Info className="w-3.5 h-3.5 text-amber-400" />
-                  </span>
+                {/* Evidence Metrics Breakdown */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[rgba(139,170,215,0.1)] text-[11px] font-mono">
+                  <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
+                    <span className="text-[#71839E]">SHA-256 Byte Match:</span>
+                    <span className={activeDuplicate.is_hash_match ? "text-emerald-400 font-bold" : "text-[#71839E]"}>
+                      {activeDuplicate.is_hash_match ? "Yes (100%)" : "No"}
+                    </span>
+                  </div>
 
-                  {activeTooltip === activeDuplicate.id && (
-                    <div className="absolute right-0 bottom-full mb-2 w-72 p-3 bg-[#06101F] border border-[rgba(139,170,215,0.2)] rounded-xl text-[11px] text-[#A7B7D0] shadow-2xl z-30 font-sans leading-snug animate-fadeIn">
-                      <strong className="text-amber-300 block mb-1">Duplicate Score</strong>
-                      Calculated from exact binary hash or extracted content similarity. Both files can be inspected externally below.
-                    </div>
-                  )}
+                  <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
+                    <span className="text-[#71839E]">Text Content Match:</span>
+                    <span className={activeDuplicate.is_text_match ? "text-cyan-400 font-bold" : "text-[#71839E]"}>
+                      {activeDuplicate.is_text_match ? "Identical" : "Different"}
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
+                    <span className="text-[#71839E]">Lexical Overlap:</span>
+                    <span className="text-[#A7B7D0] font-bold">
+                      {activeDuplicate.lexical_similarity !== null && activeDuplicate.lexical_similarity !== undefined
+                        ? `${activeDuplicate.lexical_similarity}%`
+                        : (activeDuplicate.is_hash_match ? "100%" : "N/A")}
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
+                    <span className="text-[#71839E]">Semantic Similarity:</span>
+                    <span className="text-[#A7B7D0] font-bold">
+                      {activeDuplicate.semantic_similarity !== null && activeDuplicate.semantic_similarity !== undefined
+                        ? `${activeDuplicate.semantic_similarity}%`
+                        : (activeDuplicate.is_hash_match ? "100%" : "N/A")}
+                    </span>
+                  </div>
                 </div>
               </div>
+
 
               {/* Status or Error Notifications */}
               {openBothError && (
@@ -403,43 +437,6 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                   <span>{deleteMessage}</span>
                 </div>
               )}
-
-              {/* Primary Action Hero: Open Both Files */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-[#0E1D35] to-[#132642] border border-[#3478F6]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-[#F4F7FF]">Simultaneous External Launch</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                      Desktop Native
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[#A7B7D0]">
-                    Launch both original files simultaneously in your default viewers (PowerPoint, Acrobat, Word, Photos).
-                  </p>
-                  <p className="text-[10px] text-[#71839E] font-mono">
-                    💡 Tip: Arrange windows side by side using <kbd className="px-1 py-0.5 rounded bg-[#06101F] border border-[rgba(139,170,215,0.2)] text-[#DCE5F3]">Win + ←</kbd> and <kbd className="px-1 py-0.5 rounded bg-[#06101F] border border-[rgba(139,170,215,0.2)] text-[#DCE5F3]">Win + →</kbd>
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleOpenBoth}
-                  disabled={isOpeningBoth}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#3478F6] to-[#4B91FF] hover:from-[#2563EB] hover:to-[#3478F6] text-white text-xs font-bold shadow-lg shadow-blue-500/25 transition-all cursor-pointer shrink-0 disabled:opacity-60 active:scale-95"
-                >
-                  {isOpeningBoth ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Opening Both Files...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Layers className="w-4 h-4" />
-                      <span>Open Both Files</span>
-                    </>
-                  )}
-                </button>
-              </div>
 
               {/* Compact Comparison Cards Grid (File A vs File B) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -647,12 +644,32 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
             </div>
 
             {/* Sticky Actions Footer */}
-            <div className="flex items-center justify-between px-5 py-3.5 bg-[#0E1D35] border-t border-[rgba(139,170,215,0.14)] shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 bg-[#0E1D35] border-t border-[rgba(139,170,215,0.14)] shrink-0">
               <span className="text-[11px] text-[#71839E]">
                 Both files are preserved until you explicitly confirm deletion.
               </span>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenBoth}
+                  disabled={isOpeningBoth}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r from-[#3478F6] to-[#4B91FF] hover:from-[#2563EB] hover:to-[#3478F6] text-white text-xs font-bold shadow-md shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-60 active:scale-95"
+                  title="Open both original files side-by-side (50/50 screen split)"
+                >
+                  {isOpeningBoth ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Opening...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Open Both Files</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   type="button"
                   onClick={() => handleKeepBoth(activeDuplicate.id)}
@@ -660,10 +677,11 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                 >
                   Keep Both Copies
                 </button>
+
                 <button
                   type="button"
                   onClick={handleCloseReview}
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-[#3478F6] hover:bg-[#2563EB] rounded-xl shadow-md border border-blue-400/30 transition-all cursor-pointer"
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-[#1E293B] hover:bg-[#334155] rounded-xl border border-[rgba(139,170,215,0.20)] transition-all cursor-pointer"
                 >
                   Close
                 </button>

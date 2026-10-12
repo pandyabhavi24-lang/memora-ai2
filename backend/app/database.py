@@ -50,6 +50,22 @@ def init_db_schema():
             cursor.execute("ALTER TABLE organization_suggestions ADD COLUMN smart_tags TEXT;")
             conn.commit()
 
+        # --- duplicate_groups table (explainability attributes) ---
+        cursor.execute("PRAGMA table_info(duplicate_groups);")
+        dup_cols = [row[1] for row in cursor.fetchall()]
+        if dup_cols:
+            new_dup_cols = {
+                "is_hash_match": "INTEGER DEFAULT 0",
+                "is_text_match": "INTEGER DEFAULT 0",
+                "lexical_similarity": "FLOAT",
+                "semantic_similarity": "FLOAT",
+                "reason": "TEXT"
+            }
+            for col_name, col_type in new_dup_cols.items():
+                if col_name not in dup_cols:
+                    cursor.execute(f"ALTER TABLE duplicate_groups ADD COLUMN {col_name} {col_type};")
+            conn.commit()
+
 
               # Check media_analyses table for Module 3 attributes
         cursor.execute("PRAGMA table_info(media_analyses);")

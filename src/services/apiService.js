@@ -223,6 +223,17 @@ class ApiService {
     alert(`Locating file in folder:\n${filePath}`);
   }
 
+  async openBothFiles(pathA, pathB) {
+    if (window.electronAPI && window.electronAPI.openBothAndArrange) {
+      return await window.electronAPI.openBothAndArrange(pathA, pathB);
+    }
+    console.log(`[Desktop Action] Opening both files: ${pathA} and ${pathB}`);
+    await this.openFile(pathA);
+    await this.openFile(pathB);
+    return { success: true, arranged: false, message: 'Opened both files.' };
+  }
+
+
   // --------------------------------------------------------------------------
   // Module 4 — PDF Studio API
   // --------------------------------------------------------------------------

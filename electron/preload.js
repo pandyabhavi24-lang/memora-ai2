@@ -6,5 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openFile: (filters) => ipcRenderer.invoke('dialog:openFile', filters),
   openPath: (filePath) => ipcRenderer.invoke('shell:openPath', filePath),
   showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
+  openBothAndArrange: (pathA, pathB) => ipcRenderer.invoke('shell:openBothAndArrange', { pathA, pathB }),
   isElectron: true
 });
+
