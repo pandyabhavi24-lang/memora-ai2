@@ -8,6 +8,8 @@ import { OrganizationPreviewModal } from '../components/organization/Organizatio
 import { DuplicatesSection } from '../components/organization/DuplicatesSection';
 import { CategoryOverview } from '../components/organization/CategoryOverview';
 import { organizationService } from '../services/organizationService';
+import { apiService } from '../services/apiService';
+import { useDataCache } from '../context/DataCacheContext';
 import { FolderSearch, Sparkles } from 'lucide-react';
 
 // Simple Error Boundary Fallback for Organization Page
@@ -52,28 +54,37 @@ class OrganizationErrorBoundary extends React.Component {
 }
 
 export const Organization = () => {
-  // Analysis state: 'idle' | 'scanning' | 'complete' | 'error'
-  const [analysisStatus, setAnalysisStatus] = useState('idle');
-  const [currentStep, setCurrentStep] = useState(1);
-  const [suggestions, setSuggestions] = useState([]);
+  const {
+    organizationData,
+    fetchSuggestions,
+    startOrganizationAnalysis,
+    updateSuggestionStatus,
+    updateSuggestionCategory,
+    invalidateDuplicates,
+    invalidateDashboard,
+    invalidateOverview,
+    invalidateSuggestions
+  } = useDataCache();
+
+  // Selected checkboxes & modal UI state
   const [selectedIds, setSelectedIds] = useState([]);
-  const [summaryStats, setSummaryStats] = useState({
-    files_analyzed: 0,
-    suggestions_generated: 0,
-    high_confidence: 0,
-    duplicate_groups: 0
-  });
-  
-  // Modals state
   const [editingSuggestion, setEditingSuggestion] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [dupRefreshKey, setDupRefreshKey] = useState(0);
   const [warningMessage, setWarningMessage] = useState('');
 
-  // Load suggestions on initial mount
+  // Suggestions and analysis state are preserved in DataCacheContext
+  const suggestions = organizationData.suggestions;
+  const analysisStatus = organizationData.analysisStatus;
+  const currentStep = organizationData.currentStep;
+  const summaryStats = organizationData.summaryStats;
+
+  // Load suggestions on initial mount if not already loaded
   useEffect(() => {
-    fetchInitialData();
-  }, []);
+    fetchSuggestions({ forceRefresh: false }).catch((err) => {
+      console.warn('Backend loading error, using initial state:', err);
+    });
+  }, [fetchSuggestions]);
 
   const handleOpenPreview = () => {
     if (selectedIds.length === 0) {
@@ -85,70 +96,19 @@ export const Organization = () => {
     setIsPreviewOpen(true);
   };
 
-  const fetchInitialData = async () => {
-    try {
-      const realSuggestions = await organizationService.getSuggestions();
-      if (Array.isArray(realSuggestions)) {
-        setSuggestions(realSuggestions);
-        setAnalysisStatus('complete');
-        setSummaryStats(prev => ({
-          ...prev,
-          files_analyzed: realSuggestions.length,
-          suggestions_generated: realSuggestions.length,
-          high_confidence: realSuggestions.filter(s => (s.confidence || s.confidenceScore || 0) >= 90).length
-        }));
-      }
-    } catch (err) {
-      console.warn('Backend loading error, using initial state:', err);
-    }
-  };
-
   const handleFileDeleted = async () => {
-    await fetchInitialData();
+    invalidateDuplicates();
+    invalidateDashboard();
+    invalidateOverview();
+    invalidateSuggestions();
+    await fetchSuggestions({ forceRefresh: true });
     setDupRefreshKey((k) => k + 1);
   };
 
-  // Trigger file analysis via backend or simulated progress
+  // Trigger file analysis via DataCacheContext so progress survives module navigation
   const handleStartAnalysis = async () => {
-    setAnalysisStatus('scanning');
-    setCurrentStep(1);
-
-    const stepInterval = setInterval(() => {
-      setCurrentStep((prev) => {
-        if (prev >= 5) {
-          clearInterval(stepInterval);
-          return 5;
-        }
-        return prev + 1;
-      });
-    }, 450);
-
-    try {
-      const summary = await organizationService.analyzeFiles();
-      if (summary) {
-        setSummaryStats(summary);
-      }
-      const realSuggestions = await organizationService.getSuggestions();
-      if (Array.isArray(realSuggestions)) {
-        setSuggestions(realSuggestions);
-      }
-      const nowStr = new Date().toLocaleString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      localStorage.setItem('last_analysis_timestamp', nowStr);
-      localStorage.removeItem('scanned_since_last_analysis');
-    } catch (err) {
-      console.error('Error during backend analysis:', err);
-    } finally {
-      setTimeout(() => {
-        setAnalysisStatus('complete');
-        setDupRefreshKey((k) => k + 1);
-      }, 2300);
-    }
+    await startOrganizationAnalysis();
+    setDupRefreshKey((k) => k + 1);
   };
 
   const safeSuggestions = Array.isArray(suggestions) ? suggestions : [];
@@ -173,9 +133,7 @@ export const Organization = () => {
 
   // Individual Actions
   const handleAccept = async (id) => {
-    setSuggestions((prev) =>
-      (Array.isArray(prev) ? prev : []).map((item) => (item.id === id ? { ...item, status: 'Accepted' } : item))
-    );
+    updateSuggestionStatus(id, 'Accepted');
     try {
       await organizationService.updateSuggestion(id, 'accepted');
     } catch (err) {
@@ -184,9 +142,7 @@ export const Organization = () => {
   };
 
   const handleReject = async (id) => {
-    setSuggestions((prev) =>
-      (Array.isArray(prev) ? prev : []).map((item) => (item.id === id ? { ...item, status: 'Rejected' } : item))
-    );
+    updateSuggestionStatus(id, 'Rejected');
     try {
       await organizationService.updateSuggestion(id, 'rejected');
     } catch (err) {
@@ -200,19 +156,7 @@ export const Organization = () => {
 
   const handleSaveEditCategory = async (id, newCategory, smartTags) => {
     const updatedTags = Array.isArray(smartTags) ? smartTags : [];
-    setSuggestions((prev) =>
-      (Array.isArray(prev) ? prev : []).map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              suggestedCategory: newCategory || item.suggestedCategory,
-              smart_tags: updatedTags,
-              labels: updatedTags,
-              status: 'Edited'
-            }
-          : item
-      )
-    );
+    updateSuggestionCategory(id, newCategory, updatedTags);
     try {
       await organizationService.updateSuggestion(id, 'edited', newCategory, updatedTags);
       const sug = (suggestions || []).find((s) => s.id === id);
@@ -227,11 +171,7 @@ export const Organization = () => {
 
   // Bulk Actions
   const handleAcceptSelected = async () => {
-    setSuggestions((prev) =>
-      (Array.isArray(prev) ? prev : []).map((item) =>
-        safeSelectedIds.includes(item.id) ? { ...item, status: 'Accepted' } : item
-      )
-    );
+    safeSelectedIds.forEach((id) => updateSuggestionStatus(id, 'Accepted'));
     for (const id of safeSelectedIds) {
       try {
         await organizationService.updateSuggestion(id, 'accepted');
@@ -241,11 +181,7 @@ export const Organization = () => {
   };
 
   const handleRejectSelected = async () => {
-    setSuggestions((prev) =>
-      (Array.isArray(prev) ? prev : []).map((item) =>
-        safeSelectedIds.includes(item.id) ? { ...item, status: 'Rejected' } : item
-      )
-    );
+    safeSelectedIds.forEach((id) => updateSuggestionStatus(id, 'Rejected'));
     for (const id of safeSelectedIds) {
       try {
         await organizationService.updateSuggestion(id, 'rejected');
@@ -355,7 +291,10 @@ export const Organization = () => {
               const result = await organizationService.applyOrganization(idsToApply, operationMode, destinationFolder);
               if (result && (result.files_moved > 0 || result.files_copied > 0)) {
                 setSelectedIds([]);
-                await fetchInitialData();
+                invalidateDuplicates();
+                invalidateDashboard();
+                invalidateOverview();
+                await fetchSuggestions({ forceRefresh: true });
                 setDupRefreshKey((k) => k + 1);
               }
               return result;

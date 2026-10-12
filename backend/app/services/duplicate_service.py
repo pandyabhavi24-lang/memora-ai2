@@ -3,6 +3,8 @@ import re
 import difflib
 import unicodedata
 import logging
+import threading
+import hashlib
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
@@ -225,6 +227,58 @@ def compare_file_pair(
 
 
 class DuplicateService:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._last_analyzed_fingerprint: Optional[str] = None
+        self._vector_cache: Dict[str, np.ndarray] = {}
+
+    def compute_files_fingerprint(self, files: List[File]) -> str:
+        """
+        Computes a lightweight deterministic fingerprint representing the set of valid files,
+        their sizes, hashes, and modification timestamps.
+        """
+        if not files:
+            return "empty"
+        data_parts = []
+        for f in sorted(files, key=lambda x: x.id):
+            mtime = str(f.modified_at or "")
+            hash_val = str(f.file_hash or "")
+            data_parts.append(f"{f.id}:{f.size}:{hash_val}:{mtime}")
+        raw = "|".join(data_parts)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def invalidate_fingerprint(self):
+        """Forces the next duplicate check to re-analyze."""
+        self._last_analyzed_fingerprint = None
+        logger.info("Duplicate detection fingerprint invalidated.")
+
+    def get_duplicate_groups(self, db: Session, force_refresh: bool = False) -> List[DuplicateGroup]:
+        """
+        Returns detected duplicate groups, reusing existing stored SQLite records
+        when files have not changed, and calculating only when necessary or forced.
+        """
+        files = [f for f in db.query(File).all() if is_valid_user_file(f)]
+        if len(files) < 2:
+            return self.find_and_record_duplicates(db)
+
+        current_fingerprint = self.compute_files_fingerprint(files)
+
+        # Check if stored records can be served immediately
+        if not force_refresh and self._last_analyzed_fingerprint == current_fingerprint:
+            stored_groups = db.query(DuplicateGroup).all()
+            if stored_groups:
+                return stored_groups
+
+        # If not cached or forced, run calculation under lock
+        with self._lock:
+            # Recheck under lock in case another thread just completed it
+            if not force_refresh and self._last_analyzed_fingerprint == current_fingerprint:
+                stored_groups = db.query(DuplicateGroup).all()
+                if stored_groups:
+                    return stored_groups
+
+            return self.find_and_record_duplicates(db)
+
     def find_and_record_duplicates(self, db: Session) -> List[DuplicateGroup]:
         """
         Scans all files in the database to detect:
@@ -243,6 +297,7 @@ class DuplicateService:
                 db.commit()
             except Exception:
                 db.rollback()
+            self._last_analyzed_fingerprint = self.compute_files_fingerprint(files)
             return []
 
         valid_file_ids = set(f.id for f in files)
@@ -274,8 +329,12 @@ class DuplicateService:
 
             # Embed only the pure text content (first 1500 chars), avoiding filename bias
             if norm and len(norm) >= 15:
-                texts_to_embed.append(norm[:1500])
-                ids_to_embed.append(f.id)
+                cache_key = f"{f.id}_{f.file_hash or norm[:32]}"
+                if cache_key in self._vector_cache:
+                    file_vectors[f.id] = self._vector_cache[cache_key]
+                else:
+                    texts_to_embed.append(norm[:1500])
+                    ids_to_embed.append(f.id)
             else:
                 file_vectors[f.id] = None
 
@@ -284,6 +343,9 @@ class DuplicateService:
                 batch_vecs = embedding_service.embed_documents(texts_to_embed)
                 for fid, vec in zip(ids_to_embed, batch_vecs):
                     file_vectors[fid] = vec
+                    f_obj = file_map.get(fid)
+                    cache_key = f"{fid}_{f_obj.file_hash or normalized_texts.get(fid, '')[:32]}" if f_obj else str(fid)
+                    self._vector_cache[cache_key] = vec
             except Exception as e:
                 logger.warning(f"Batch embedding failed: {e}")
                 for fid in ids_to_embed:
@@ -368,6 +430,7 @@ class DuplicateService:
             db.rollback()
             logger.error(f"Error persisting duplicate groups: {e}")
 
+        self._last_analyzed_fingerprint = self.compute_files_fingerprint(files)
         return list(existing_by_pair.values())
 
 

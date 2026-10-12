@@ -133,9 +133,12 @@ def apply_organization(
         )
 
 @router.get("/duplicates", response_model=List[DuplicateGroupResponse])
-def get_duplicates(db: Session = Depends(get_db)):
+def get_duplicates(
+    force_refresh: bool = False,
+    db: Session = Depends(get_db)
+):
     """Returns detected exact and semantic duplicate candidate file groups."""
-    return organization_service.get_duplicates(db)
+    return organization_service.get_duplicates(db, force_refresh=force_refresh)
 
 @router.get("/operations", response_model=List[FileOperationResponse])
 def get_operations(db: Session = Depends(get_db)):

@@ -19,6 +19,7 @@ import {
 import { organizationService } from '../../services/organizationService';
 import { apiService } from '../../services/apiService';
 import { useApp } from '../../context/AppContext';
+import { useDataCache } from '../../context/DataCacheContext';
 
 export const getDetectionBadge = (type) => {
   switch (type) {
@@ -36,10 +37,17 @@ export const getDetectionBadge = (type) => {
 };
 
 export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
+  const { 
+    duplicatesData, 
+    fetchDuplicates: fetchCachedDuplicates, 
+    updateDuplicateStatus, 
+    removeDuplicateFile 
+  } = useDataCache();
 
-  const [duplicates, setDuplicates] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Instant zero-spinner initial state from shared cache
+  const [duplicates, setDuplicates] = useState(duplicatesData.items);
+  const [loading, setLoading] = useState(!duplicatesData.isLoaded);
+  const [error, setError] = useState(duplicatesData.error);
   const [activeDuplicate, setActiveDuplicate] = useState(null);
   const [activeTooltip, setActiveTooltip] = useState(null);
   const { recordOpenedFile, addToast } = useApp();
@@ -53,22 +61,37 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
   const [isOpeningBoth, setIsOpeningBoth] = useState(false);
   const [openBothError, setOpenBothError] = useState(null);
 
-  const fetchDuplicates = async () => {
-    setLoading(true);
+  const fetchDuplicates = async (force = false) => {
+    // Only show full loading spinner if we have no cached data yet or if explicitly forced
+    if (!duplicatesData.isLoaded || force) {
+      setLoading(true);
+    }
     setError(null);
     try {
-      const data = await organizationService.getDuplicates();
+      const data = await fetchCachedDuplicates({ forceRefresh: force });
       setDuplicates(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load duplicate files from backend API:', err);
-      setError('Unable to load duplicate results.');
+      if (!duplicatesData.isLoaded) {
+        setError('Unable to load duplicate results.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // Sync state when cache changes
   useEffect(() => {
-    fetchDuplicates();
+    if (duplicatesData.isLoaded) {
+      setDuplicates(duplicatesData.items);
+      setLoading(false);
+      setError(duplicatesData.error);
+    }
+  }, [duplicatesData]);
+
+  useEffect(() => {
+    const shouldForce = Boolean(refreshTrigger && refreshTrigger > 0);
+    fetchDuplicates(shouldForce);
   }, [refreshTrigger]);
 
   const handleCopyPath = (filePath) => {
@@ -97,6 +120,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
     setDuplicates((prev) =>
       prev.map((item) => (item.id === id ? { ...item, status: 'Kept Both' } : item))
     );
+    updateDuplicateStatus(id, 'Kept Both');
     setActiveDuplicate(null);
   };
 
@@ -186,6 +210,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
           return item;
         })
       );
+      removeDuplicateFile(targetId);
       setFileToDelete(null);
 
       // Notify parent component to refresh organization suggestions, overview & summary counts
@@ -194,7 +219,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
       }
 
       setTimeout(() => {
-        fetchDuplicates();
+        fetchDuplicates(true);
       }, 400);
     } catch (err) {
       console.error('Failed to delete physical file copy:', err);

@@ -548,6 +548,8 @@ class OrganizationService:
                 errors.append(err)
 
         db.commit()
+        if files_moved > 0 or files_copied > 0:
+            duplicate_service.invalidate_fingerprint()
         return {
             "status": "success" if not errors else "partial_success",
             "files_moved": files_moved,
@@ -556,9 +558,9 @@ class OrganizationService:
             "message": f"Successfully organized files ({files_moved} moved, {files_copied} copied)."
         }
 
-    def get_duplicates(self, db: Session) -> List[Dict[str, Any]]:
-        # Refresh and sync duplicate groups to ensure clean, accurate records
-        groups = duplicate_service.find_and_record_duplicates(db)
+    def get_duplicates(self, db: Session, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        # Efficiently get duplicate groups, using SQLite cache unless invalid or forced
+        groups = duplicate_service.get_duplicate_groups(db, force_refresh=force_refresh)
         results = []
 
         for g in groups:

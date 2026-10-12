@@ -10,9 +10,11 @@ import {
 import { apiService } from '../services/apiService';
 import { ProgressBar } from '../components/common/ProgressBar';
 import { Button } from '../components/common/Button';
+import { useDataCache } from '../context/DataCacheContext';
 
 export const Scanning = () => {
   const navigate = useNavigate();
+  const { invalidateAll } = useDataCache();
   const [scanState, setScanState] = useState({
     totalFiles: 0,
     processedFiles: 0,
@@ -32,6 +34,7 @@ export const Scanning = () => {
       }
     }).then(() => {
       if (isMounted) {
+        invalidateAll();
         setTimeout(() => {
           navigate('/dashboard');
         }, 1200);
@@ -41,7 +44,7 @@ export const Scanning = () => {
     return () => {
       isMounted = false;
     };
-  }, [navigate]);
+  }, [navigate, invalidateAll]);
 
   return (
     <div className="min-h-screen bg-[#06101F] flex flex-col justify-between p-8 select-none">

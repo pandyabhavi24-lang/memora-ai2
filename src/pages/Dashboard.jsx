@@ -25,6 +25,7 @@ import {
   Layers
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useDataCache } from '../context/DataCacheContext';
 import { Button } from '../components/common/Button';
 import { apiService } from '../services/apiService';
 import { organizationService } from '../services/organizationService';
@@ -65,52 +66,24 @@ export const Dashboard = () => {
     recentlyOpenedFiles,
     recordOpenedFile
   } = useApp();
+  const { dashboardData, fetchDashboardData } = useDataCache();
 
-  // Primary Data States
-  const [stats, setStats] = useState({
-    folders: 0,
-    files: 0,
-    chunks: 0,
-    vectors: 0,
-    searches: 0,
-    total_size_bytes: 0,
-    recent_files: [],
-    recent_searches: []
-  });
-
-  const [duplicateCount, setDuplicateCount] = useState(0);
-  const [scanStatus, setScanStatus] = useState({
-    status: 'idle',
-    files_found: 0,
-    files_processed: 0,
-    files_failed: 0,
-    progress_percentage: 100,
-    current_file: ''
-  });
-
-  const [healthStatus, setHealthStatus] = useState({
-    status: 'ok',
-    database: true,
-    faiss: true,
-    embedding_model: true
-  });
-
-  const [categories, setCategories] = useState([]);
+  // Primary Data States (initialized from cache for instant zero-spinner render)
+  const [stats, setStats] = useState(dashboardData.stats);
+  const [duplicateCount, setDuplicateCount] = useState(dashboardData.duplicateCount);
+  const [scanStatus, setScanStatus] = useState(dashboardData.scanStatus);
+  const [healthStatus, setHealthStatus] = useState(dashboardData.healthStatus);
+  const [categories, setCategories] = useState(dashboardData.categories);
   const [suggestions, setSuggestions] = useState([]);
 
   // Expiry State
-  const [expirySummary, setExpirySummary] = useState({
-    total_tracked: 0,
-    upcoming: 0,
-    due_soon: 0,
-    expired: 0,
-    needs_review: 0
-  });
-  const [nextExpiry, setNextExpiry] = useState(null);
+  const [expirySummary, setExpirySummary] = useState(dashboardData.expirySummary);
+  const [nextExpiry, setNextExpiry] = useState(dashboardData.nextExpiry);
 
   // Loading & Error States
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(!dashboardData.isLoaded);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasError, setHasError] = useState(dashboardData.hasError && !dashboardData.isLoaded);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const bellButtonRef = useRef(null);
@@ -164,83 +137,47 @@ export const Dashboard = () => {
     };
   }, [showNotifications]);
 
+  // Sync state with shared cache whenever cache updates
   useEffect(() => {
-    loadAllDashboardData();
-  }, []);
+    if (dashboardData.isLoaded) {
+      setStats(dashboardData.stats);
+      setCategories(dashboardData.categories);
+      setDuplicateCount(dashboardData.duplicateCount);
+      setScanStatus(dashboardData.scanStatus);
+      setHealthStatus(dashboardData.healthStatus);
+      setExpirySummary(dashboardData.expirySummary);
+      setNextExpiry(dashboardData.nextExpiry);
+      setIsLoading(false);
+      setHasError(false);
+    }
+  }, [dashboardData]);
 
-  const loadAllDashboardData = async () => {
-    setIsLoading(true);
-    setHasError(false);
+  const loadAllDashboardData = async (force = false) => {
+    const isFirstVisit = !dashboardData.isLoaded;
+    if (isFirstVisit) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
 
     try {
-      const [
-        statsRes,
-        overviewRes,
-        scanStatusRes,
-        duplicatesRes,
-        suggestionsRes,
-        healthRes,
-        expirySummaryRes,
-        expiryListRes
-      ] = await Promise.allSettled([
-        apiService.getStatistics(),
-        organizationService.getOverview(),
-        apiService.getScanStatus(),
-        organizationService.getDuplicates(),
-        organizationService.getSuggestions(),
-        apiService.getHealth(),
-        apiService.getExpirySummary(),
-        apiService.getExpiries({ sort_by: 'date_asc', status: 'all' })
-      ]);
-
-      // 1. Statistics
-      if (statsRes.status === 'fulfilled' && statsRes.value) {
-        setStats(statsRes.value);
-      }
-
-      // 2. Organization Categories / File Distribution
-      if (overviewRes.status === 'fulfilled' && overviewRes.value && overviewRes.value.aiCategories) {
-        setCategories(overviewRes.value.aiCategories);
-      }
-
-      // 3. Scan Status
-      if (scanStatusRes.status === 'fulfilled' && scanStatusRes.value) {
-        setScanStatus(scanStatusRes.value);
-      }
-
-      // 4. Duplicate Files Count
-      if (duplicatesRes.status === 'fulfilled' && Array.isArray(duplicatesRes.value)) {
-        setDuplicateCount(duplicatesRes.value.length);
-      }
-
-      // 5. Suggestions
-      if (suggestionsRes.status === 'fulfilled' && Array.isArray(suggestionsRes.value)) {
-        setSuggestions(suggestionsRes.value);
-      }
-
-      // 6. System Health Check
-      if (healthRes.status === 'fulfilled' && healthRes.value) {
-        setHealthStatus(healthRes.value);
-      }
-
-      // 7. Expiry & Renewal Summary
-      if (expirySummaryRes.status === 'fulfilled' && expirySummaryRes.value) {
-        setExpirySummary(expirySummaryRes.value);
-      }
-
-      if (expiryListRes.status === 'fulfilled' && Array.isArray(expiryListRes.value)) {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const nextUpcoming = expiryListRes.value.find(r => new Date(r.extracted_date) >= today) || expiryListRes.value[0] || null;
-        setNextExpiry(nextUpcoming);
-      }
+      await fetchDashboardData({ forceRefresh: force });
+      setHasError(false);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
-      setHasError(true);
+      // Only show full blocking error if we had no cached data at all
+      if (isFirstVisit) {
+        setHasError(true);
+      }
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    loadAllDashboardData(false);
+  }, []);
 
   const handleOpenRecentFile = (fileItem) => {
     if (fileItem && fileItem.path) {
@@ -255,8 +192,8 @@ export const Dashboard = () => {
     }
   };
 
-  // Full Page Error State
-  if (hasError) {
+  // Full Page Error State — ONLY when no usable cached data is available
+  if (hasError && !dashboardData.isLoaded) {
     return (
       <div className="glass-panel p-8 rounded-2xl border-red-500/30 bg-[#0A1629] text-center space-y-4 max-w-lg mx-auto my-12">
         <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-400 flex items-center justify-center mx-auto border border-red-500/20">

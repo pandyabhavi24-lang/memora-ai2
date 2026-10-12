@@ -322,6 +322,10 @@ class IndexingService:
                 # Final vector mapping synchronization check
                 self._sync_vector_mappings(db)
 
+                # Invalidate duplicate fingerprint so new files are analyzed on next duplicate check
+                from .duplicate_service import duplicate_service
+                duplicate_service.invalidate_fingerprint()
+
                 self.state["status"] = "complete"
                 self.state["progress_percentage"] = 100
                 self.state["current_file"] = "Finished"

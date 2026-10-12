@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
+import { DataCacheProvider } from './context/DataCacheContext';
 import { MainLayout } from './components/layout/MainLayout';
 
 // Screen Component Imports
@@ -157,9 +158,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <AppProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <DataCacheProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </DataCacheProvider>
     </AppProvider>
   );
 }

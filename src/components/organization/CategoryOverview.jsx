@@ -18,46 +18,48 @@ import {
   FolderSearch,
   Code2
 } from 'lucide-react';
-import { organizationService } from '../../services/organizationService';
+import { useDataCache } from '../../context/DataCacheContext';
 
 export const CategoryOverview = ({ refreshTrigger }) => {
-  const [overviewData, setOverviewData] = useState({
-    existingFolders: [],
-    aiCategories: [],
-    totalFiles: 0
-  });
-  const [activeTab, setActiveTab] = useState('both'); // 'both' | 'existing' | 'ai'
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { overviewData: cachedOverview, fetchOverview: fetchCachedOverview } = useDataCache();
 
-  const fetchOverview = async () => {
-    setLoading(true);
+  // Instant zero-spinner initial state from shared cache
+  const [overviewData, setOverviewData] = useState(cachedOverview.data);
+  const [activeTab, setActiveTab] = useState('both'); // 'both' | 'existing' | 'ai'
+  const [loading, setLoading] = useState(!cachedOverview.isLoaded);
+  const [error, setError] = useState(cachedOverview.error);
+
+  const fetchOverview = async (force = false) => {
+    if (!cachedOverview.isLoaded || force) {
+      setLoading(true);
+    }
     setError(null);
     try {
-      const data = await organizationService.getOverview();
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        setOverviewData({
-          existingFolders: Array.isArray(data.existingFolders) ? data.existingFolders : [],
-          aiCategories: Array.isArray(data.aiCategories) ? data.aiCategories : [],
-          totalFiles: data.totalFiles || 0
-        });
-      } else if (Array.isArray(data)) {
-        setOverviewData({
-          existingFolders: [],
-          aiCategories: data,
-          totalFiles: data.reduce((acc, curr) => acc + (curr.fileCount || 0), 0)
-        });
+      const data = await fetchCachedOverview({ forceRefresh: force });
+      if (data) {
+        setOverviewData(data);
       }
     } catch (err) {
       console.error('Failed to load organization overview from backend API:', err);
-      setError('Unable to load overview data.');
+      if (!cachedOverview.isLoaded) {
+        setError('Unable to load overview data.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchOverview();
+    if (cachedOverview.isLoaded) {
+      setOverviewData(cachedOverview.data);
+      setLoading(false);
+      setError(cachedOverview.error);
+    }
+  }, [cachedOverview]);
+
+  useEffect(() => {
+    const shouldForce = Boolean(refreshTrigger && refreshTrigger > 0);
+    fetchOverview(shouldForce);
   }, [refreshTrigger]);
 
   const getCategoryIcon = (category) => {

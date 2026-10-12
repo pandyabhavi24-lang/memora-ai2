@@ -164,6 +164,9 @@ def delete_file(file_id: int, db: Session = Depends(get_db)):
         db.delete(file_rec)
         db.commit()
 
+        from ..services.duplicate_service import duplicate_service
+        duplicate_service.invalidate_fingerprint()
+
         logger.info(f"Completed DB metadata and FAISS vector index cleanup for file_id {file_id} ('{file_name}').")
         return {
             "status": "success",

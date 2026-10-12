@@ -112,9 +112,10 @@ class OrganizationService {
     }
   }
 
-  async getDuplicates() {
+  async getDuplicates(forceRefresh = false) {
     try {
-      return await this._fetch('/api/organization/duplicates');
+      const endpoint = forceRefresh ? '/api/organization/duplicates?force_refresh=true' : '/api/organization/duplicates';
+      return await this._fetch(endpoint);
     } catch (err) {
       console.warn('Failed to fetch duplicates from backend:', err);
       return [];

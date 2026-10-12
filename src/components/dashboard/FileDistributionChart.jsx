@@ -83,7 +83,7 @@ export const FileDistributionChart = ({ categories = [], isLoading = false, hasE
       </div>
 
       {/* Content Body */}
-      {isLoading ? (
+      {isLoading && (!categories || categories.length === 0) ? (
         <div className="animate-pulse flex flex-col items-center justify-center p-6 space-y-3 my-auto">
           <div className="w-20 h-20 rounded-full border-4 border-[#0E1D35] border-t-[#3478F6] animate-spin" />
           <div className="h-2.5 bg-[#0E1D35] rounded w-1/3" />

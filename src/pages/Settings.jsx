@@ -15,10 +15,22 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import { useApp } from '../context/AppContext';
+import { useDataCache } from '../context/DataCacheContext';
 
 export const Settings = () => {
   const { folders, removeFolder, selectFolderNative, addToast } = useApp();
+  const { invalidateAll } = useDataCache();
   const [activeTab, setActiveTab] = useState('general'); // 'general' | 'folders' | 'privacy' | 'ai' | 'about'
+
+  const handleSelectFolder = async () => {
+    await selectFolderNative();
+    invalidateAll();
+  };
+
+  const handleRemoveFolder = async (folderId) => {
+    await removeFolder(folderId);
+    invalidateAll();
+  };
 
   const handleReindex = () => {
     addToast('Re-indexing triggered across all watched folders...', 'info');
@@ -98,7 +110,7 @@ export const Settings = () => {
               <h3 className="text-sm font-bold text-white">Monitored Folders</h3>
               <p className="text-xs text-[#A7B7D0] mt-0.5">Manage local file directories indexed by Memora AI.</p>
             </div>
-            <Button variant="primary" size="sm" icon={Folder} onClick={selectFolderNative} className="bg-[#3478F6] hover:bg-[#2563EB] text-white">
+            <Button variant="primary" size="sm" icon={Folder} onClick={handleSelectFolder} className="bg-[#3478F6] hover:bg-[#2563EB] text-white">
               Add Directory
             </Button>
           </div>
@@ -119,7 +131,7 @@ export const Settings = () => {
                     <p className="text-[11px] text-[#7E93B3] font-mono mt-0.5">{f.path}</p>
                   </div>
                   <button
-                    onClick={() => removeFolder(f.id)}
+                    onClick={() => handleRemoveFolder(f.id)}
                     className="p-1.5 text-[#7E93B3] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
                     title="Remove folder"
                   >
