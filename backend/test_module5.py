@@ -1,6 +1,6 @@
 """
-Memora AI - Module 5 Security Tests
-=====================================
+Memora AI - Module 5 Security Tests (Fully Isolated)
+=====================================================
 Tests PIN hashing, session management, path validation, excluded folders,
 audit logging, data removal (FAISS/SQLite consistency), backup/restore,
 and protected API endpoint enforcement.
@@ -25,12 +25,29 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from backend.app.database import Base, DB_PATH, DATA_DIR, SessionLocal, engine, init_db_schema
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from backend.app.database import Base
 from backend.app.models import (
     AuditLog, Chunk, ExcludedFolder, File, Folder, SecuritySettings,
     VectorMapping,
 )
 from backend.app.services.security_service import SecurityService, security_service
+
+# ---------------------------------------------------------------------------
+# Isolated Test Database & Data Directory
+# ---------------------------------------------------------------------------
+TEST_TEMP_DIR = tempfile.mkdtemp(prefix="memora_mod5_isolated_")
+TEST_DB_PATH = os.path.join(TEST_TEMP_DIR, "memora_test.db")
+TEST_DATA_DIR = os.path.join(TEST_TEMP_DIR, "data")
+os.makedirs(TEST_DATA_DIR, exist_ok=True)
+
+test_engine = create_engine(
+    f"sqlite:///{TEST_DB_PATH}",
+    connect_args={"check_same_thread": False},
+)
+TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 PASS = "\033[32m[PASS]\033[0m"
 FAIL = "\033[31m[FAIL]\033[0m"
@@ -76,7 +93,6 @@ def test_pin_hashing():
     check("Empty PIN rejected", not empty)
 
     # Verify that verification uses constant-time comparison (smoke check)
-    # We can't time it precisely, but we verify it calls compare_digest internally
     import inspect
     src = inspect.getsource(svc.verify_pin)
     check("Uses secrets.compare_digest", "compare_digest" in src)
@@ -168,8 +184,7 @@ def test_path_validation():
         check("../.. traversal is rejected",
               not svc.validate_path_in_approved(traversal, approved))
 
-        # Encoded traversal via realpath (Windows %2e%2e is not normally decoded at FS level,
-        # but we test the commonpath logic)
+        # Encoded traversal via realpath
         fake_child = tmpdir + "Evil"  # looks like child via prefix matching, not commonpath
         check("String-prefix trick rejected by commonpath",
               not svc.validate_path_in_approved(fake_child, approved))
@@ -188,7 +203,7 @@ def test_excluded_folders_scanner():
     print("\n[5] Excluded Folders in Scanner")
     from backend.app.services.scanner import scan_directory
 
-    test_dir = os.path.join(ROOT, "test_scan_tmp")
+    test_dir = os.path.join(ROOT, "test_scan_scratch")
     os.makedirs(test_dir, exist_ok=True)
     try:
         pub = os.path.join(test_dir, "public")
@@ -220,12 +235,12 @@ def test_excluded_folders_scanner():
 
 
 # ---------------------------------------------------------------------------
-# 6. Audit log creation
+# 6. Audit log creation (Isolated SQLite DB)
 # ---------------------------------------------------------------------------
 def test_audit_log():
     print("\n[6] Audit Log")
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
+    Base.metadata.create_all(bind=test_engine)
+    db = TestSessionLocal()
     try:
         initial_count = db.query(AuditLog).count()
 
@@ -259,28 +274,47 @@ def test_audit_log():
 
 
 # ---------------------------------------------------------------------------
-# 7. Data removal — FAISS / SQLite consistency
+# 7. Data removal — FAISS / SQLite consistency (Isolated mock FAISS & SQLite)
 # ---------------------------------------------------------------------------
 def test_data_removal():
     print("\n[7] Data Removal — FAISS/SQLite Consistency")
-    from backend.app.ai.faiss_manager import faiss_manager
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        # Snapshot current state
-        initial_vm = db.query(VectorMapping).count()
-        initial_faiss = faiss_manager.index.ntotal
+    from unittest.mock import patch, MagicMock
 
-        # Remove vector data
-        result = security_service.remove_vector_data(db)
+    Base.metadata.create_all(bind=test_engine)
+    db = TestSessionLocal()
+    try:
+        fake_faiss = MagicMock()
+        fake_faiss.index.ntotal = 5
+        fake_faiss.faiss_to_chunk = {"0": 1, "1": 2}
+
+        def fake_reset():
+            fake_faiss.index.ntotal = 0
+            fake_faiss.faiss_to_chunk.clear()
+
+        fake_faiss.reset = fake_reset
+
+        # Seed a test VectorMapping row in test DB
+        vm = VectorMapping(faiss_id=0, chunk_id=1)
+        db.add(vm)
+        db.commit()
+
+        initial_vm = db.query(VectorMapping).count()
+        check("Initial test VectorMapping exists", initial_vm > 0)
+        check("Initial test FAISS count > 0", fake_faiss.index.ntotal > 0)
+
+        # Patch faiss_manager in backend.app.ai.faiss_manager and backend.app.services.security_service
+        with patch("backend.app.ai.faiss_manager.faiss_manager", fake_faiss), \
+             patch("backend.app.services.security_service.faiss_manager", fake_faiss, create=True):
+            result = security_service.remove_vector_data(db)
+
         check("Vector data removal returns dict", isinstance(result, dict))
-        check("FAISS reset to 0", faiss_manager.index.ntotal == 0)
+        check("FAISS reset to 0", fake_faiss.index.ntotal == 0)
 
         vm_after = db.query(VectorMapping).count()
         check("VectorMapping table cleared", vm_after == 0)
 
         # Verify SQLite and FAISS are consistent (both 0)
-        faiss_mapping_count = len(faiss_manager.faiss_to_chunk)
+        faiss_mapping_count = len(fake_faiss.faiss_to_chunk)
         check("FAISS in-memory mapping also cleared", faiss_mapping_count == 0)
 
     finally:
@@ -288,168 +322,195 @@ def test_data_removal():
 
 
 # ---------------------------------------------------------------------------
-# 8. Backup creation and validation
+# 8. Backup creation and validation (Isolated paths)
 # ---------------------------------------------------------------------------
 def test_backup():
     print("\n[8] Backup Creation & Validation")
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
+    from unittest.mock import patch
+    Base.metadata.create_all(bind=test_engine)
+    db = TestSessionLocal()
+
+    # Create dummy memora.db inside TEST_DATA_DIR for isolated backup verification
+    dummy_db_in_data = os.path.join(TEST_DATA_DIR, "memora.db")
+    with open(dummy_db_in_data, "w", encoding="utf-8") as f:
+        f.write("isolated test db content")
 
     with tempfile.TemporaryDirectory() as dest:
         try:
-            result = security_service.create_backup(db, dest)
-            check("Backup returns dict with path", "backup_path" in result)
-            backup_path = result["backup_path"]
-            check("Backup file exists", os.path.isfile(backup_path))
-            check("Backup is a ZIP", zipfile.is_zipfile(backup_path))
+            with patch("backend.app.database.DB_PATH", dummy_db_in_data), \
+                 patch("backend.app.database.DATA_DIR", TEST_DATA_DIR), \
+                 patch("backend.app.services.security_service.DB_PATH", dummy_db_in_data, create=True), \
+                 patch("backend.app.services.security_service.DATA_DIR", TEST_DATA_DIR, create=True):
+                result = security_service.create_backup(db, dest)
+                check("Backup returns dict with path", "backup_path" in result)
+                backup_path = result["backup_path"]
+                check("Backup file exists", os.path.isfile(backup_path))
+                check("Backup is a ZIP", zipfile.is_zipfile(backup_path))
 
-            # Validate manifest
-            manifest = security_service.validate_backup(backup_path)
-            check("Manifest has backup_format_version", "backup_format_version" in manifest)
-            check("Manifest has created_at", "created_at" in manifest)
-            check("Manifest has included_files list",
-                  isinstance(manifest.get("included_files"), list))
-            check("DB file included", any("memora.db" in f for f in manifest["included_files"]))
+                # Validate manifest
+                manifest = security_service.validate_backup(backup_path)
+                check("Manifest has backup_format_version", "backup_format_version" in manifest)
+                check("Manifest has created_at", "created_at" in manifest)
+                check("Manifest has included_files list",
+                      isinstance(manifest.get("included_files"), list))
+                check("DB file included", any("memora.db" in f for f in manifest["included_files"]))
 
-            # Validate corrupt backup
-            corrupt_path = os.path.join(dest, "corrupt.zip")
-            with open(corrupt_path, "wb") as f:
-                f.write(b"not a zip")
-            try:
-                security_service.validate_backup(corrupt_path)
-                check("Corrupt backup raises ValueError", False, "no error raised")
-            except ValueError:
-                check("Corrupt backup raises ValueError", True)
+                # Validate corrupt backup
+                corrupt_path = os.path.join(dest, "corrupt.zip")
+                with open(corrupt_path, "wb") as f:
+                    f.write(b"not a zip")
+                try:
+                    security_service.validate_backup(corrupt_path)
+                    check("Corrupt backup raises ValueError", False, "no error raised")
+                except ValueError:
+                    check("Corrupt backup raises ValueError", True)
 
-            # Destination inside data dir should fail
-            try:
-                security_service.create_backup(db, DATA_DIR)
-                check("Self-inclusion prevented", False, "no error raised")
-            except ValueError:
-                check("Self-inclusion prevented", True)
+                # Destination inside data dir should fail
+                try:
+                    security_service.create_backup(db, TEST_DATA_DIR)
+                    check("Self-inclusion prevented", False, "no error raised")
+                except ValueError:
+                    check("Self-inclusion prevented", True)
 
-            # Temp file atomic rename: if zip exists at final path, no .tmp should remain
-            tmp_files = [f for f in os.listdir(dest) if f.endswith(".tmp")]
-            check("No orphaned .tmp files after successful backup", len(tmp_files) == 0)
+                # Temp file atomic rename: if zip exists at final path, no .tmp should remain
+                tmp_files = [f for f in os.listdir(dest) if f.endswith(".tmp")]
+                check("No orphaned .tmp files after successful backup", len(tmp_files) == 0)
 
         finally:
             db.close()
 
 
 # ---------------------------------------------------------------------------
-# 9. Protected API endpoints (live server test if available)
+# 9. Protected API endpoints (In-Process TestClient with DB Override)
 # ---------------------------------------------------------------------------
 def test_api_endpoints():
     print("\n[9] Protected API Endpoints")
+    from fastapi.testclient import TestClient
+    from backend.app.main import app
+    from backend.app.database import get_db
+
+    def override_get_db():
+        db = TestSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    orig_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_db] = override_get_db
     try:
-        import requests
-    except ImportError:
-        print("  [SKIP] requests not available — skipping live API tests")
-        return
+        client = TestClient(app)
 
-    base = "http://127.0.0.1:8000"
+        # Clear existing PIN hash in test DB so set_pin operates on a clean state
+        with TestSessionLocal() as _db:
+            _s = _db.query(SecuritySettings).filter(SecuritySettings.id == 1).first()
+            if not _s:
+                _s = SecuritySettings(id=1)
+                _db.add(_s)
+            _s.pin_hash = None
+            _s.pin_salt = None
+            _s.lock_enabled = False
+            _db.commit()
 
-    try:
-        r = requests.get(f"{base}/", timeout=2)
-        if r.status_code != 200:
-            print("  [SKIP] Backend not responding")
-            return
-    except Exception:
-        print("  [SKIP] Backend not responding — skipping live API tests")
-        return
+        # Reset in-memory security_service state
+        security_service.invalidate_session()
+        security_service._failed_attempts = 0
+        security_service._lockout_until = None
 
-    # Clear existing PIN hash in DB so set_pin operates on a clean state
-    _db = SessionLocal()
-    _s = _db.query(SecuritySettings).filter(SecuritySettings.id == 1).first()
-    if _s:
-        _s.pin_hash = None
-        _s.pin_salt = None
-        _s.lock_enabled = False
-        _db.commit()
-    _db.close()
+        # Set PIN for tests (pass recovery_email for first-time setup requirement)
+        r_set = client.post("/api/security/pin/set", json={"pin": "test9999", "recovery_email": "test@example.com"})
+        check("Set PIN succeeds (200)", r_set.status_code == 200)
 
-    # Set PIN for tests (pass recovery_email for first-time setup requirement)
-    r_set = requests.post(f"{base}/api/security/pin/set", json={"pin": "test9999", "recovery_email": "test@example.com"})
+        # Enable lock
+        r = client.post("/api/security/pin/verify", json={"pin": "test9999"})
+        token = r.json().get("session_token", "")
+        client.post("/api/security/lock/enable",
+                    json={"enabled": True}, headers={"X-Session-Token": token})
 
-    # Enable lock
-    r = requests.post(f"{base}/api/security/pin/verify", json={"pin": "test9999"})
-    token = r.json().get("session_token", "")
-    requests.post(f"{base}/api/security/lock/enable",
-                  json={"enabled": True}, headers={"X-Session-Token": token})
+        # Protected without token → 401
+        r = client.get("/api/security/excluded-folders")
+        check("Protected endpoint 401 without token", r.status_code == 401)
 
-    # Protected without token → 401
-    r = requests.get(f"{base}/api/security/excluded-folders")
-    check("Protected endpoint 401 without token", r.status_code == 401)
+        # Protected with valid token → 200
+        r = client.get("/api/security/excluded-folders",
+                       headers={"X-Session-Token": token})
+        check("Protected endpoint 200 with valid token", r.status_code == 200)
 
-    # Protected with valid token → 200
-    r = requests.get(f"{base}/api/security/excluded-folders",
-                     headers={"X-Session-Token": token})
-    check("Protected endpoint 200 with valid token", r.status_code == 200)
+        # Wrong token → 401
+        r = client.get("/api/security/excluded-folders",
+                       headers={"X-Session-Token": "deadbeef" * 4})
+        check("Protected endpoint 401 with wrong token", r.status_code == 401)
 
-    # Wrong token → 401
-    r = requests.get(f"{base}/api/security/excluded-folders",
-                     headers={"X-Session-Token": "deadbeef" * 4})
-    check("Protected endpoint 401 with wrong token", r.status_code == 401)
+        # Progressive lockout via API
+        for _ in range(5):
+            client.post("/api/security/pin/verify", json={"pin": "bad"})
+        r = client.post("/api/security/pin/verify", json={"pin": "bad"})
+        check("API returns 429 after lockout", r.status_code == 429)
 
-    # Progressive lockout via API
-    for _ in range(5):
-        requests.post(f"{base}/api/security/pin/verify", json={"pin": "bad"})
-    r = requests.post(f"{base}/api/security/pin/verify", json={"pin": "bad"})
-    check("API returns 429 after lockout", r.status_code == 429)
+        # Reset lockout for subsequent authorized requests
+        security_service._failed_attempts = 0
+        security_service._lockout_until = None
 
-    # Lock Now invalidates session server-side
-    r2 = requests.post(f"{base}/api/security/pin/verify", json={"pin": "test9999"})
-    tok2 = r2.json().get("session_token", "")
-    requests.post(f"{base}/api/security/lock/lock-now",
-                  headers={"X-Session-Token": tok2})
-    r = requests.get(f"{base}/api/security/excluded-folders",
-                     headers={"X-Session-Token": tok2})
-    check("Session invalidated after Lock Now", r.status_code == 401)
+        # Lock Now invalidates session server-side
+        r2 = client.post("/api/security/pin/verify", json={"pin": "test9999"})
+        tok2 = r2.json().get("session_token", "")
+        client.post("/api/security/lock/lock-now",
+                    headers={"X-Session-Token": tok2})
+        r = client.get("/api/security/excluded-folders",
+                       headers={"X-Session-Token": tok2})
+        check("Session invalidated after Lock Now", r.status_code == 401)
 
-    # Cleanup: disable lock
-    r3 = requests.post(f"{base}/api/security/pin/verify", json={"pin": "test9999"})
-    tok3 = r3.json().get("session_token", "")
-    requests.post(f"{base}/api/security/lock/enable",
-                  json={"enabled": False}, headers={"X-Session-Token": tok3})
-    print("  (lock disabled for cleanup)")
+        # Cleanup: disable lock
+        r3 = client.post("/api/security/pin/verify", json={"pin": "test9999"})
+        tok3 = r3.json().get("session_token", "")
+        client.post("/api/security/lock/enable",
+                    json={"enabled": False}, headers={"X-Session-Token": tok3})
+        security_service.invalidate_session()
+        print("  (lock disabled for cleanup)")
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(orig_overrides)
 
 
 # ---------------------------------------------------------------------------
-# 10. Existing Modules 1–4 regression
+# 10. Existing Modules 1–4 regression (In-Process TestClient with DB Override)
 # ---------------------------------------------------------------------------
 def test_regression():
     print("\n[10] Modules 1-4 Regression")
+    from fastapi.testclient import TestClient
+    from backend.app.main import app
+    from backend.app.database import get_db
+
+    def override_get_db():
+        db = TestSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    orig_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_db] = override_get_db
     try:
-        import requests
-    except ImportError:
-        print("  [SKIP] requests not available")
-        return
+        client = TestClient(app)
 
-    base = "http://127.0.0.1:8000"
-    try:
-        r = requests.get(f"{base}/", timeout=2)
-        if r.status_code != 200:
-            print("  [SKIP] Backend not responding")
-            return
-    except Exception:
-        print("  [SKIP] Backend not responding")
-        return
+        endpoints = [
+            ("GET", "/api/folders", None),
+            ("GET", "/api/statistics", None),
+            ("GET", "/api/scan/status", None),
+            ("GET", "/api/organization/categories", None),
+            ("GET", "/api/organization/overview", None),
+        ]
 
-    endpoints = [
-        ("GET", "/api/folders", None),
-        ("GET", "/api/statistics", None),
-        ("GET", "/api/scan/status", None),
-        ("GET", "/api/organization/categories", None),
-        ("GET", "/api/organization/overview", None),
-    ]
-
-    for method, path, body in endpoints:
-        r = requests.request(method, f"{base}{path}", json=body, timeout=5)
-        check(f"{method} {path} still works (2xx)", 200 <= r.status_code < 300)
+        for method, path, body in endpoints:
+            r = client.request(method, path, json=body)
+            check(f"{method} {path} still works (2xx)", 200 <= r.status_code < 300)
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(orig_overrides)
 
 
 # ---------------------------------------------------------------------------
-# 11. Email-Based PIN Recovery & Masking
+# 11. Email-Based PIN Recovery & Masking (Isolated DB)
 # ---------------------------------------------------------------------------
 def test_email_recovery():
     print("\n[11] Email-Based PIN Recovery & Masking")
@@ -486,7 +547,7 @@ def test_email_recovery():
     original_send = email_service.send_reset_code
     email_service.send_reset_code = MagicMock(side_effect=mock_send)
 
-    db = SessionLocal()
+    db = TestSessionLocal()
     try:
         settings = db.query(SecuritySettings).filter(SecuritySettings.id == 1).first()
         if not settings:
@@ -534,15 +595,16 @@ def test_email_recovery():
         email_service.send_reset_code = original_send
 
 
+# ---------------------------------------------------------------------------
+# 12. File and Folder Exclusion (Isolated DB)
+# ---------------------------------------------------------------------------
 def test_file_and_folder_exclusion():
     print("\n[12] File and Folder Exclusion (Granular Privacy)")
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    db.query(ExcludedFolder).delete()
-    db.commit()
+    Base.metadata.create_all(bind=test_engine)
+    db = TestSessionLocal()
     svc = security_service
 
-    tmp_dir = os.path.join(ROOT, "test_excl_tmp")
+    tmp_dir = os.path.join(ROOT, "test_excl_scratch")
     os.makedirs(tmp_dir, exist_ok=True)
     try:
         norm_file = os.path.join(tmp_dir, "normal.pdf")
@@ -583,166 +645,192 @@ def test_file_and_folder_exclusion():
         db.close()
 
 
+# ---------------------------------------------------------------------------
+# 13. Local AES-256-GCM Encryption & Decryption (Isolated DB)
+# ---------------------------------------------------------------------------
 def test_local_aes256_gcm_encryption_and_decryption():
     print("\n[13] Local AES-256-GCM Encryption & Decryption")
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    except ImportError:
+        print("  [SKIP] cryptography not installed")
+        return
+
+    Base.metadata.create_all(bind=test_engine)
+    db = TestSessionLocal()
     svc = security_service
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        folder_path = os.path.join(tmp_dir, "SecureDocs")
-        os.makedirs(folder_path, exist_ok=True)
-        file_path = os.path.join(folder_path, "confidential.txt")
-        original_text = "Top Secret Personal Data 123456"
-        with open(file_path, "w") as f:
-            f.write(original_text)
-
-        # Create initial Folder and File DB record
-        folder_rec = Folder(path=svc.resolve_path(folder_path), name="SecureDocs")
-        db.add(folder_rec)
-        db.commit()
-        db.refresh(folder_rec)
-
-        file_rec = File(
-            folder_id=folder_rec.id,
-            path=svc.resolve_path(file_path),
-            name="confidential.txt",
-            extension=".txt",
-            size=len(original_text),
-            modified_at=datetime.utcnow(),
-            file_hash="hash123",
-            extraction_status="success",
-            is_encrypted=False
-        )
-        db.add(file_rec)
-        db.commit()
-        db.refresh(file_rec)
-        original_db_id = file_rec.id
-
-        res_enc = svc.encrypt_file(db, file_path)
-        check("encrypt_file returns status success", res_enc["status"] == "success")
-        check("is_file_encrypted returns True", svc.is_file_encrypted(file_path))
-
-        # Verify DB record still exists and state is ENCRYPTED
-        db_file_after_enc = db.query(File).filter(File.path == svc.resolve_path(file_path)).first()
-        check("DB record still exists after encryption", db_file_after_enc is not None)
-        check("DB record ID unchanged after encryption", db_file_after_enc is not None and db_file_after_enc.id == original_db_id)
-        check("DB record state marked as ENCRYPTED", db_file_after_enc is not None and db_file_after_enc.is_encrypted is True and db_file_after_enc.extraction_status == "encrypted")
-
-        with open(file_path, "rb") as f:
-            raw_data = f.read()
-        check("File content starts with magic header MEMORA_ENC_v1", raw_data.startswith(b"MEMORA_ENC_v1"))
-        check("Plaintext is NOT present in raw encrypted file (cannot be read as normal plaintext)", original_text.encode() not in raw_data)
-
-        res_dec = svc.decrypt_file(db, file_path)
-        check("decrypt_file returns status success", res_dec["status"] == "success")
-        check("is_file_encrypted returns False after decryption", not svc.is_file_encrypted(file_path))
-
-        # Verify same DB record still exists and state is normal/plaintext with no duplicate records
-        file_count_after_dec = db.query(File).filter(File.path == svc.resolve_path(file_path)).count()
-        db_file_after_dec = db.query(File).filter(File.path == svc.resolve_path(file_path)).first()
-        check("Decrypt does not create a duplicate DB record", file_count_after_dec == 1)
-        check("Same DB record still exists after decryption", db_file_after_dec is not None and db_file_after_dec.id == original_db_id)
-        check("DB record state returned to normal/pending after decryption", db_file_after_dec is not None and db_file_after_dec.is_encrypted is False and db_file_after_dec.extraction_status == "pending")
-
-        with open(file_path, "r") as f:
-            restored_text = f.read()
-        check("Restored text matches original text exactly", restored_text == original_text)
-
-        sub_file = os.path.join(folder_path, "sub.txt")
-        with open(sub_file, "w") as f:
-            f.write("sub content")
-
-        f_enc = svc.encrypt_folder(db, folder_path)
-        check("encrypt_folder encrypts all files", f_enc["encrypted_count"] == 2)
-        check("All files in folder encrypted", svc.is_file_encrypted(file_path) and svc.is_file_encrypted(sub_file))
-
-        f_dec = svc.decrypt_folder(db, folder_path)
-        check("decrypt_folder decrypts all files", f_dec["decrypted_count"] == 2)
-
-        svc.encrypt_file(db, file_path)
-        with open(file_path, "r+b") as f:
-            f.seek(30)
-            f.write(b"X")
-
         try:
-            svc.decrypt_file(db, file_path)
-            check("Corrupted file decryption fails", False, "Expected ValueError")
-        except ValueError as e:
-            check("Corrupted file decryption rejected cleanly", "Corrupted encrypted data" in str(e) or "Decryption failed" in str(e))
+            folder_path = os.path.join(tmp_dir, "SecureDocs")
+            os.makedirs(folder_path, exist_ok=True)
+            file_path = os.path.join(folder_path, "confidential.txt")
+            original_text = "Top Secret Personal Data 123456"
+            with open(file_path, "w") as f:
+                f.write(original_text)
 
-    db.close()
+            # Create initial Folder and File DB record
+            folder_rec = Folder(path=svc.resolve_path(folder_path), name="SecureDocs")
+            db.add(folder_rec)
+            db.commit()
+            db.refresh(folder_rec)
 
+            file_rec = File(
+                folder_id=folder_rec.id,
+                path=svc.resolve_path(file_path),
+                name="confidential.txt",
+                extension=".txt",
+                size=len(original_text),
+                modified_at=datetime.utcnow(),
+                file_hash="hash123",
+                extraction_status="success",
+                is_encrypted=False
+            )
+            db.add(file_rec)
+            db.commit()
+            db.refresh(file_rec)
+            original_db_id = file_rec.id
 
-def test_permanent_cascading_deletion_and_safety_checks():
-    print("\n[14] Permanent Cascading Deletion & Path Safety Checks")
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    svc = security_service
+            res_enc = svc.encrypt_file(db, file_path)
+            check("encrypt_file returns status success", res_enc["status"] == "success")
+            check("is_file_encrypted returns True", svc.is_file_encrypted(file_path))
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        app_folder = Folder(path=svc.resolve_path(tmp_dir), name="TestApproved")
-        db.add(app_folder)
-        db.commit()
+            # Verify DB record still exists and state is ENCRYPTED
+            db_file_after_enc = db.query(File).filter(File.path == svc.resolve_path(file_path)).first()
+            check("DB record still exists after encryption", db_file_after_enc is not None)
+            check("DB record ID unchanged after encryption", db_file_after_enc is not None and db_file_after_enc.id == original_db_id)
+            check("DB record state marked as ENCRYPTED", db_file_after_enc is not None and db_file_after_enc.is_encrypted is True and db_file_after_enc.extraction_status == "encrypted")
 
-        parent_dir = os.path.join(tmp_dir, "Parent")
-        os.makedirs(parent_dir, exist_ok=True)
-        f1 = os.path.join(parent_dir, "file1.pdf")
-        child_dir = os.path.join(parent_dir, "Child")
-        os.makedirs(child_dir, exist_ok=True)
-        f2 = os.path.join(child_dir, "doc.txt")
+            with open(file_path, "rb") as f:
+                raw_data = f.read()
+            check("File content starts with magic header MEMORA_ENC_v1", raw_data.startswith(b"MEMORA_ENC_v1"))
+            check("Plaintext is NOT present in raw encrypted file (cannot be read as normal plaintext)", original_text.encode() not in raw_data)
 
-        for fp in [f1, f2]:
-            with open(fp, "w") as f:
-                f.write("data")
+            res_dec = svc.decrypt_file(db, file_path)
+            check("decrypt_file returns status success", res_dec["status"] == "success")
+            check("is_file_encrypted returns False after decryption", not svc.is_file_encrypted(file_path))
 
-        info = svc.inspect_delete_path(db, parent_dir)
-        check("Inspect path returns folder info", info["is_folder"])
-        check("Child file count calculated correctly", info["child_file_count"] == 2)
-        check("Child folder count calculated correctly", info["child_folder_count"] == 1)
-        check("Inside approved folder is True", info["is_inside_approved"])
+            # Verify same DB record still exists and state is normal/plaintext with no duplicate records
+            file_count_after_dec = db.query(File).filter(File.path == svc.resolve_path(file_path)).count()
+            db_file_after_dec = db.query(File).filter(File.path == svc.resolve_path(file_path)).first()
+            check("Decrypt does not create a duplicate DB record", file_count_after_dec == 1)
+            check("Same DB record still exists after decryption", db_file_after_dec is not None and db_file_after_dec.id == original_db_id)
+            check("DB record state returned to normal/pending after decryption", db_file_after_dec is not None and db_file_after_dec.is_encrypted is False and db_file_after_dec.extraction_status == "pending")
 
-        try:
-            svc.delete_permanently(db, os.path.abspath(os.sep), confirm=True)
-            check("System root deletion blocked", False, "Should have failed")
-        except ValueError as e:
-            check("System root deletion blocked with security policy error", "strictly prohibited" in str(e) or "protected" in str(e))
+            with open(file_path, "r") as f:
+                restored_text = f.read()
+            check("Restored text matches original text exactly", restored_text == original_text)
 
-        res = svc.delete_permanently(db, parent_dir, confirm=True)
-        check("Permanent deletion returned success", res["status"] == "success")
-        check("Parent directory removed from disk", not os.path.exists(parent_dir))
-        check("Child files removed from disk", not os.path.exists(f1) and not os.path.exists(f2))
+            sub_file = os.path.join(folder_path, "sub.txt")
+            with open(sub_file, "w") as f:
+                f.write("sub content")
 
-        db.delete(app_folder)
-        db.commit()
+            f_enc = svc.encrypt_folder(db, folder_path)
+            check("encrypt_folder encrypts all files", f_enc["encrypted_count"] == 2)
+            check("All files in folder encrypted", svc.is_file_encrypted(file_path) and svc.is_file_encrypted(sub_file))
 
-    db.close()
+            f_dec = svc.decrypt_folder(db, folder_path)
+            check("decrypt_folder decrypts all files", f_dec["decrypted_count"] == 2)
+
+            svc.encrypt_file(db, file_path)
+            with open(file_path, "r+b") as f:
+                f.seek(30)
+                f.write(b"X")
+
+            try:
+                svc.decrypt_file(db, file_path)
+                check("Corrupted file decryption fails", False, "Expected ValueError")
+            except ValueError as e:
+                check("Corrupted file decryption rejected cleanly", "Corrupted encrypted data" in str(e) or "Decryption failed" in str(e))
+        finally:
+            db.close()
 
 
 # ---------------------------------------------------------------------------
-# Main
+# 14. Permanent Cascading Deletion & Path Safety Checks (Isolated DB)
+# ---------------------------------------------------------------------------
+def test_permanent_cascading_deletion_and_safety_checks():
+    print("\n[14] Permanent Cascading Deletion & Path Safety Checks")
+    Base.metadata.create_all(bind=test_engine)
+    db = TestSessionLocal()
+    svc = security_service
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        try:
+            app_folder = Folder(path=svc.resolve_path(tmp_dir), name="TestApproved")
+            db.add(app_folder)
+            db.commit()
+
+            parent_dir = os.path.join(tmp_dir, "Parent")
+            os.makedirs(parent_dir, exist_ok=True)
+            f1 = os.path.join(parent_dir, "file1.pdf")
+            child_dir = os.path.join(parent_dir, "Child")
+            os.makedirs(child_dir, exist_ok=True)
+            f2 = os.path.join(child_dir, "doc.txt")
+
+            for fp in [f1, f2]:
+                with open(fp, "w") as f:
+                    f.write("data")
+
+            info = svc.inspect_delete_path(db, parent_dir)
+            check("Inspect path returns folder info", info["is_folder"])
+            check("Child file count calculated correctly", info["child_file_count"] == 2)
+            check("Child folder count calculated correctly", info["child_folder_count"] == 1)
+            check("Inside approved folder is True", info["is_inside_approved"])
+
+            try:
+                svc.delete_permanently(db, os.path.abspath(os.sep), confirm=True)
+                check("System root deletion blocked", False, "Should have failed")
+            except ValueError as e:
+                check("System root deletion blocked with security policy error", "strictly prohibited" in str(e) or "protected" in str(e))
+
+            res = svc.delete_permanently(db, parent_dir, confirm=True)
+            check("Permanent deletion returned success", res["status"] == "success")
+            check("Parent directory removed from disk", not os.path.exists(parent_dir))
+            check("Child files removed from disk", not os.path.exists(f1) and not os.path.exists(f2))
+
+            db.delete(app_folder)
+            db.commit()
+        finally:
+            db.close()
+
+
+# ---------------------------------------------------------------------------
+# Main Runner
 # ---------------------------------------------------------------------------
 def run_all():
     print("=" * 60)
-    print("MEMORA AI - MODULE 5 SECURITY TEST SUITE")
+    print("MEMORA AI - MODULE 5 SECURITY TEST SUITE (FULLY ISOLATED)")
     print("=" * 60)
 
-    init_db_schema()
+    try:
+        Base.metadata.create_all(bind=test_engine)
+        with TestSessionLocal() as db:
+            if not db.query(SecuritySettings).filter(SecuritySettings.id == 1).first():
+                db.add(SecuritySettings(id=1, pin_hash=None, pin_salt=None, lock_enabled=False))
+                db.commit()
 
-    test_pin_hashing()
-    test_lockout()
-    test_session()
-    test_path_validation()
-    test_excluded_folders_scanner()
-    test_audit_log()
-    test_data_removal()
-    test_backup()
-    test_api_endpoints()
-    test_email_recovery()
-    test_file_and_folder_exclusion()
-    test_local_aes256_gcm_encryption_and_decryption()
-    test_permanent_cascading_deletion_and_safety_checks()
-    test_regression()
+        test_pin_hashing()
+        test_lockout()
+        test_session()
+        test_path_validation()
+        test_excluded_folders_scanner()
+        test_audit_log()
+        test_data_removal()
+        test_backup()
+        test_api_endpoints()
+        test_email_recovery()
+        test_file_and_folder_exclusion()
+        test_local_aes256_gcm_encryption_and_decryption()
+        test_permanent_cascading_deletion_and_safety_checks()
+        test_regression()
+
+    finally:
+        try:
+            test_engine.dispose()
+            shutil.rmtree(TEST_TEMP_DIR, ignore_errors=True)
+        except Exception:
+            pass
 
     print("\n" + "=" * 60)
     if _failures:
@@ -752,7 +840,7 @@ def run_all():
         print("=" * 60)
         return False
     else:
-        print("\033[32mALL MODULE 5 TESTS PASSED\033[0m")
+        print("\033[32mALL MODULE 5 TESTS PASSED (FULLY ISOLATED)\033[0m")
         print("=" * 60)
         return True
 

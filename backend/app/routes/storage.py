@@ -16,8 +16,11 @@ from ..schemas import (
     OptimizeApplyResponse,
     ZipArchiveRequest,
     ZipArchiveResponse,
+    EmailShareRequest,
+    EmailShareResponse,
 )
 from ..services.storage_service import storage_service, StorageServiceError
+from ..services.email_service import email_service
 
 logger = logging.getLogger("memora.storage_route")
 
@@ -30,10 +33,14 @@ def _handle_storage_error(e: StorageServiceError):
     """
     msg = str(e)
     msg_lower = msg.lower()
-    if "not found" in msg_lower:
+    if "not found" in msg_lower or "does not exist" in msg_lower:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
     elif "modified after" in msg_lower:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg)
+    elif "exceeds" in msg_lower or ("limit" in msg_lower and "size" in msg_lower):
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=msg)
+    elif "excluded" in msg_lower or "encrypted" in msg_lower or "outside" in msg_lower or "permission denied" in msg_lower:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
@@ -239,3 +246,63 @@ def create_zip_archive(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal error creating ZIP archive."
         )
+
+
+@router.post("/share/email", response_model=EmailShareResponse)
+def share_files_via_email(
+    req: EmailShareRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Sends selected indexed files as email attachments via configured Gmail SMTP.
+    Supports 'zip' mode (packaged into one archive) and 'originals' mode.
+    Guarantees temporary ZIP cleanup in finally block.
+    """
+    temp_zip_path = None
+    try:
+        attachments, temp_zip_path, total_bytes = storage_service.prepare_email_attachments(
+            db=db,
+            file_ids=req.file_ids,
+            mode=req.mode,
+            zip_filename=req.zip_filename
+        )
+        result = email_service.send_file_sharing_email(
+            to_email=req.to_email,
+            subject=req.subject or "Shared Files from Memora AI",
+            message_body=req.body or "Please find the attached files shared from Memora AI.",
+            attachments=attachments,
+            sender_name="Memora AI"
+        )
+        return EmailShareResponse(
+            status="success",
+            sent_to=req.to_email,
+            mode=req.mode,
+            attachments_count=result["attachments_count"],
+            total_bytes_sent=result["total_bytes_sent"],
+            message=result["message"]
+        )
+    except StorageServiceError as e:
+        _handle_storage_error(e)
+    except FileNotFoundError as fnf:
+        logger.error("File not found during email sharing: %s", fnf)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(fnf))
+    except ValueError as ve:
+        err_msg = str(ve)
+        if "exceeds" in err_msg.lower() or "limit" in err_msg.lower():
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=err_msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+    except RuntimeError as re_err:
+        logger.error("SMTP delivery failure: %s", re_err)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Email delivery failed. Please check your network connection and SMTP configuration."
+        )
+    except Exception as exc:
+        logger.error("Unexpected error during email sharing: %s", exc, exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error sending email.")
+    finally:
+        if temp_zip_path and os.path.exists(temp_zip_path):
+            try:
+                os.remove(temp_zip_path)
+            except Exception as rem_err:
+                logger.debug("Failed to remove temporary share ZIP '%s': %s", temp_zip_path, rem_err)

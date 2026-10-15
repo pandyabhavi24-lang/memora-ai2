@@ -3,7 +3,7 @@ import {
   HardDrive, Zap, Archive, FolderOpen, CheckCircle2, AlertTriangle,
   RefreshCw, Layers, ArrowRight, Info, Loader2, Filter, CheckSquare,
   Square, Eye, Copy, FileCheck, SlidersHorizontal, ShieldCheck,
-  ChevronRight, ChevronDown, Folder
+  ChevronRight, ChevronDown, Folder, Mail, Send
 } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useApp } from '../context/AppContext';
@@ -171,7 +171,7 @@ const FileBrowser = ({ files, loading, selectedFileIds, onToggle, onToggleFolder
 
 // ─── Selection Bar ─────────────────────────────────────────────────────────────
 
-const SelectionBar = ({ count, optimizableCount, onOptimize, onZip, showOptimize }) => {
+const SelectionBar = ({ count, optimizableCount, onOptimize, onZip, onEmail, showOptimize }) => {
   if (count === 0) return null;
   const zipOnly = count - optimizableCount;
   return (
@@ -181,7 +181,7 @@ const SelectionBar = ({ count, optimizableCount, onOptimize, onZip, showOptimize
         {optimizableCount > 0 && <span className="ml-2 text-emerald-400 font-medium">· {optimizableCount} optimizable</span>}
         {zipOnly > 0 && <span className="ml-2 text-[#71839E]">· {zipOnly} ZIP only</span>}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         {showOptimize && optimizableCount > 0 && (
           <Button variant="primary" size="sm" onClick={onOptimize}>
             <Zap className="w-3.5 h-3.5 mr-1" />Optimize First
@@ -190,6 +190,11 @@ const SelectionBar = ({ count, optimizableCount, onOptimize, onZip, showOptimize
         <Button variant="secondary" size="sm" onClick={onZip}>
           <Archive className="w-3.5 h-3.5 mr-1" />Create ZIP
         </Button>
+        {onEmail && (
+          <Button variant="outline" size="sm" onClick={onEmail} className="text-xs border-[#3478F6]/40 hover:bg-[#3478F6]/15 text-[#4B91FF]">
+            <Mail className="w-3.5 h-3.5 mr-1" />Share via Email
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -238,6 +243,21 @@ export const StorageOptimization = () => {
   const [zipOverwrite, setZipOverwrite] = useState(false);
   const [creatingZip, setCreatingZip] = useState(false);
   const [zipResult, setZipResult] = useState(null);
+
+  // Email Share modal
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [emailMode, setEmailMode] = useState('zip');
+  const [emailZipFilename, setEmailZipFilename] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailResult, setEmailResult] = useState(null);
+  const [emailError, setEmailError] = useState(null);
+
+  // Large file audit custom MB input
+  const [isCustomMinSize, setIsCustomMinSize] = useState(false);
+  const [customMinSizeInput, setCustomMinSizeInput] = useState('');
 
   useEffect(() => { loadAllData(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -385,9 +405,113 @@ export const StorageOptimization = () => {
       });
       setZipResult(res); setSelectedFileIds([]);
       addToast(`ZIP created with ${res.files_archived} files!`, 'success');
-      loadSummary(); loadAllFiles(); loadLargeFiles(minSizeMb, limit);
-    } catch (err) { addToast(err.message || 'ZIP creation failed', 'error'); }
-    finally { setCreatingZip(false); }
+    } catch (err) {
+      const errMsg = err.message || 'ZIP creation failed';
+      addToast(errMsg, 'error');
+      if (errMsg.toLowerCase().includes('does not exist') || errMsg.toLowerCase().includes('not found')) {
+        loadSummary(); loadAllFiles(); loadLargeFiles(minSizeMb, limit);
+        setSelectedFileIds([]);
+      }
+    } finally { setCreatingZip(false); }
+  };
+
+  const handleOpenEmailModal = () => {
+    if (!selectedFileIds.length) return;
+    setEmailRecipient('');
+    setEmailSubject(selectedList.length === 1 ? `Shared: ${selectedList[0].name}` : `Shared Files (${selectedList.length}) from Memora AI`);
+    setEmailBody('');
+    setEmailMode('zip');
+    if (selectedList.length === 1 && selectedList[0].name) {
+      const stem = selectedList[0].name.replace(/\.[^/.]+$/, '');
+      setEmailZipFilename(`${stem}.zip`);
+    } else {
+      setEmailZipFilename('memora_shared_files.zip');
+    }
+    setEmailResult(null);
+    setEmailError(null);
+    setShowEmailModal(true);
+  };
+
+  const handleCloseEmailModal = () => {
+    if (sendingEmail) return;
+    setShowEmailModal(false);
+    setEmailResult(null);
+    setEmailError(null);
+  };
+
+  const handleSendEmail = async () => {
+    if (!selectedFileIds.length) {
+      setEmailError('Please select at least one file to share.');
+      return;
+    }
+    const cleanEmail = emailRecipient.trim();
+    if (!cleanEmail) {
+      setEmailError('Please enter a recipient email address.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setEmailError('Please enter a valid email address format (e.g., user@example.com).');
+      return;
+    }
+    if (emailSubject && (emailSubject.includes('\r') || emailSubject.includes('\n'))) {
+      setEmailError('Subject line cannot contain newline characters.');
+      return;
+    }
+    if (emailMode === 'zip' && emailZipFilename) {
+      const forbidden = ['\r', '\n', '\0', '/', '\\', '"', "'", ';'];
+      if (forbidden.some(char => emailZipFilename.includes(char))) {
+        setEmailError('ZIP filename contains invalid characters or directory separators.');
+        return;
+      }
+    }
+    if (selectedBytes > 18 * 1024 * 1024) {
+      setEmailError('Selected files exceed the 18 MB raw attachment limit. Please select fewer files.');
+      return;
+    }
+
+    setSendingEmail(true);
+    setEmailError(null);
+    try {
+      const payload = {
+        file_ids: selectedFileIds,
+        to_email: cleanEmail,
+        mode: emailMode,
+        subject: emailSubject.trim() || undefined,
+        body: emailBody.trim() || undefined,
+        zip_filename: emailMode === 'zip' && emailZipFilename.trim() ? emailZipFilename.trim() : undefined,
+      };
+      const res = await storageService.shareFilesViaEmail(payload);
+      setEmailResult(res);
+      addToast(`Email successfully sent to ${cleanEmail}!`, 'success');
+    } catch (err) {
+      const errMsg = err.message || 'Email delivery failed. Please check your network connection and SMTP configuration.';
+      setEmailError(errMsg);
+      addToast(errMsg, 'error');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const handleMinSizeSelectChange = (e) => {
+    const val = e.target.value;
+    if (val === 'custom') {
+      setIsCustomMinSize(true);
+      setCustomMinSizeInput(String(minSizeMb));
+    } else {
+      setIsCustomMinSize(false);
+      setMinSizeMb(parseFloat(val));
+    }
+  };
+
+  const handleApplyCustomMinSize = () => {
+    const parsed = parseFloat(customMinSizeInput);
+    if (isNaN(parsed) || parsed < 0.1) {
+      addToast('Minimum size must be at least 0.1 MB', 'warning');
+      return;
+    }
+    setMinSizeMb(parsed);
+    addToast(`Filtering files ≥ ${parsed} MB`, 'info');
   };
 
   const toggleSection = (key) => setOpenSection(prev => prev === key ? null : key);
@@ -446,7 +570,7 @@ export const StorageOptimization = () => {
               filterOptimizable={true} showOptimize={true} onOptimize={handleOpenOptimize} />
             <SelectionBar count={selectedList.length} optimizableCount={selectedOptimizable.length}
               onOptimize={() => selectedOptimizable.length > 0 && handleOpenOptimize(selectedOptimizable[0])}
-              onZip={handleOpenZipModal} showOptimize={true} />
+              onZip={handleOpenZipModal} onEmail={handleOpenEmailModal} showOptimize={true} />
           </div>
         )}
       </div>
@@ -460,12 +584,31 @@ export const StorageOptimization = () => {
           accent="text-[#4B91FF]" />
         {openSection === 'audit' && (
           <div className="border-t border-[rgba(139,170,215,0.12)]">
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(139,170,215,0.1)] bg-[#0E1D35]/50">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(139,170,215,0.1)] bg-[#0E1D35]/50 flex-wrap">
               <span className="text-xs text-[#A7B7D0] shrink-0">Min size:</span>
-              <select value={minSizeMb} onChange={e => setMinSizeMb(parseFloat(e.target.value))}
+              <select value={isCustomMinSize ? 'custom' : minSizeMb} onChange={handleMinSizeSelectChange}
                 className="bg-[#06101F] border border-[rgba(139,170,215,0.18)] text-[#F4F7FF] text-xs rounded-lg px-2.5 py-1 focus:outline-none cursor-pointer">
                 {[1,5,10,25,50,100].map(v => <option key={v} value={v}>{v} MB</option>)}
+                <option value="custom">Custom...</option>
               </select>
+              {isCustomMinSize && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min="0.1"
+                    max="10000"
+                    step="0.5"
+                    value={customMinSizeInput}
+                    onChange={e => setCustomMinSizeInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleApplyCustomMinSize()}
+                    placeholder="MB"
+                    className="w-16 px-2 py-0.5 bg-[#06101F] border border-[rgba(139,170,215,0.18)] text-[#F4F7FF] text-xs rounded-lg font-mono focus:border-[#3478F6] focus:outline-none"
+                  />
+                  <Button variant="secondary" size="sm" onClick={handleApplyCustomMinSize} className="py-0.5 px-2 text-[11px] h-7">
+                    Apply
+                  </Button>
+                </div>
+              )}
               <span className="text-xs text-[#A7B7D0] shrink-0 ml-4">Limit:</span>
               <select value={limit} onChange={e => setLimit(parseInt(e.target.value))}
                 className="bg-[#06101F] border border-[rgba(139,170,215,0.18)] text-[#F4F7FF] text-xs rounded-lg px-2.5 py-1 focus:outline-none cursor-pointer">
@@ -481,7 +624,7 @@ export const StorageOptimization = () => {
                       const isSel = selectedFileIds.includes(file.id);
                       return (
                         <div key={file.id}
-                          className={`flex items-center gap-2.5 px-4 py-2.5 transition-colors ${isSel ? 'bg-[#3478F6]/10' : 'hover:bg-white/[0.02]'}`}>
+                           className={`flex items-center gap-2.5 px-4 py-2.5 transition-colors ${isSel ? 'bg-[#3478F6]/10' : 'hover:bg-white/[0.02]'}`}>
                           <button type="button" onClick={() => handleToggle(file.id)} className="text-[#71839E] hover:text-[#F4F7FF] shrink-0 transition-colors cursor-pointer">
                             {isSel ? <CheckSquare className="w-3.5 h-3.5 text-[#4B91FF]" /> : <Square className="w-3.5 h-3.5" />}
                           </button>
@@ -502,7 +645,7 @@ export const StorageOptimization = () => {
             }
             <SelectionBar count={selectedList.length} optimizableCount={selectedOptimizable.length}
               onOptimize={() => selectedOptimizable.length > 0 && handleOpenOptimize(selectedOptimizable[0])}
-              onZip={handleOpenZipModal} showOptimize={true} />
+              onZip={handleOpenZipModal} onEmail={handleOpenEmailModal} showOptimize={true} />
           </div>
         )}
       </div>
@@ -527,7 +670,7 @@ export const StorageOptimization = () => {
               filterOptimizable={false} showOptimize={false} onOptimize={handleOpenOptimize} />
             <SelectionBar count={selectedList.length} optimizableCount={selectedOptimizable.length}
               onOptimize={() => selectedOptimizable.length > 0 && handleOpenOptimize(selectedOptimizable[0])}
-              onZip={handleOpenZipModal} showOptimize={false} />
+              onZip={handleOpenZipModal} onEmail={handleOpenEmailModal} showOptimize={false} />
           </div>
         )}
       </div>
@@ -912,6 +1055,205 @@ export const StorageOptimization = () => {
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* ─ EMAIL SHARE MODAL ─ */}
+      <Modal isOpen={showEmailModal} onClose={handleCloseEmailModal}
+        title="Share via Email"
+        subtitle={emailResult ? "Email dispatched successfully" : `Sending ${selectedFileIds.length} selected file${selectedFileIds.length === 1 ? '' : 's'}`}
+        maxWidth="max-w-lg"
+        actions={
+          <div className="flex items-center justify-between w-full">
+            <Button variant="ghost" size="sm" onClick={handleCloseEmailModal} disabled={sendingEmail}>
+              <span>{emailResult ? 'Close' : 'Cancel'}</span>
+            </Button>
+            {!emailResult ? (
+              <Button variant="primary" size="sm" icon={Send} onClick={handleSendEmail}
+                disabled={sendingEmail || !emailRecipient.trim() || selectedBytes > 18 * 1024 * 1024}
+                className="bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/30 text-white shadow-lg shadow-indigo-950/30">
+                <span>{sendingEmail ? 'Sending...' : 'Send Email'}</span>
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" onClick={() => { setEmailResult(null); setEmailRecipient(''); setEmailError(null); }}
+                className="bg-[#0E1D35] hover:bg-[#162746] border-[rgba(139,170,215,0.2)] text-white">
+                <span>Share Another</span>
+              </Button>
+            )}
+          </div>
+        }>
+        <div className="space-y-4">
+          {!emailResult ? (
+            <>
+              {/* Summary of files */}
+              <div className="p-3.5 rounded-xl bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)] flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-[#7E93B3] uppercase tracking-wider">Selected Files</span>
+                  <div className="text-[12px] font-bold text-white mt-0.5">{selectedFileIds.length} file{selectedFileIds.length === 1 ? '' : 's'}</div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-semibold text-[#7E93B3] uppercase tracking-wider">Total Raw Size</span>
+                  <div className={`text-xs font-mono font-bold mt-0.5 ${selectedBytes > 18 * 1024 * 1024 ? 'text-red-400' : 'text-indigo-400'}`}>
+                    {(selectedBytes / (1024 * 1024)).toFixed(2)} MB
+                  </div>
+                </div>
+              </div>
+
+              {/* Payload ceiling warning */}
+              {selectedBytes > 18 * 1024 * 1024 && (
+                <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-500/30 text-xs text-amber-300 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <span>The selected files ({ (selectedBytes / (1024*1024)).toFixed(2) } MB) exceed the 18 MB email attachment ceiling. Please deselect some files before sharing.</span>
+                </div>
+              )}
+
+              {/* Error display */}
+              {emailError && (
+                <div className="p-3 rounded-lg bg-red-950/40 border border-red-500/30 text-xs text-red-300 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <span>{emailError}</span>
+                </div>
+              )}
+
+              {/* Recipient */}
+              <div className="space-y-1.5">
+                <label htmlFor="email-recipient" className="text-xs font-semibold text-[#DCE5F3] block">
+                  Recipient Email <span className="text-red-400">*</span>
+                </label>
+                <input
+                  id="email-recipient"
+                  type="email"
+                  value={emailRecipient}
+                  onChange={e => { setEmailRecipient(e.target.value); if (emailError) setEmailError(null); }}
+                  placeholder="name@example.com"
+                  disabled={sendingEmail}
+                  className="w-full px-3.5 py-2 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] text-xs text-white placeholder-[#7E93B3] focus:border-[#3478F6] focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Delivery Mode */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#DCE5F3] block">Attachment Mode</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEmailMode('zip')}
+                    disabled={sendingEmail}
+                    className={`p-3 rounded-xl text-left border transition-all cursor-pointer ${
+                      emailMode === 'zip'
+                        ? 'bg-indigo-500/15 border-indigo-500/60 text-white'
+                        : 'bg-[#06101F]/70 border-[rgba(139,170,215,0.12)] text-[#A7B7D0] hover:bg-[#0E1D35] hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Archive className={`w-4 h-4 ${emailMode === 'zip' ? 'text-indigo-400' : 'text-[#7E93B3]'}`} />
+                      <span className="text-xs font-semibold">ZIP Archive</span>
+                    </div>
+                    <p className="text-[11px] text-[#7E93B3] leading-tight">Bundle files into a single compressed archive (Default)</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmailMode('originals')}
+                    disabled={sendingEmail}
+                    className={`p-3 rounded-xl text-left border transition-all cursor-pointer ${
+                      emailMode === 'originals'
+                        ? 'bg-indigo-500/15 border-indigo-500/60 text-white'
+                        : 'bg-[#06101F]/70 border-[rgba(139,170,215,0.12)] text-[#A7B7D0] hover:bg-[#0E1D35] hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Layers className={`w-4 h-4 ${emailMode === 'originals' ? 'text-indigo-400' : 'text-[#7E93B3]'}`} />
+                      <span className="text-xs font-semibold">Individual Files</span>
+                    </div>
+                    <p className="text-[11px] text-[#7E93B3] leading-tight">Attach each file separately with its original name</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Custom ZIP filename (only in ZIP mode) */}
+              {emailMode === 'zip' && (
+                <div className="space-y-1.5">
+                  <label htmlFor="email-zip-filename" className="text-xs font-semibold text-[#DCE5F3] block">
+                    Custom ZIP Filename <span className="text-[11px] font-normal text-[#7E93B3]">(optional)</span>
+                  </label>
+                  <input
+                    id="email-zip-filename"
+                    type="text"
+                    value={emailZipFilename}
+                    onChange={e => setEmailZipFilename(e.target.value)}
+                    placeholder="memora_shared_files.zip"
+                    disabled={sendingEmail}
+                    className="w-full px-3.5 py-2 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] text-xs text-white placeholder-[#7E93B3] font-mono focus:border-[#3478F6] focus:outline-none transition-colors"
+                  />
+                  <p className="text-[11px] text-[#7E93B3]">Must end in .zip. Unsafe path separators or characters will be rejected.</p>
+                </div>
+              )}
+
+              {/* Subject */}
+              <div className="space-y-1.5">
+                <label htmlFor="email-subject" className="text-xs font-semibold text-[#DCE5F3] block">
+                  Subject <span className="text-[11px] font-normal text-[#7E93B3]">(optional)</span>
+                </label>
+                <input
+                  id="email-subject"
+                  type="text"
+                  value={emailSubject}
+                  onChange={e => setEmailSubject(e.target.value)}
+                  placeholder="Memora AI - Shared Files"
+                  disabled={sendingEmail}
+                  className="w-full px-3.5 py-2 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] text-xs text-white placeholder-[#7E93B3] focus:border-[#3478F6] focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Message Body */}
+              <div className="space-y-1.5">
+                <label htmlFor="email-body" className="text-xs font-semibold text-[#DCE5F3] block">
+                  Message <span className="text-[11px] font-normal text-[#7E93B3]">(optional plain text)</span>
+                </label>
+                <textarea
+                  id="email-body"
+                  rows={3}
+                  value={emailBody}
+                  onChange={e => setEmailBody(e.target.value)}
+                  placeholder="Add an optional message for the recipient..."
+                  disabled={sendingEmail}
+                  className="w-full px-3.5 py-2 rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.16)] text-xs text-white placeholder-[#7E93B3] focus:border-[#3478F6] focus:outline-none transition-colors resize-none"
+                />
+              </div>
+
+              {sendingEmail && (
+                <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 flex items-center justify-center gap-2.5 text-xs text-indigo-300">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                  <span>Preparing attachments and sending email via secure backend...</span>
+                </div>
+              )}
+            </>
+          ) : (
+            /* Success View */
+            <div className="p-5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-center space-y-3">
+              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+              <h4 className="text-base font-bold text-white">Email Sent Successfully!</h4>
+              <p className="text-xs text-[#A7B7D0]">{emailResult.message || 'Files were dispatched via email.'}</p>
+              <div className="grid grid-cols-2 gap-2 pt-2 text-xs text-left">
+                <div className="p-2.5 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.12)]">
+                  <span className="text-[10px] text-[#7E93B3] uppercase font-mono block">Recipient</span>
+                  <span className="font-mono font-bold text-white truncate block" title={emailResult.sent_to}>{emailResult.sent_to}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.12)]">
+                  <span className="text-[10px] text-[#7E93B3] uppercase font-mono block">Mode</span>
+                  <span className="font-mono font-bold text-white uppercase">{emailResult.mode}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.12)]">
+                  <span className="text-[10px] text-[#7E93B3] uppercase font-mono block">Attachments</span>
+                  <span className="font-mono font-bold text-white">{emailResult.attachments_count}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.12)]">
+                  <span className="text-[10px] text-[#7E93B3] uppercase font-mono block">Total Payload</span>
+                  <span className="font-mono font-bold text-emerald-400">{(emailResult.total_bytes_sent / (1024 * 1024)).toFixed(2)} MB</span>
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -2,6 +2,7 @@ import os
 import time
 import secrets
 import zipfile
+import tempfile
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -106,6 +107,74 @@ class StorageService:
     def __init__(self):
         self._candidate_registry: Dict[str, CandidateRecord] = {}
 
+    def _resolve_source_file_path(self, f_rec: File, db: Optional[Session] = None) -> Optional[str]:
+        """
+        Resolves the physical on-disk path for a file record.
+        Handles:
+        1. Direct absolute/normalized path.
+        2. Slashes and case normalization on Windows.
+        3. Relative-to-folder path resolution if stored relatively or if parent folder path shifted.
+        4. Auto-heals the database record path if resolved via fallback.
+        Returns the canonical absolute path if found on disk, or None if the file does not exist.
+        """
+        if not f_rec:
+            return None
+
+        candidates = []
+
+        # 1. Primary path from record
+        if getattr(f_rec, "path", None):
+            raw_path = str(f_rec.path).strip()
+            if raw_path:
+                candidates.append(raw_path)
+                candidates.append(os.path.normpath(raw_path))
+                candidates.append(os.path.abspath(raw_path))
+
+        # 2. Folder-based fallback resolution
+        folder_path = None
+        folder = getattr(f_rec, "folder", None)
+        if folder and getattr(folder, "path", None):
+            folder_path = folder.path
+        elif getattr(f_rec, "folder_id", None) and db:
+            try:
+                fld = db.query(Folder).filter(Folder.id == f_rec.folder_id).first()
+                if fld and getattr(fld, "path", None):
+                    folder_path = fld.path
+            except Exception:
+                folder_path = None
+
+        if folder_path and os.path.exists(folder_path):
+            if getattr(f_rec, "name", None):
+                candidates.append(os.path.join(folder_path, f_rec.name))
+                candidates.append(os.path.normpath(os.path.join(folder_path, f_rec.name)))
+            if getattr(f_rec, "path", None):
+                base = os.path.basename(str(f_rec.path).replace("\\", "/"))
+                if base:
+                    candidates.append(os.path.join(folder_path, base))
+                    candidates.append(os.path.normpath(os.path.join(folder_path, base)))
+
+        # Test each candidate
+        seen = set()
+        for cand in candidates:
+            if not cand or cand in seen:
+                continue
+            seen.add(cand)
+            try:
+                abs_cand = os.path.abspath(cand)
+                if os.path.exists(abs_cand) and os.path.isfile(abs_cand):
+                    # Auto-heal path in database if discrepancy is detected
+                    if db and getattr(f_rec, "path", None) != abs_cand:
+                        try:
+                            f_rec.path = abs_cand
+                            db.commit()
+                        except Exception:
+                            db.rollback()
+                    return abs_cand
+            except Exception:
+                continue
+
+        return None
+
     # =========================================================================
     # 1. STORAGE SUMMARY & BREAKDOWN
     # =========================================================================
@@ -113,11 +182,17 @@ class StorageService:
     def get_storage_summary(self, db: Session) -> Dict[str, Any]:
         """
         Calculates total indexed files, size, and category distribution from SQLite.
-        Excludes files inside Security-excluded paths.
+        Excludes files inside Security-excluded paths and ghost files missing on disk.
         """
         excluded_paths = security_service.get_excluded_paths(db)
         all_files = db.query(File).all()
-        files = [f for f in all_files if not _is_file_excluded(f.path, excluded_paths)]
+        files = []
+        for f in all_files:
+            if _is_file_excluded(f.path, excluded_paths):
+                continue
+            if self._resolve_source_file_path(f, db) is None:
+                continue
+            files.append(f)
 
         total_files = len(files)
         total_size = sum(f.size for f in files) if files else 0
@@ -194,7 +269,13 @@ class StorageService:
 
         query = db.query(File).filter(File.size >= min_bytes).order_by(desc(File.size))
         all_file_records = query.all()
-        valid_file_records = [f for f in all_file_records if not _is_file_excluded(f.path, excluded_paths)]
+        valid_file_records = []
+        for f in all_file_records:
+            if _is_file_excluded(f.path, excluded_paths):
+                continue
+            if self._resolve_source_file_path(f, db) is None:
+                continue
+            valid_file_records.append(f)
         total_count = len(valid_file_records)
         file_records = valid_file_records[:safe_limit]
 
@@ -259,7 +340,13 @@ class StorageService:
             File.is_encrypted == False
         ).order_by(desc(File.size))
         all_records = query.all()
-        valid_records = [f for f in all_records if not _is_file_excluded(f.path, excluded_paths)]
+        valid_records = []
+        for f in all_records:
+            if _is_file_excluded(f.path, excluded_paths):
+                continue
+            if self._resolve_source_file_path(f, db) is None:
+                continue
+            valid_records.append(f)
         total_count = len(valid_records)
         file_records = valid_records[:safe_limit]
 
@@ -318,7 +405,13 @@ class StorageService:
 
         query = db.query(File).order_by(desc(File.size))
         all_records = query.all()
-        valid_records = [f for f in all_records if not _is_file_excluded(f.path, excluded_paths)]
+        valid_records = []
+        for f in all_records:
+            if _is_file_excluded(f.path, excluded_paths):
+                continue
+            if self._resolve_source_file_path(f, db) is None:
+                continue
+            valid_records.append(f)
         total_count = len(valid_records)
         file_records = valid_records[:safe_limit]
 
@@ -399,12 +492,12 @@ class StorageService:
                 "reason": "File is encrypted and protected by Security module."
             }
 
-        source_path = os.path.abspath(file_rec.path)
-        if not os.path.exists(source_path) or not os.path.isfile(source_path):
+        source_path = self._resolve_source_file_path(file_rec, db)
+        if not source_path or not os.path.exists(source_path) or not os.path.isfile(source_path):
             return {
                 "status": "invalid_file",
                 "file_id": file_id,
-                "reason": f"Physical source file does not exist on disk: '{source_path}'"
+                "reason": f"Physical source file does not exist on disk: '{file_rec.name}'"
             }
 
         if not os.access(source_path, os.R_OK):
@@ -981,12 +1074,12 @@ class StorageService:
             if getattr(f_rec, "is_encrypted", False):
                 raise StorageServiceError(f"File '{f_rec.name}' is encrypted and protected.")
 
-            f_path = os.path.abspath(f_rec.path)
-            if not os.path.exists(f_path) or not os.path.isfile(f_path):
-                raise StorageServiceError(f"Source file does not exist on disk: '{f_path}'")
+            f_path = self._resolve_source_file_path(f_rec, db)
+            if not f_path or not os.path.exists(f_path) or not os.path.isfile(f_path):
+                raise StorageServiceError(f"Source file does not exist on disk: '{f_rec.name}'. Please refresh the file list.")
 
             if not os.access(f_path, os.R_OK):
-                raise StorageServiceError(f"Permission denied reading source file: '{f_path}'")
+                raise StorageServiceError(f"Permission denied reading source file: '{f_rec.name}'")
 
             if f_path == dest_abs:
                 raise StorageServiceError("Destination archive cannot overwrite one of the input source files.")
@@ -1064,6 +1157,176 @@ class StorageService:
             rec = self._candidate_registry.pop(token, None)
             if rec:
                 self._safe_remove(rec.candidate_path)
+
+    # =========================================================================
+    # 6. EMAIL ATTACHMENT PREPARATION
+    # =========================================================================
+
+    def prepare_email_attachments(
+        self,
+        db: Session,
+        file_ids: List[int],
+        mode: str = "zip",
+        zip_filename: Optional[str] = None,
+        max_raw_bytes: int = 18 * 1024 * 1024,
+    ) -> Tuple[List[Tuple[str, str, str]], Optional[str], int]:
+        """
+        Validates database-indexed files for email sharing and prepares attachments.
+
+        Security checks applied:
+        1. File records must exist in database.
+        2. File paths must exist and be accessible on disk.
+        3. File must be within authorized storage folders (security_service.validate_path_in_approved).
+        4. File must NOT be in security-excluded folders (_is_file_excluded).
+        5. File must NOT be encrypted.
+        6. Total raw attachment size must not exceed max_raw_bytes (18 MB).
+
+        Returns:
+            Tuple of:
+            - attachments: List of (file_path, display_name, mime_type)
+            - temp_zip_path: Optional path to created temporary ZIP (needs cleanup after send)
+            - total_bytes: Total payload size in bytes
+        """
+        if not file_ids:
+            raise StorageServiceError("At least one file must be selected for email sharing.")
+
+        clean_mode = (mode or "zip").strip().lower()
+        if clean_mode not in ("zip", "originals"):
+            raise StorageServiceError(f"Unsupported attachment mode: '{mode}'. Must be 'zip' or 'originals'.")
+
+        approved_paths = security_service.get_approved_paths(db)
+        excluded_paths = security_service.get_excluded_paths(db)
+
+        source_items: List[Tuple[str, str, str]] = []
+        total_raw_bytes = 0
+
+        # Disambiguate duplicate file IDs in input
+        seen_ids = set()
+        unique_file_ids = []
+        for fid in file_ids:
+            if fid not in seen_ids:
+                seen_ids.add(fid)
+                unique_file_ids.append(fid)
+
+        for fid in unique_file_ids:
+            f_rec = db.query(File).filter(File.id == fid).first()
+            if not f_rec:
+                raise StorageServiceError(f"File ID {fid} not found in database.")
+
+            f_path = self._resolve_source_file_path(f_rec, db)
+            if not f_path or not os.path.exists(f_path) or not os.path.isfile(f_path):
+                raise StorageServiceError(f"Source file does not exist on disk: '{f_rec.name}'. Please refresh the file list.")
+
+            # 1. Scope validation: must be within active approved folder
+            if not approved_paths or not security_service.validate_path_in_approved(f_path, approved_paths):
+                raise StorageServiceError(f"File '{f_rec.name}' is outside authorized storage folders.")
+
+            # 2. Exclusion validation
+            if _is_file_excluded(f_path, excluded_paths):
+                raise StorageServiceError(f"File '{f_rec.name}' is located inside a Security-excluded folder.")
+
+            # 3. Encryption validation
+            if getattr(f_rec, "is_encrypted", False) or security_service.is_file_encrypted(f_path):
+                raise StorageServiceError(f"File '{f_rec.name}' is encrypted and cannot be shared.")
+
+            # 4. Filesystem validation
+            if not os.access(f_path, os.R_OK):
+                raise StorageServiceError(f"Permission denied reading source file: '{f_rec.name}'")
+
+            file_size = os.path.getsize(f_path)
+            total_raw_bytes += file_size
+
+            # Check individual and running raw threshold before reading files
+            if total_raw_bytes > max_raw_bytes:
+                raise StorageServiceError(
+                    f"Selected files total {total_raw_bytes / (1024 * 1024):.2f} MB, which exceeds "
+                    f"the raw attachment limit ({max_raw_bytes / (1024 * 1024):.2f} MB). "
+                    f"Please select fewer files or optimize them first."
+                )
+
+            mime_type = f_rec.mime_type or "application/octet-stream"
+            source_items.append((f_path, f_rec.name, mime_type))
+
+        if clean_mode == "originals":
+            # In originals mode, attach each file with sanitized display name
+            used_names: Dict[str, int] = {}
+            fallback_counter = 0
+            attachments: List[Tuple[str, str, str]] = []
+            for src_path, orig_name, mime_t in source_items:
+                raw_name = (orig_name or "").replace("\\", "/").strip()
+                clean_name = os.path.basename(raw_name) if raw_name else ""
+                clean_name = "".join(c for c in clean_name if ord(c) >= 32).strip()
+                if not clean_name or clean_name in (".", ".."):
+                    fallback_counter += 1
+                    _, ext = os.path.splitext(src_path)
+                    clean_name = f"attachment_{fallback_counter}{ext or '.dat'}"
+
+                if clean_name in used_names:
+                    used_names[clean_name] += 1
+                    stem, ext = os.path.splitext(clean_name)
+                    disp_name = f"{stem} ({used_names[clean_name]}){ext}"
+                else:
+                    used_names[clean_name] = 0
+                    disp_name = clean_name
+                attachments.append((src_path, disp_name, mime_t))
+
+            return attachments, None, total_raw_bytes
+
+        # Mode == "zip"
+        temp_dir = os.path.join(tempfile.gettempdir(), "memora_email_shares")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        temp_zip_path = os.path.join(temp_dir, f"memora_share_{secrets.token_hex(8)}.zip")
+
+        # Determine display name for the attached ZIP
+        if zip_filename and isinstance(zip_filename, str) and zip_filename.strip():
+            raw_zip = zip_filename.replace("\\", "/").strip()
+            disp_zip_name = os.path.basename(raw_zip)
+            disp_zip_name = "".join(c for c in disp_zip_name if ord(c) >= 32 and c not in ('"', "'", ";")).strip()
+            if not disp_zip_name or disp_zip_name in (".", "..") or disp_zip_name.lower() == ".zip":
+                disp_zip_name = "memora_archive.zip"
+            elif not disp_zip_name.lower().endswith(".zip"):
+                disp_zip_name += ".zip"
+        else:
+            disp_zip_name = "memora_archive.zip"
+
+        used_arcnames: Dict[str, int] = {}
+        fallback_counter = 0
+        try:
+            with zipfile.ZipFile(temp_zip_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+                for src_path, orig_name, _ in source_items:
+                    raw_name = (orig_name or "").replace("\\", "/").strip()
+                    clean_name = os.path.basename(raw_name) if raw_name else ""
+                    clean_name = "".join(c for c in clean_name if ord(c) >= 32).strip()
+                    if not clean_name or clean_name in (".", ".."):
+                        fallback_counter += 1
+                        _, ext = os.path.splitext(src_path)
+                        clean_name = f"attachment_{fallback_counter}{ext or '.dat'}"
+
+                    if clean_name in used_arcnames:
+                        used_arcnames[clean_name] += 1
+                        name_stem, name_ext = os.path.splitext(clean_name)
+                        arcname = f"{name_stem} ({used_arcnames[clean_name]}){name_ext}"
+                    else:
+                        used_arcnames[clean_name] = 0
+                        arcname = clean_name
+                    zf.write(src_path, arcname=arcname)
+
+            zip_size = os.path.getsize(temp_zip_path)
+            if zip_size > max_raw_bytes:
+                self._safe_remove(temp_zip_path)
+                raise StorageServiceError(
+                    f"Generated ZIP archive ({zip_size / (1024 * 1024):.2f} MB) exceeds "
+                    f"the attachment size limit ({max_raw_bytes / (1024 * 1024):.2f} MB)."
+                )
+
+            return [(temp_zip_path, disp_zip_name, "application/zip")], temp_zip_path, zip_size
+
+        except Exception as e:
+            self._safe_remove(temp_zip_path)
+            if isinstance(e, StorageServiceError):
+                raise
+            raise StorageServiceError(f"Failed to create temporary ZIP for email: {str(e)}") from e
 
 
 storage_service = StorageService()
