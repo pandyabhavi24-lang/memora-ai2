@@ -41,36 +41,36 @@
 
 [data-theme="light"] {
   color-scheme: light;
-  --bg-page:               #F8FAFC;
+  --bg-page:               #F5F6F8;
   --bg-surface:            #FFFFFF;
-  --bg-surface-secondary:  #F1F5F9;
-  --bg-surface-elevated:   #E8EFF9;
-  --bg-surface-hover:      #E2EAF6;
+  --bg-surface-secondary:  #EEF1F5;
+  --bg-surface-elevated:   #E3E8F0;
+  --bg-surface-hover:      #D8DFE9;
   --bg-card:               rgba(255, 255, 255, 0.98);
-  --bg-card-hover:         rgba(241, 245, 249, 0.98);
-  --bg-sidebar:            #FFFFFF;
+  --bg-card-hover:         rgba(238, 241, 245, 0.98);
+  --bg-sidebar:            #F5F6F8;
   --bg-sidebar-item-hover: rgba(52, 120, 246, 0.07);
   --bg-sidebar-item-active:rgba(52, 120, 246, 0.12);
-  --text-primary:          #111827;
-  --text-secondary:        #374151;
+  --text-primary:          #1F2937;
+  --text-secondary:        #4B5563;
   --text-muted:            #64748B;
   --text-disabled:         #9CA3AF;
-  --border-subtle:         rgba(15, 23, 42, 0.10);
-  --border-default:        rgba(15, 23, 42, 0.16);
+  --border-subtle:         #E1E5EC;
+  --border-default:        #CBD3DE;
   --border-accent:         rgba(52, 120, 246, 0.40);
   --accent-blue:           #2563EB;
   --accent-bright:         #2563EB;
   --accent-indigo:         #6366F1;
   --accent-glow:           rgba(52, 120, 246, 0.10);
   --input-bg:              #FFFFFF;
-  --input-border:          #CBD5E1;
-  --input-text:            #111827;
+  --input-border:          #CBD3DE;
+  --input-text:            #1F2937;
   --input-placeholder:     #94A3B8;
-  --scrollbar-track:       #F1F5F9;
+  --scrollbar-track:       #EEF1F5;
   --scrollbar-thumb:       rgba(100, 116, 139, 0.25);
   --scrollbar-thumb-hover: rgba(100, 116, 139, 0.45);
-  --topnav-bg:             rgba(255, 255, 255, 0.97);
-  --topnav-border:         rgba(15, 23, 42, 0.10);
+  --topnav-bg:             rgba(245, 246, 248, 0.97);
+  --topnav-border:         #E1E5EC;
 }
 
 /* ── Base ─────────────────────────────────────────────────── */
@@ -150,32 +150,32 @@ html[data-theme="light"] .glass-panel {
   background: rgba(255,255,255,0.98) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border-color: #E2E8F0 !important;
+  border-color: #E1E5EC !important;
 }
 html[data-theme="light"] .glass-panel-hover:hover {
-  background: rgba(241,245,249,0.98) !important;
+  background: rgba(238,241,245,0.98) !important;
   border-color: rgba(52,120,246,0.28) !important;
   box-shadow: 0 4px 12px -2px rgba(52,120,246,0.10) !important;
 }
 html[data-theme="light"] .surface-card {
   background: rgba(255,255,255,0.98) !important;
-  border-color: #E2E8F0 !important;
+  border-color: #E1E5EC !important;
   backdrop-filter: none !important;
 }
 
 /* ── Native form elements ─────────────────────────────────── */
 html[data-theme="light"] select {
   background-color: #FFFFFF !important;
-  color: #111827 !important;
-  border-color: #CBD5E1 !important;
+  color: #1F2937 !important;
+  border-color: #CBD3DE !important;
 }
 html[data-theme="light"] select option {
   background-color: #FFFFFF;
-  color: #111827;
+  color: #1F2937;
 }
 html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
   background-color: #FFFFFF !important;
-  color: #111827 !important;
+  color: #1F2937 !important;
 }
 html[data-theme="light"] input::placeholder,
 html[data-theme="light"] textarea::placeholder { color: #94A3B8 !important; }
@@ -184,7 +184,7 @@ html[data-theme="light"] textarea::placeholder { color: #94A3B8 !important; }
 html[data-theme="light"] h1,
 html[data-theme="light"] h2,
 html[data-theme="light"] h3,
-html[data-theme="light"] h4 { color: #111827; }
+html[data-theme="light"] h4 { color: #1F2937; }
 
 /* ============================================================
    LIGHT THEME — JS-INJECTED UTILITY CLASS OVERRIDES

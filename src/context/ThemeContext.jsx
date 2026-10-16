@@ -40,7 +40,7 @@ function savePreference(preference) {
 //
 // We use [class*="..."] substring-match attribute selectors. This matches any
 // element whose class attribute contains the literal substring, e.g.
-//   [class*="bg-[#0A1629]"]   →  matches   class="glass-panel bg-[#0A1629] ..."
+//   [class*="bg-[#0A1629]"]   ->  matches   class="glass-panel bg-[#0A1629] ..."
 // ---------------------------------------------------------------------------
 
 // Build the CSS string using a helper so it stays readable.
@@ -50,27 +50,27 @@ function buildLightOverrideCSS() {
   // Map each hardcoded dark color to its light equivalent.
   // Format: [ class-substring, property, value ]
   const BG = [
-    ['bg-[#06101F]',  'background-color', '#F8FAFC'],
+    ['bg-[#06101F]',  'background-color', '#F5F6F8'],
     ['bg-[#0A1629]',  'background-color', '#FFFFFF'],
-    ['bg-[#0E1D35]',  'background-color', '#F1F5F9'],
-    ['bg-[#132642]',  'background-color', '#E8EFF9'],
-    ['bg-[#162746]',  'background-color', '#E2EAF6'],
-    ['bg-[#182F50]',  'background-color', '#DCE8F8'],
-    ['bg-[#1E293B]',  'background-color', '#F1F5F9'],
-    ['bg-[#334155]',  'background-color', '#E2E8F0'],
+    ['bg-[#0E1D35]',  'background-color', '#EEF1F5'],
+    ['bg-[#132642]',  'background-color', '#E3E8F0'],
+    ['bg-[#162746]',  'background-color', '#D8DFE9'],
+    ['bg-[#182F50]',  'background-color', '#CFD8E6'],
+    ['bg-[#1E293B]',  'background-color', '#EEF1F5'],
+    ['bg-[#334155]',  'background-color', '#DDE3EC'],
     ['bg-[#71839E]',  'background-color', '#94A3B8'],
-    // Opacity variants — use substring on the hex only
-    ['bg-[#06101F]/', 'background-color', '#F8FAFC'],
+    // Opacity variants
+    ['bg-[#06101F]/', 'background-color', '#F5F6F8'],
     ['bg-[#0A1629]/', 'background-color', '#FFFFFF'],
-    ['bg-[#0E1D35]/', 'background-color', '#F1F5F9'],
+    ['bg-[#0E1D35]/', 'background-color', '#EEF1F5'],
   ];
 
   const TEXT = [
-    // Near-white primary text → charcoal
-    ['text-[#F4F7FF]', 'color', '#111827'],
+    // Near-white primary text -> charcoal
+    ['text-[#F4F7FF]', 'color', '#1F2937'],
     ['text-[#DCE5F3]', 'color', '#1F2937'],
-    ['text-[#E2E8F0]', 'color', '#374151'],
-    ['text-[#CBD5E1]', 'color', '#374151'],
+    ['text-[#E2E8F0]', 'color', '#4B5563'],
+    ['text-[#CBD5E1]', 'color', '#4B5563'],
     // Secondary / muted
     ['text-[#A7B7D0]', 'color', '#475569'],
     ['text-[#8BAAD7]', 'color', '#475569'],
@@ -88,29 +88,28 @@ function buildLightOverrideCSS() {
     ['text-[#C4B5FD]', 'color', '#7C3AED'],
   ];
 
-  let css = `/* === Memora AI — Light Theme Runtime Overrides === */\n\n`;
+  let css = '/* === Memora AI - Light Theme Runtime Overrides === */\n\n';
 
-  // Backgrounds
+  // Hardcoded hex background overrides
   for (const [substring, prop, value] of BG) {
     css += `${SCOPE} [class*="${substring}"] { ${prop}: ${value} !important; }\n`;
   }
 
   css += '\n';
 
-  // Text colors
+  // Hardcoded hex text overrides
   for (const [substring, prop, value] of TEXT) {
     css += `${SCOPE} [class*="${substring}"] { ${prop}: ${value} !important; }\n`;
   }
 
-  // All rgba(139,170,215,x) borders → light border gray
-  css += `\n/* Borders */\n`;
-  css += `${SCOPE} [class*="border-[rgba(139,170,215"] { border-color: #E2E8F0 !important; }\n`;
+  // Hardcoded hex border overrides
+  css += '\n/* Hardcoded hex borders */\n';
+  css += `${SCOPE} [class*="border-[rgba(139,170,215"] { border-color: #E1E5EC !important; }\n`;
   css += `${SCOPE} [class*="border-[rgba(117,102,246"] { border-color: rgba(99,102,241,0.35) !important; }\n`;
 
   // text-white: override globally to dark in light mode, but restore for coloured surfaces
-  css += `\n/* text-white override */\n`;
-  css += `${SCOPE} .text-white { color: #111827 !important; }\n`;
-  // Restore white text on intentionally coloured buttons / badges / chips
+  css += '\n/* text-white override */\n';
+  css += `${SCOPE} .text-white { color: #1F2937 !important; }\n`;
   css += `${SCOPE} [class*="bg-[#3478F6]"] .text-white,\n`;
   css += `${SCOPE} [class*="bg-[#2563EB]"] .text-white,\n`;
   css += `${SCOPE} [class*="bg-[#4B91FF]"] .text-white,\n`;
@@ -119,7 +118,6 @@ function buildLightOverrideCSS() {
   css += `${SCOPE} .bg-red-600 .text-white,\n`;
   css += `${SCOPE} .bg-amber-600 .text-white,\n`;
   css += `${SCOPE} .bg-indigo-600 .text-white { color: #FFFFFF !important; }\n`;
-  // Restore white on elements that ARE the coloured button (self-contained)
   css += `${SCOPE} [class*="bg-[#3478F6]"].text-white,\n`;
   css += `${SCOPE} [class*="bg-[#2563EB]"].text-white,\n`;
   css += `${SCOPE} [class*="bg-[#4B91FF]"].text-white,\n`;
@@ -129,31 +127,95 @@ function buildLightOverrideCSS() {
   css += `${SCOPE} .bg-amber-600.text-white { color: #FFFFFF !important; }\n`;
 
   // Glass utilities
-  css += `
-/* Glass / surface utilities */
-${SCOPE} .glass-panel {
-  background: rgba(255,255,255,0.98) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  border-color: #E2E8F0 !important;
-}
-${SCOPE} .glass-panel-hover:hover {
-  background: rgba(241,245,249,0.98) !important;
-  border-color: rgba(52,120,246,0.28) !important;
-  box-shadow: 0 4px 12px -2px rgba(52,120,246,0.10) !important;
-}
-${SCOPE} .surface-card {
-  background: rgba(255,255,255,0.98) !important;
-  border-color: #E2E8F0 !important;
-  backdrop-filter: none !important;
-}
+  css += '\n/* Glass / surface utilities */\n';
+  css += `${SCOPE} .glass-panel { background: rgba(255,255,255,0.98) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-color: #E1E5EC !important; }\n`;
+  css += `${SCOPE} .glass-panel-hover:hover { background: rgba(238,241,245,0.98) !important; border-color: rgba(52,120,246,0.28) !important; box-shadow: 0 4px 12px -2px rgba(52,120,246,0.10) !important; }\n`;
+  css += `${SCOPE} .surface-card { background: rgba(255,255,255,0.98) !important; border-color: #E1E5EC !important; backdrop-filter: none !important; }\n`;
 
-/* Native form elements */
-${SCOPE} select { background-color: #FFFFFF !important; color: #111827 !important; border-color: #CBD5E1 !important; }
-${SCOPE} select option { background-color: #FFFFFF; color: #111827; }
-${SCOPE} input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { background-color: #FFFFFF !important; color: #111827 !important; }
-${SCOPE} input::placeholder, ${SCOPE} textarea::placeholder { color: #94A3B8 !important; }
-`;
+  // Native form elements
+  css += '\n/* Native form elements */\n';
+  css += `${SCOPE} select { background-color: #FFFFFF !important; color: #1F2937 !important; border-color: #CBD3DE !important; }\n`;
+  css += `${SCOPE} select option { background-color: #FFFFFF; color: #1F2937; }\n`;
+  css += `${SCOPE} input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { background-color: #FFFFFF !important; color: #1F2937 !important; }\n`;
+  css += `${SCOPE} input::placeholder, ${SCOPE} textarea::placeholder { color: #94A3B8 !important; }\n`;
+
+  // ── ROOT CAUSE FIX: Tailwind semantic dark classes not caught by hex matching ──
+  // These are the classes Security.jsx (and other pages) use that previously
+  // rendered as near-black backgrounds / invisible text on light surfaces.
+
+  css += '\n/* Tailwind semantic gray backgrounds -> light surfaces */\n';
+  css += `${SCOPE} .bg-gray-900\\/80 { background-color: #F8FAFC !important; }\n`;
+  css += `${SCOPE} .bg-gray-900\\/60 { background-color: #F8FAFC !important; }\n`;
+  css += `${SCOPE} .bg-gray-900\\/50 { background-color: #F8FAFC !important; }\n`;
+  css += `${SCOPE} .bg-gray-900\\/40 { background-color: #F1F5F9 !important; }\n`;
+  css += `${SCOPE} .bg-gray-900 { background-color: #F8FAFC !important; }\n`;
+  css += `${SCOPE} .bg-gray-800 { background-color: #EEF1F5 !important; }\n`;
+
+  css += '\n/* Tailwind semantic dark borders -> light borders */\n';
+  css += `${SCOPE} .border-gray-800 { border-color: #CBD3DE !important; }\n`;
+  css += `${SCOPE} .border-gray-700\\/80 { border-color: #CBD3DE !important; }\n`;
+  css += `${SCOPE} .border-gray-700 { border-color: #CBD3DE !important; }\n`;
+  css += `${SCOPE} .border-red-900\\/60 { border-color: #FECACA !important; }\n`;
+
+  css += '\n/* Semantic text grays -> readable on light surfaces */\n';
+  css += `${SCOPE} .text-gray-200 { color: #1F2937 !important; }\n`;
+  css += `${SCOPE} .text-gray-300 { color: #374151 !important; }\n`;
+  css += `${SCOPE} .text-gray-400 { color: #4B5563 !important; }\n`;
+  css += `${SCOPE} .text-gray-500 { color: #6B7280 !important; }\n`;
+  css += `${SCOPE} .text-gray-600 { color: #6B7280 !important; }\n`;
+
+  css += '\n/* Opacity-suffixed text that goes invisible on light surfaces */\n';
+  css += `${SCOPE} .text-yellow-400\\/60 { color: #92400E !important; opacity: 1 !important; }\n`;
+  css += `${SCOPE} .text-emerald-300\\/90 { color: #065F46 !important; opacity: 1 !important; }\n`;
+
+  css += '\n/* Colored semantic text -> darkened for WCAG AA on light bg */\n';
+  css += `${SCOPE} .text-yellow-300 { color: #92400E !important; }\n`;
+  css += `${SCOPE} .text-yellow-400 { color: #B45309 !important; }\n`;
+  css += `${SCOPE} .text-emerald-400 { color: #047857 !important; }\n`;
+  css += `${SCOPE} .text-emerald-300 { color: #065F46 !important; }\n`;
+  css += `${SCOPE} .text-red-400 { color: #B91C1C !important; }\n`;
+  css += `${SCOPE} .text-red-300 { color: #9F1239 !important; }\n`;
+  css += `${SCOPE} .text-blue-300 { color: #1D4ED8 !important; }\n`;
+  css += `${SCOPE} .text-blue-400 { color: #1D4ED8 !important; }\n`;
+  css += `${SCOPE} .text-amber-400 { color: #B45309 !important; }\n`;
+  css += `${SCOPE} .text-purple-300 { color: #5B21B6 !important; }\n`;
+  css += `${SCOPE} .text-purple-400 { color: #7C3AED !important; }\n`;
+
+  css += '\n/* Colored panel backgrounds -> proper light tints */\n';
+  css += `${SCOPE} .bg-emerald-950\\/20 { background-color: #ECFDF5 !important; }\n`;
+  css += `${SCOPE} .bg-yellow-950\\/20 { background-color: #FFFBEB !important; }\n`;
+  css += `${SCOPE} .bg-purple-950\\/20 { background-color: #F5F3FF !important; }\n`;
+  css += `${SCOPE} .bg-red-950\\/10 { background-color: #FFF1F2 !important; }\n`;
+  css += `${SCOPE} .bg-red-950\\/20 { background-color: #FFF1F2 !important; }\n`;
+  css += `${SCOPE} .bg-red-950\\/30 { background-color: #FFE4E6 !important; }\n`;
+  css += `${SCOPE} .bg-red-950\\/40 { background-color: #FFE4E6 !important; }\n`;
+
+  css += '\n/* Colored panel borders */\n';
+  css += `${SCOPE} .border-emerald-500\\/30 { border-color: #6EE7B7 !important; }\n`;
+  css += `${SCOPE} .border-yellow-500\\/20 { border-color: #FDE68A !important; }\n`;
+  css += `${SCOPE} .border-yellow-500\\/30 { border-color: #FCD34D !important; }\n`;
+  css += `${SCOPE} .border-purple-500\\/20 { border-color: #C4B5FD !important; }\n`;
+  css += `${SCOPE} .border-red-500\\/20 { border-color: #FECACA !important; }\n`;
+  css += `${SCOPE} .border-red-500\\/30 { border-color: #FCA5A5 !important; }\n`;
+  css += `${SCOPE} .border-red-500\\/40 { border-color: #F87171 !important; }\n`;
+
+  css += '\n/* Status/badge chip backgrounds */\n';
+  css += `${SCOPE} .bg-emerald-500\\/10 { background-color: #ECFDF5 !important; }\n`;
+  css += `${SCOPE} .bg-amber-500\\/10 { background-color: #FFFBEB !important; }\n`;
+  css += `${SCOPE} .bg-yellow-500\\/10 { background-color: #FFFBEB !important; }\n`;
+  css += `${SCOPE} .bg-red-500\\/10 { background-color: #FFF1F2 !important; }\n`;
+  css += `${SCOPE} .bg-red-500\\/20 { background-color: #FFE4E6 !important; }\n`;
+  css += `${SCOPE} .bg-blue-400\\/10 { background-color: #EFF6FF !important; }\n`;
+  css += `${SCOPE} .bg-purple-500\\/10 { background-color: #F5F3FF !important; }\n`;
+
+  css += '\n/* Toggle switch off-state track */\n';
+  css += `${SCOPE} .bg-gray-700 { background-color: #CBD5E1 !important; }\n`;
+
+  css += '\n/* Hover states */\n';
+  css += `${SCOPE} .hover\\:bg-red-500\\/10:hover { background-color: #FFF1F2 !important; }\n`;
+  css += `${SCOPE} .hover\\:text-red-400:hover { color: #B91C1C !important; }\n`;
+  css += `${SCOPE} .hover\\:text-gray-300:hover { color: #374151 !important; }\n`;
+  css += `${SCOPE} .hover\\:text-white:hover { color: #1F2937 !important; }\n`;
 
   return css;
 }
@@ -180,14 +242,14 @@ function removeLightOverrides() {
   if (tag) tag.remove();
 }
 
-// ── Context ──────────────────────────────────────────────────────────────────
+// -- Context ------------------------------------------------------------------
 
 const ThemeContext = createContext(null);
 
 export const ThemeProvider = ({ children }) => {
   const [preference, setPreference] = useState(() => {
     const stored = readStoredPreference();
-    // Apply immediately — before React's first paint — to avoid FOUC
+    // Apply immediately -- before React's first paint -- to avoid FOUC
     applyTheme(resolveEffective(stored));
     return stored;
   });
