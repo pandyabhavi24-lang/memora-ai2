@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
-  Brain,
   LayoutDashboard,
   Search,
   FolderSearch,
@@ -15,9 +14,12 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { useApp } from "../../context/AppContext";
 
 export const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { selectFolderNative } = useApp();
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
       return localStorage.getItem("memora_sidebar_collapsed") === "true";
@@ -40,38 +42,77 @@ export const Sidebar = () => {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Skip shortcuts when user is typing in an input, textarea, or contenteditable
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const isEditing =
+        tag === "input" ||
+        tag === "textarea" ||
+        document.activeElement?.isContentEditable;
+
+      // Ctrl+B — toggle sidebar (existing)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
         toggleSidebar();
+        return;
+      }
+
+      if (isEditing) return;
+
+      // Ctrl+K — open Search
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        navigate("/search");
+        return;
+      }
+
+      // Ctrl+, — open Settings
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault();
+        navigate("/settings");
+        return;
+      }
+
+      // Alt+H — go to Home / Dashboard
+      if (e.altKey && e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        navigate("/dashboard");
+        return;
+      }
+
+      // Ctrl+O — Add Folder
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        selectFolderNative();
+        return;
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [navigate, selectFolderNative]);
 
   const navSections = [
     {
       title: "Core",
       items: [
-        { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-        { label: "Search", path: "/search", icon: Search },
+        { label: "Home", path: "/dashboard", icon: LayoutDashboard },
+        { label: "Find", path: "/search", icon: Search },
         { label: "Files", path: "/folders", icon: FolderSearch },
       ],
     },
     {
-      title: "Intelligence & Tools",
+      title: "Tools",
       items: [
-        { label: "Organization", path: "/organize", icon: FolderTree },
-        { label: "Media Intelligence", path: "/media", icon: Sparkles },
+        { label: "Organize", path: "/organize", icon: FolderTree },
+        { label: "Media", path: "/media", icon: Sparkles },
         { label: "PDF Studio", path: "/pdf-studio", icon: FileText },
-        { label: "Storage Optimization", path: "/storage-optimization", icon: HardDrive },
-        { label: "Expiry & Reminders", path: "/expiry", icon: CalendarClock },
+        { label: "Free Up Space", path: "/storage-optimization", icon: HardDrive },
+        { label: "Reminders", path: "/expiry", icon: CalendarClock },
       ],
     },
     {
       title: "System",
       items: [
-        { label: "Security & Privacy", path: "/security", icon: ShieldCheck },
+        { label: "Privacy", path: "/security", icon: ShieldCheck },
         { label: "Settings", path: "/settings", icon: Settings },
       ],
     },
@@ -87,21 +128,31 @@ export const Sidebar = () => {
       <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
         {/* Brand Header */}
         <div className="flex items-center justify-between px-1.5 py-1.5 mb-3 border-b border-[rgba(139,170,215,0.14)] pb-3 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#3478F6] to-[#7566F6] flex items-center justify-center text-white shadow-md shadow-[#3478F6]/25 shrink-0 border border-[#4B91FF]/30">
-              <Brain className="w-5 h-5" />
-            </div>
-            {!isCollapsed && (
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-sm tracking-wide text-[#F4F7FF]">MEMORA</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#3478F6]/20 text-[#4B91FF] font-mono font-semibold">
-                    AI
-                  </span>
-                </div>
-                <p className="text-[10px] text-[#A7B7D0] font-medium truncate">
-                  Digital Memory Assistant
-                </p>
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Logo: collapsed = M symbol only, expanded = full logo */}
+            {isCollapsed ? (
+              /* Collapsed: show just the M symbol (top ~55% of square image) */
+              <div
+                className="w-9 h-9 rounded-xl overflow-hidden shrink-0 border border-[rgba(139,170,215,0.15)] shadow-md shadow-[#3478F6]/20"
+                title="Memora AI"
+              >
+                <img
+                  src="/memora-ai-logo.png"
+                  alt="Memora AI"
+                  className="w-full object-cover"
+                  style={{ objectPosition: 'center 18%', height: '180%' }}
+                  draggable={false}
+                />
+              </div>
+            ) : (
+              /* Expanded: full logo image, letterbox contained */
+              <div className="h-12 w-auto flex items-center shrink-0">
+                <img
+                  src="/memora-ai-logo.png"
+                  alt="Memora AI — Your Files • Smarter • Always"
+                  className="h-12 w-auto object-contain"
+                  draggable={false}
+                />
               </div>
             )}
           </div>
@@ -198,13 +249,13 @@ export const Sidebar = () => {
               </span>
             </div>
             <p className="text-[10px] text-[#A7B7D0] leading-tight">
-              Hardware-only index. No cloud sync.
+              Your data stays on your device.
             </p>
           </div>
         ) : (
           <div
             className="flex justify-center p-2 rounded-xl bg-[#0E1D35] border border-[rgba(139,170,215,0.14)] text-emerald-400"
-            title="Local & Private - 100% Offline"
+            title="Private & Local"
           >
             <ShieldCheck className="w-4 h-4" />
           </div>
@@ -214,14 +265,14 @@ export const Sidebar = () => {
           className={`flex items-center ${
             isCollapsed ? "justify-center px-0 py-1.5" : "justify-between px-2.5 py-1.5"
           } text-[11px] text-[#A7B7D0] bg-[#06101F] rounded-lg border border-[rgba(139,170,215,0.14)] font-mono`}
-          title="Search vector engine is online"
+          title="Memora is ready"
         >
           <span className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            {!isCollapsed && <span>Engine Ready</span>}
+            {!isCollapsed && <span>Ready</span>}
           </span>
           {!isCollapsed && (
-            <span className="text-[10px] text-emerald-400 font-semibold">Active</span>
+            <span className="text-[10px] text-emerald-400 font-semibold">✓</span>
           )}
         </div>
       </div>

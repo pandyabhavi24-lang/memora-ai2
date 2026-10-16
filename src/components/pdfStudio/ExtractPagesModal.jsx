@@ -91,7 +91,7 @@ export const ExtractPagesModal = ({
               <span>Index Extracted PDF with Memora</span>
             </div>
             <p className="text-[10px] text-gray-400 leading-tight">
-              Automatically register and vector index extracted file for search.
+              Automatically make the extracted file searchable in Memora.
             </p>
           </div>
           <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${

@@ -24,7 +24,7 @@ export const WorkflowPipeline = ({
     {
       id: 'scan',
       label: 'Scan',
-      fullName: 'Folder Ingestion & Scan',
+      fullName: 'Scan Folders',
       icon: FolderSearch,
       color: 'from-blue-500 to-cyan-500',
       textColor: 'text-[#4B91FF]',
@@ -33,13 +33,13 @@ export const WorkflowPipeline = ({
       topLine: 'bg-gradient-to-r from-[#3478F6] to-[#4B91FF]',
       statusText: isScanning ? 'Scanning...' : `${folderCount} folder${folderCount === 1 ? '' : 's'} active`,
       statusState: isScanning ? 'active' : (folderCount > 0 ? 'ready' : 'idle'),
-      description: 'Memora scans user-selected directories and detects supported documents & media.',
+      description: 'Memora watches your selected folders and detects your documents and photos.',
       actionPath: '/folders'
     },
     {
       id: 'understand',
       label: 'Understand',
-      fullName: 'AI Intelligence Extraction',
+      fullName: 'Read Files',
       icon: BrainCircuit,
       color: 'from-purple-500 to-indigo-500',
       textColor: 'text-purple-400',
@@ -48,43 +48,43 @@ export const WorkflowPipeline = ({
       topLine: 'bg-gradient-to-r from-[#7566F6] to-purple-500',
       statusText: `${fileCount} file${fileCount === 1 ? '' : 's'} indexed`,
       statusState: fileCount > 0 ? 'ready' : 'idle',
-      description: 'Extracts deep text snippets, OCR image text, metadata, and semantic embeddings offline.',
+      description: 'Reads and understands your documents and photos, all locally on your device.',
       actionPath: '/media'
     },
     {
       id: 'organize',
       label: 'Organize',
-      fullName: 'Smart Classification & Tagging',
+      fullName: 'Organize',
       icon: FolderTree,
       color: 'from-amber-500 to-orange-500',
       textColor: 'text-amber-400',
       borderColor: 'hover:border-amber-500/50',
       accentBg: 'bg-amber-500/10 border-amber-500/20',
       topLine: 'bg-gradient-to-r from-amber-500 to-orange-500',
-      statusText: suggestionCount > 0 ? `${suggestionCount} suggestions` : 'Taxonomy ready',
+      statusText: suggestionCount > 0 ? `${suggestionCount} suggestions` : 'Ready to organize',
       statusState: 'ready',
-      description: 'Generates AI category suggestions, smart tags, and duplicate detection without altering disk files.',
+      description: 'Suggests categories and tags for your files. You approve all changes before anything moves.',
       actionPath: '/organize'
     },
     {
       id: 'search',
       label: 'Search',
-      fullName: 'Semantic & Natural Query',
+      fullName: 'Find Files',
       icon: Search,
       color: 'from-emerald-500 to-teal-500',
       textColor: 'text-emerald-400',
       borderColor: 'hover:border-emerald-500/50',
       accentBg: 'bg-emerald-500/10 border-emerald-500/20',
       topLine: 'bg-gradient-to-r from-emerald-500 to-teal-500',
-      statusText: 'Semantic search ready',
+      statusText: 'Search ready',
       statusState: 'ready',
-      description: 'Query your workspace memories by concept, meaning, keywords, or OCR text instantly.',
+      description: 'Search by meaning — not just exact filenames. Find anything in your files instantly.',
       actionPath: '/search'
     },
     {
       id: 'discover',
       label: 'Discover',
-      fullName: 'Contextual Discovery & Connections',
+      fullName: 'Discover',
       icon: Compass,
       color: 'from-pink-500 to-rose-500',
       textColor: 'text-pink-400',
@@ -93,7 +93,7 @@ export const WorkflowPipeline = ({
       topLine: 'bg-gradient-to-r from-pink-500 to-rose-500',
       statusText: 'Discovery active',
       statusState: 'ready',
-      description: 'Find closely related documents, similar images, and linked files based on AI embeddings.',
+      description: 'Find related files and similar documents based on what you are working on.',
       actionPath: '/results'
     }
   ];
@@ -105,11 +105,11 @@ export const WorkflowPipeline = ({
         <div className="flex items-center gap-1.5">
           <Sparkles className="w-3 h-3 text-[#4B91FF]" />
           <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-[#F4F7FF]">
-            Memora AI Engine Workflow
+            How Memora Works
           </span>
         </div>
         <span className="text-[9px] text-[#A7B7D0] font-medium hidden sm:inline-block">
-          Hover step for details &bull; Click to open module
+          Click any step to open it
         </span>
       </div>
 

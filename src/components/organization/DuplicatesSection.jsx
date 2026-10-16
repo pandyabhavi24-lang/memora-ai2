@@ -24,8 +24,10 @@ import { useDataCache } from '../../context/DataCacheContext';
 export const getDetectionBadge = (type) => {
   switch (type) {
     case 'Exact duplicate':
+    case 'Exact Copy':
       return 'bg-[rgba(117,102,246,0.15)] text-indigo-300 border-[rgba(117,102,246,0.3)]';
     case 'Identical text content':
+    case 'Same Text Content':
       return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30';
     case 'Highly similar':
       return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
@@ -33,6 +35,18 @@ export const getDetectionBadge = (type) => {
     case 'Possible duplicate':
     default:
       return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+  }
+};
+
+// Map raw backend detection type strings to plain user-facing labels
+const friendlyDetectionType = (type) => {
+  switch (type) {
+    case 'Exact duplicate':         return 'Exact Copy';
+    case 'Identical text content':  return 'Same Text Content';
+    case 'Highly similar':          return 'Very Similar';
+    case 'Similar content':         return 'Similar Content';
+    case 'Possible duplicate':      return 'Possible Copy';
+    default:                        return type || 'Possible Copy';
   }
 };
 
@@ -247,7 +261,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
               Possible Duplicates
             </h2>
             <p className="text-xs text-[#A7B7D0]">
-              Files with matching content, hashes, or visual presentation structures.
+              Files with matching or very similar content.
             </p>
           </div>
         </div>
@@ -299,7 +313,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                   <span
                     className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${getDetectionBadge(dup.detectionType)}`}
                   >
-                    {dup.detectionType}
+                    {friendlyDetectionType(dup.detectionType)}
                   </span>
 
                   <span className="font-mono text-xs font-bold text-amber-400">
@@ -358,9 +372,9 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-bold text-[#F4F7FF] flex items-center gap-2">
-                    <span>Duplicate File Comparison</span>
+                    <span>Compare Files</span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#3478F6]/15 text-[#4B91FF] border border-[#3478F6]/30">
-                      Quick Inspector
+                      {friendlyDetectionType(activeDuplicate.detectionType)}
                     </span>
                   </h3>
                   <p className="text-[11px] text-[#A7B7D0]">
@@ -398,14 +412,14 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                       onMouseLeave={() => setActiveTooltip(null)}
                       className="font-mono text-amber-300 cursor-help flex items-center gap-1 bg-[#0A1629] px-2.5 py-1 rounded-lg border border-amber-500/30"
                     >
-                      <span>{activeDuplicate.similarity}% Similarity</span>
+                      <span>{activeDuplicate.similarity}% Match</span>
                       <Info className="w-3.5 h-3.5 text-amber-400" />
                     </span>
 
                     {activeTooltip === activeDuplicate.id && (
                       <div className="absolute right-0 bottom-full mb-2 w-72 p-3 bg-[#06101F] border border-[rgba(139,170,215,0.2)] rounded-xl text-[11px] text-[#A7B7D0] shadow-2xl z-30 font-sans leading-snug animate-fadeIn">
-                        <strong className="text-amber-300 block mb-1">Duplicate Score</strong>
-                        Evaluated with multi-tier cryptographic SHA-256 verification, normalized text comparison, and semantic embeddings.
+                        <strong className="text-amber-300 block mb-1">Similarity Score</strong>
+                        How closely these files match based on content and structure analysis.
                       </div>
                     )}
                   </div>
@@ -414,9 +428,9 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                 {/* Evidence Metrics Breakdown */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[rgba(139,170,215,0.1)] text-[11px] font-mono">
                   <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
-                    <span className="text-[#71839E]">SHA-256 Byte Match:</span>
+                    <span className="text-[#71839E]">Exact File Match:</span>
                     <span className={activeDuplicate.is_hash_match ? "text-emerald-400 font-bold" : "text-[#71839E]"}>
-                      {activeDuplicate.is_hash_match ? "Yes (100%)" : "No"}
+                      {activeDuplicate.is_hash_match ? "Yes" : "No"}
                     </span>
                   </div>
 
@@ -428,7 +442,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                   </div>
 
                   <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
-                    <span className="text-[#71839E]">Lexical Overlap:</span>
+                    <span className="text-[#71839E]">Text Match:</span>
                     <span className="text-[#A7B7D0] font-bold">
                       {activeDuplicate.lexical_similarity !== null && activeDuplicate.lexical_similarity !== undefined
                         ? `${activeDuplicate.lexical_similarity}%`
@@ -437,7 +451,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                   </div>
 
                   <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
-                    <span className="text-[#71839E]">Semantic Similarity:</span>
+                    <span className="text-[#71839E]">Content Similarity:</span>
                     <span className="text-[#A7B7D0] font-bold">
                       {activeDuplicate.semantic_similarity !== null && activeDuplicate.semantic_similarity !== undefined
                         ? `${activeDuplicate.semantic_similarity}%`
@@ -471,7 +485,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.12)] pb-2">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#3478F6]/20 text-[#60A5FA] border border-[#3478F6]/40 uppercase tracking-wider font-mono">
-                        File Copy A
+                        File A
                       </span>
                       <span className="text-[10px] font-mono font-bold text-[#71839E] px-1.5 py-0.5 rounded bg-[#0A1629] border border-[rgba(139,170,215,0.1)]">
                         {activeDuplicate.fileA?.filename?.split('.').pop()?.toUpperCase() || 'FILE'}
@@ -541,7 +555,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                       className="w-full py-2 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Keep File A (Delete Copy B)</span>
+                      <span>Keep File A</span>
                     </button>
                   </div>
                 </div>
@@ -551,7 +565,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.12)] pb-2">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#7566F6]/20 text-[#A78BFA] border border-[#7566F6]/40 uppercase tracking-wider font-mono">
-                        File Copy B
+                        File B
                       </span>
                       <span className="text-[10px] font-mono font-bold text-[#71839E] px-1.5 py-0.5 rounded bg-[#0A1629] border border-[rgba(139,170,215,0.1)]">
                         {activeDuplicate.fileB?.filename?.split('.').pop()?.toUpperCase() || 'FILE'}
@@ -621,7 +635,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                       className="w-full py-2 px-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Keep File B (Delete Copy A)</span>
+                      <span>Keep File B</span>
                     </button>
                   </div>
                 </div>

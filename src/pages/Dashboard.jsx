@@ -199,13 +199,13 @@ export const Dashboard = () => {
         <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-400 flex items-center justify-center mx-auto border border-red-500/20">
           <AlertTriangle className="w-6 h-6" />
         </div>
-        <h2 className="text-lg font-bold text-[#F4F7FF]">Engine Connection Error</h2>
+        <h2 className="text-lg font-bold text-[#F4F7FF]">Couldn't connect</h2>
         <p className="text-xs text-[#A7B7D0]">
-          Memora could not connect to the local FastAPI backend. Verify that the backend service is running.
+          Memora couldn't start. Please try again or restart the application.
         </p>
         <Button variant="primary" size="md" onClick={loadAllDashboardData} className="mx-auto">
           <RefreshCw className="w-4 h-4 mr-2" />
-          Retry Connection
+          Try Again
         </Button>
       </div>
     );
@@ -243,15 +243,12 @@ export const Dashboard = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm sm:text-base font-bold text-[#F4F7FF] tracking-tight truncate">
-                Intelligent Digital Memory
+                Your Files at a Glance
               </h1>
               <span className={`text-[9px] font-semibold px-2 py-0.2 rounded-full border shrink-0 ${systemOperationalColor}`}>
                 {systemOperationalLabel}
               </span>
             </div>
-            <p className="text-[10px] text-[#A7B7D0] font-normal truncate hidden sm:block">
-              Local knowledge base and semantic workspace overview
-            </p>
           </div>
         </div>
 
@@ -328,8 +325,7 @@ export const Dashboard = () => {
                       <Bell className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <span className="font-bold text-xs text-[#F4F7FF]">Activity Alerts</span>
-                      <span className="text-[10px] text-[#71839E] ml-1.5 font-normal">Real-time status</span>
+                      <span className="font-bold text-xs text-[#F4F7FF]">Alerts</span>
                     </div>
                     {totalNotificationAlerts > 0 && (
                       <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -362,7 +358,7 @@ export const Dashboard = () => {
                         onClick={() => { setShowNotifications(false); navigate('/organize'); }}
                         className="inline-flex items-center gap-1 text-[#4B91FF] hover:underline text-[11px] font-bold pt-0.5 cursor-pointer"
                       >
-                        Review in Organization &rarr;
+                        Review Duplicates &rarr;
                       </button>
                     </div>
                   )}
@@ -392,7 +388,7 @@ export const Dashboard = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                           <RefreshCw className="w-3 h-3 text-[#4B91FF] animate-spin" />
-                          <span className="font-bold text-xs text-blue-200">Ingestion Active</span>
+                          <span className="font-bold text-xs text-blue-200">Scanning your files…</span>
                         </div>
                         <span className="text-[10px] font-mono text-blue-400">
                           {scanStatus.progress_percentage || 0}%
@@ -409,8 +405,8 @@ export const Dashboard = () => {
                       <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
                         <CheckCircle2 className="w-4 h-4" />
                       </div>
-                      <p className="font-semibold text-[#A7B7D0]">All Systems Optimal</p>
-                      <p className="text-[10px] text-[#71839E]">No active warnings, duplicate alerts, or expired files.</p>
+                      <p className="font-semibold text-[#A7B7D0]">Everything looks good</p>
+                      <p className="text-[10px] text-[#71839E]">No alerts right now.</p>
                     </div>
                   )}
                 </div>
@@ -419,10 +415,8 @@ export const Dashboard = () => {
             )}
           </div>
         </div>
-      </div>
-
-      {/* 2. Key Statistics Grid (5 Compact KPI Cards Strip) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
+      </div>      {/* 2. Key Statistics Grid (4 Compact KPI Cards Strip) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
         
         {/* Stat 1: Total Files */}
         <div 
@@ -430,7 +424,7 @@ export const Dashboard = () => {
           onClick={() => navigate('/folders')}
         >
           <div className="flex items-center justify-between mb-0.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#71839E]">Indexed Files</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#71839E]">Files</span>
             <div className="p-1 rounded-md bg-[#3478F6]/10 text-[#4B91FF] group-hover:scale-105 transition-transform">
               <FileText className="w-3 h-3" />
             </div>
@@ -438,7 +432,7 @@ export const Dashboard = () => {
           <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
             {stats.files !== undefined ? stats.files : '—'}
           </div>
-          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Documents & media</p>
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Documents &amp; media</p>
         </div>
 
         {/* Stat 2: Storage Used */}
@@ -475,26 +469,9 @@ export const Dashboard = () => {
           <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Monitored roots</p>
         </div>
 
-        {/* Stat 4: Chunks / Vectors */}
+        {/* Stat 4: Duplicate Groups */}
         <div 
-          className="glass-panel p-2.5 rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-cyan-500/40 bg-[#0A1629] hover:bg-[#0E1D35] transition-all duration-150 group cursor-pointer shadow-xs"
-          onClick={() => navigate('/search')}
-        >
-          <div className="flex items-center justify-between mb-0.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#71839E]">Vector Chunks</span>
-            <div className="p-1 rounded-md bg-cyan-500/10 text-cyan-400 group-hover:scale-105 transition-transform">
-              <Layers className="w-3 h-3" />
-            </div>
-          </div>
-          <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
-            {stats.chunks || stats.vectors || stats.files * 2 || 0}
-          </div>
-          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">FAISS index vectors</p>
-        </div>
-
-        {/* Stat 5: Duplicate Groups */}
-        <div 
-          className="glass-panel p-2.5 rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-amber-500/40 bg-[#0A1629] hover:bg-[#0E1D35] transition-all duration-150 group cursor-pointer shadow-xs col-span-2 sm:col-span-1"
+          className="glass-panel p-2.5 rounded-xl border border-[rgba(139,170,215,0.14)] hover:border-amber-500/40 bg-[#0A1629] hover:bg-[#0E1D35] transition-all duration-150 group cursor-pointer shadow-xs"
           onClick={() => navigate('/organize')}
         >
           <div className="flex items-center justify-between mb-0.5">
@@ -541,7 +518,7 @@ export const Dashboard = () => {
               <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.14)] pb-1.5 mb-2">
                 <h3 className="font-bold text-[11px] text-[#F4F7FF] uppercase tracking-wider flex items-center gap-1.5">
                   <CalendarClock className="w-3.5 h-3.5 text-[#4B91FF] group-hover:scale-105 transition-transform" />
-                  <span>Expiry & Renewal Alerts</span>
+                  <span>Upcoming Deadlines</span>
                 </h3>
                 <span className="text-[10px] text-[#4B91FF] font-semibold group-hover:underline">
                   View &rarr;
@@ -567,7 +544,7 @@ export const Dashboard = () => {
               {/* Next Expiry Highlight */}
               <div className="p-2 rounded-lg bg-[#06101F] border border-[rgba(139,170,215,0.14)] space-y-1">
                 <div className="flex items-center justify-between text-[9px] font-semibold text-[#71839E]">
-                  <span>NEXT UPCOMING EXPIRY</span>
+                  <span>NEXT DEADLINE</span>
                   {nextExpiry && (
                     <span className="text-[#4B91FF] font-mono">{nextExpiry.date_type}</span>
                   )}
@@ -600,9 +577,9 @@ export const Dashboard = () => {
             </div>
 
             <div className="text-[9px] text-[#71839E] flex items-center justify-between pt-1 border-t border-[rgba(139,170,215,0.12)]">
-              <span>Tracked Records: {expirySummary.total_tracked}</span>
+              <span>Total: {expirySummary.total_tracked}</span>
               {expirySummary.needs_review > 0 && (
-                <span className="text-purple-400 font-semibold">{expirySummary.needs_review} Needs Review</span>
+                <span className="text-purple-400 font-semibold">{expirySummary.needs_review} Need Review</span>
               )}
             </div>
           </div>
@@ -697,7 +674,7 @@ export const Dashboard = () => {
               <div className="flex items-center justify-between border-b border-[rgba(139,170,215,0.14)] pb-1 mb-1.5">
                 <h3 className="font-bold text-[11px] text-[#F4F7FF] uppercase tracking-wider flex items-center gap-1.5">
                   <Sparkles className="w-3 h-3 text-[#4B91FF]" />
-                  <span>Module Shortcuts</span>
+                  <span>Quick Access</span>
                 </h3>
               </div>
 
@@ -709,7 +686,7 @@ export const Dashboard = () => {
                 >
                   <Search className="w-3 h-3 text-[#4B91FF] mb-0.5 group-hover:scale-105 transition-transform" />
                   <div className="font-bold text-[11px] text-[#F4F7FF] truncate">Search</div>
-                  <div className="text-[8px] text-[#71839E] truncate">Semantic query</div>
+                  <div className="text-[8px] text-[#71839E] truncate">Find your files</div>
                 </button>
 
                 <button
@@ -748,8 +725,8 @@ export const Dashboard = () => {
                   className="p-1.5 rounded-lg bg-[#0E1D35] hover:bg-[#132642] border border-[rgba(139,170,215,0.14)] hover:border-purple-500/40 text-left transition-all cursor-pointer group"
                 >
                   <HardDrive className="w-3 h-3 text-purple-400 mb-0.5 group-hover:scale-105 transition-transform" />
-                  <div className="font-bold text-[11px] text-[#F4F7FF] truncate">Storage Opt</div>
-                  <div className="text-[8px] text-[#71839E] truncate">Compress space</div>
+                  <div className="font-bold text-[11px] text-[#F4F7FF] truncate">Free Up Space</div>
+                  <div className="text-[8px] text-[#71839E] truncate">Clean up storage</div>
                 </button>
 
                 <button
@@ -770,7 +747,7 @@ export const Dashboard = () => {
               className="w-full mt-1.5 py-1.5 px-2 rounded-lg bg-[#3478F6]/10 hover:bg-[#3478F6]/20 border border-[#3478F6]/30 text-[#4B91FF] text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
             >
               <FolderPlus className="w-3.5 h-3.5" />
-              <span>Add Local Folder to Index</span>
+              <span>Add Folder</span>
             </button>
           </div>
         </div>
@@ -783,7 +760,7 @@ export const Dashboard = () => {
           <div className="flex items-center gap-1.5">
             <Activity className="w-3.5 h-3.5 text-emerald-400" />
             <span className="font-bold text-[10px] text-[#F4F7FF] uppercase tracking-wider">
-              System Telemetry
+              Status
             </span>
           </div>
           <span className={`text-[9px] font-semibold px-2 py-0.2 rounded-full border ${systemOperationalColor}`}>
@@ -793,14 +770,14 @@ export const Dashboard = () => {
 
         <div className="flex items-center gap-2 flex-1 max-w-md justify-center">
           <div className="px-2 py-0.5 rounded-lg bg-[#0E1D35] border border-[rgba(139,170,215,0.12)] flex items-center gap-1.5 text-[10px]">
-            <span className="text-[#A7B7D0]">Engine:</span>
+            <span className="text-[#A7B7D0]">Memora:</span>
             <span className="font-semibold text-emerald-400 flex items-center gap-0.5">
               <CheckCircle2 className="w-3 h-3" /> Ready
             </span>
           </div>
 
           <div className="px-2 py-0.5 rounded-lg bg-[#0E1D35] border border-[rgba(139,170,215,0.12)] flex items-center gap-1.5 text-[10px]">
-            <span className="text-[#A7B7D0]">Indexed:</span>
+            <span className="text-[#A7B7D0]">Files:</span>
             <span className="font-mono font-bold text-[#F4F7FF]">{stats.files}</span>
           </div>
 

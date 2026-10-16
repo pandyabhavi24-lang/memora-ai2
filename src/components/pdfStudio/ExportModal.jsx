@@ -266,7 +266,7 @@ export const ExportModal = ({
               <span>Index with Memora upon Export</span>
             </div>
             <p className="text-[10px] text-gray-400 leading-tight">
-              Automatically index exported file for Module 1 intelligent semantic search.
+              Automatically make the exported file searchable in Memora.
             </p>
           </div>
           <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${

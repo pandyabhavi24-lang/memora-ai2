@@ -608,10 +608,10 @@ export const SearchResults = () => {
                 ? 'bg-[#3478F6] text-white shadow-md shadow-[#3478F6]/25'
                 : 'text-[#A7B7D0] hover:text-[#F4F7FF]'
             }`}
-            title="Semantic Mode: Finds conceptually related files even if exact words differ"
+            title="Smart Search: Finds related files even if exact words differ"
           >
             <Brain className="w-3.5 h-3.5 text-purple-300" />
-            <span>Semantic</span>
+            <span>Smart</span>
           </button>
           <button
             type="button"
@@ -1082,12 +1082,8 @@ export const SearchResults = () => {
                     </span>
                     {typeof primaryResult.semanticScore === 'number' && (
                       <div className="flex items-center gap-1.5 text-[10px] text-[#71839E] font-mono">
-                        <span className="text-indigo-300 font-semibold" title="Semantic Score (90% weight)">
-                          Sem: {(primaryResult.semanticScore * 100).toFixed(1)}%
-                        </span>
-                        <span>•</span>
-                        <span className="text-blue-300 font-semibold" title="Lexical Score (10% weight)">
-                          Lex: {typeof primaryResult.lexicalScore === 'number' ? (primaryResult.lexicalScore * 100).toFixed(1) : '0.0'}%
+                        <span className="text-indigo-300 font-semibold" title="Relevance score">
+                          {(primaryResult.semanticScore * 100).toFixed(0)}% match
                         </span>
                       </div>
                     )}

@@ -11,15 +11,15 @@ export const OrganizationHeader = ({ onAnalyze, isAnalyzing, isAnalyzed }) => {
           </div>
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-[#F4F7FF] tracking-tight">
-              Intelligent File Organization
+              Organize
             </h1>
             <span className="text-[11px] font-semibold text-[#4B91FF]">
-              AI suggests taxonomy &bull; You approve all changes
+              Suggestions are yours to approve
             </span>
           </div>
         </div>
         <p className="text-xs text-[#A7B7D0] pl-10 font-normal leading-relaxed">
-          Analyzes document and media semantics to suggest category groupings, smart tags, and duplicate consolidation.
+          Memora reviews your files and suggests how to sort them. You decide what to keep.
         </p>
       </div>
 

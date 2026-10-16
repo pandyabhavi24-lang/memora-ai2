@@ -53,7 +53,7 @@ export const Welcome = () => {
             </div>
             <h3 className="font-semibold text-sm text-white mb-1">100% Local Execution</h3>
             <p className="text-xs text-[#A7B7D0] leading-relaxed">
-              All files, OCR text, and vector indices stay strictly on your local computer.
+              All files and data stay strictly on your local computer. Nothing is uploaded.
             </p>
           </div>
 

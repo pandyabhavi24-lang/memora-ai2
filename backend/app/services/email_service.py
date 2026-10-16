@@ -3,7 +3,9 @@ import json
 import logging
 import base64
 import glob
-from typing import Dict, Any, Optional, Tuple
+import re
+from typing import Dict, Any, Optional, Tuple, List
+from email.utils import formataddr
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -11,15 +13,26 @@ from email.mime.application import MIMEApplication
 
 from dotenv import load_dotenv
 
-# Always load the .env file from the MemoraAI project root,
-# regardless of the backend process working directory.
+# Always load the .env file from the backend directory or project root,
+# preserving existing environment variables (override=False).
 
-PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..",)
+BACKEND_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..")
 )
-ENV_FILE = os.path.join(PROJECT_ROOT, ".env")
+PROJECT_ROOT = os.path.abspath(
+    os.path.join(BACKEND_DIR, "..")
+)
 
-load_dotenv(ENV_FILE)
+ROOT_ENV_FILE = os.path.join(PROJECT_ROOT, ".env")
+BACKEND_ENV_FILE = os.path.join(BACKEND_DIR, ".env")
+
+if os.path.isfile(ROOT_ENV_FILE):
+    load_dotenv(ROOT_ENV_FILE, override=False)
+if os.path.isfile(BACKEND_ENV_FILE):
+    load_dotenv(BACKEND_ENV_FILE, override=False)
+
+ENV_FILE = BACKEND_ENV_FILE if os.path.isfile(BACKEND_ENV_FILE) else ROOT_ENV_FILE
+
 
 logger = logging.getLogger("memora.email_service")
 
@@ -501,6 +514,198 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to send email via Gmail API: {e}", exc_info=True)
             raise RuntimeError(f"Gmail API Delivery Error: {e}")
+
+    def send_file_sharing_email(
+        self,
+        to_email: str,
+        subject: str,
+        message_body: str,
+        attachments: List[Tuple[str, str, str]],
+        sender_name: str = "Memora AI",
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
+        max_message_bytes: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Sends an email with attached files (individual files or ZIP archive) via configured SMTP.
+        Uses sender_name (default "Memora AI") in the From header while preserving
+        the configured SMTP_FROM / SMTP_USER email address.
+
+        Enforces total outgoing message size (headers + body + base64 attachments) <= max_message_bytes.
+        Never reveals passwords or credentials in logs or returned data.
+        """
+        # Resolve configurable limit: explicit param > env var > 25 MB default
+        if max_message_bytes is None:
+            try:
+                max_message_bytes = int(float(os.getenv("EMAIL_MAX_MESSAGE_MB", "25")) * 1024 * 1024)
+            except (ValueError, TypeError):
+                max_message_bytes = 25 * 1024 * 1024
+
+        if not to_email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", to_email.strip()):
+            raise ValueError(f"Invalid recipient email address: '{to_email}'")
+
+        clean_to = to_email.strip()
+
+        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_user = os.getenv("SMTP_USER", "")
+        smtp_pass = os.getenv("SMTP_PASS", "")
+        from_addr = os.getenv("SMTP_FROM", "") or smtp_user
+
+        if not smtp_user or not smtp_pass:
+            logger.warning("SMTP credentials not configured in environment (SMTP_USER / SMTP_PASS missing).")
+            raise RuntimeError("Email service is not configured. Please verify SMTP credentials in the backend environment.")
+
+        # Construct multipart/mixed message
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject or "Shared Files from Memora AI"
+        msg["From"] = formataddr((sender_name, from_addr))
+        msg["To"] = clean_to
+
+        recipients = [clean_to]
+
+        if cc_emails:
+            clean_ccs = [c.strip() for c in cc_emails if c and re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", c.strip())]
+            if clean_ccs:
+                msg["Cc"] = ", ".join(clean_ccs)
+                recipients.extend(clean_ccs)
+
+        if bcc_emails:
+            clean_bccs = [b.strip() for b in bcc_emails if b and re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", b.strip())]
+            if clean_bccs:
+                recipients.extend(clean_bccs)
+
+        # Body text
+        body_text = message_body or "Please find the attached files shared from Memora AI."
+        msg.attach(MIMEText(body_text, "plain", "utf-8"))
+
+        # Attachments: list of (file_path, display_name, mime_type)
+        if not attachments:
+            raise ValueError("At least one attachment is required.")
+
+        # Estimate conservative raw limit based on max_message_bytes accounting for
+        # base64 encoding expansion (~33.3%) and MIME line breaks / header overhead (~1.37 factor).
+        max_raw_bytes = int(max_message_bytes / 1.37)
+        total_raw_bytes = 0
+
+        # Validate file existence, regular file status, and raw size BEFORE reading into memory
+        validated_items = []
+        for item in attachments:
+            f_path, disp_name, _ = item
+            clean_disp_name = os.path.basename(disp_name or f_path) if f_path else "unknown"
+            if not f_path or not os.path.exists(f_path):
+                raise FileNotFoundError(f"Attachment file not found on disk: '{clean_disp_name}'")
+            if not os.path.isfile(f_path):
+                raise ValueError(f"Attachment path is not a regular file: '{clean_disp_name}'")
+
+            file_size = os.path.getsize(f_path)
+            total_raw_bytes += file_size
+            if total_raw_bytes > max_raw_bytes:
+                raise ValueError(
+                    f"Total attachment size ({total_raw_bytes / (1024 * 1024):.2f} MB) "
+                    f"exceeds the maximum email delivery limit ({max_message_bytes / (1024 * 1024):.2f} MB). "
+                    f"Please select fewer files or optimize them first."
+                )
+            validated_items.append((f_path, clean_disp_name))
+
+        # Stream/attach files one by one, immediately releasing file buffer
+        for f_path, clean_disp_name in validated_items:
+            with open(f_path, "rb") as af:
+                file_bytes = af.read()
+
+            part = MIMEApplication(file_bytes, Name=clean_disp_name)
+            del file_bytes
+            part.add_header("Content-Disposition", "attachment", filename=clean_disp_name)
+            msg.attach(part)
+
+        # Calculate exact outgoing MIME message size including headers, body, base64 data
+        encoded_message = msg.as_bytes()
+        total_message_bytes = len(encoded_message)
+        del encoded_message  # Free serialized buffer immediately before transmission
+
+        if total_message_bytes > max_message_bytes:
+            raise ValueError(
+                f"Total outgoing message size ({total_message_bytes / (1024 * 1024):.2f} MB) "
+                f"exceeds the maximum email delivery limit ({max_message_bytes / (1024 * 1024):.2f} MB). "
+                f"Please select fewer files or optimize them first."
+            )
+
+        stage = "initializing"
+        smtp_timeout = 60
+        try:
+            import smtplib
+
+            logger.info(
+                "Initiating SMTP file-sharing delivery: message_size=%d bytes, attachments=%d, port=%d, timeout=%ds",
+                total_message_bytes,
+                len(attachments),
+                smtp_port,
+                smtp_timeout,
+            )
+
+            if smtp_port == 465:
+                stage = "connecting_ssl"
+                logger.info("Establishing SMTP_SSL connection (port=%d, timeout=%ds)...", smtp_port, smtp_timeout)
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=smtp_timeout) as server:
+                    logger.info("SMTP_SSL connection established. Authenticating...")
+                    stage = "authenticating"
+                    server.login(smtp_user, smtp_pass)
+                    logger.info("SMTP authentication successful. Transmitting message payload (%d bytes, timeout=%ds)...", total_message_bytes, smtp_timeout)
+                    stage = "transmitting_payload"
+                    server.send_message(msg, from_addr=from_addr, to_addrs=recipients)
+                    stage = "transmission_completed"
+                    logger.info("Message payload transmission completed.")
+            else:
+                stage = "connecting"
+                logger.info("Establishing SMTP connection (port=%d, timeout=%ds)...", smtp_port, smtp_timeout)
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout) as server:
+                    logger.info("SMTP socket connected. Sending initial EHLO...")
+                    stage = "ehlo_initial"
+                    server.ehlo()
+                    logger.info("Initial EHLO accepted. Initiating STARTTLS...")
+                    stage = "starttls"
+                    server.starttls()
+                    logger.info("STARTTLS completed. Sending post-TLS EHLO...")
+                    stage = "ehlo_tls"
+                    server.ehlo()
+                    logger.info("Post-TLS EHLO accepted. Authenticating...")
+                    stage = "authenticating"
+                    server.login(smtp_user, smtp_pass)
+                    logger.info("SMTP authentication successful. Transmitting message payload (%d bytes, timeout=%ds)...", total_message_bytes, smtp_timeout)
+                    stage = "transmitting_payload"
+                    server.send_message(msg, from_addr=from_addr, to_addrs=recipients)
+                    stage = "transmission_completed"
+                    logger.info("Message payload transmission completed.")
+
+            logger.info("File-sharing email successfully accepted by SMTP for %s (%d attachments, %d bytes)", clean_to, len(attachments), total_message_bytes)
+            return {
+                "status": "success",
+                "sent_to": clean_to,
+                "attachments_count": len(attachments),
+                "total_bytes_sent": total_message_bytes,
+                "message": f"Email successfully accepted by SMTP server for delivery to {clean_to}."
+            }
+        except Exception as e:
+            failure_detail = stage
+            if stage == "transmitting_payload":
+                import traceback
+                tb_entries = traceback.extract_tb(e.__traceback__)
+                func_names = [entry.name for entry in tb_entries]
+                err_lower = str(e).lower()
+                if "getreply" in func_names or "read operation" in err_lower or "unexpectedly closed" in err_lower:
+                    failure_detail = "waiting_for_server_response"
+                elif "send" in func_names or "write operation" in err_lower or "server not connected" in err_lower:
+                    failure_detail = "transmitting_message_data"
+
+            logger.error(
+                "SMTP file sharing delivery failure at stage '%s' (detail: %s, error_type: %s): %s",
+                stage,
+                failure_detail,
+                type(e).__name__,
+                str(e),
+                exc_info=True,
+            )
+            raise RuntimeError(f"SMTP delivery failed: {str(e)}")
 
 
 email_service = EmailService()

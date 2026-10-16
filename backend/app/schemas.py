@@ -897,3 +897,59 @@ class ZipArchiveResponse(BaseModel):
     execution_time_ms: float
 
 
+class EmailShareRequest(BaseModel):
+    file_ids: List[int] = Field(..., min_length=1, description="List of indexed file IDs to share")
+    mode: Literal["zip", "originals"] = Field("zip", description="Attachment mode: 'zip' or 'originals'")
+    to_email: str = Field(..., min_length=3, max_length=254, description="Recipient email address")
+    subject: Optional[str] = Field("Shared Files from Memora AI", max_length=200, description="Email subject line")
+    body: Optional[str] = Field(None, max_length=10000, description="Optional plain-text message body")
+    zip_filename: Optional[str] = Field(None, max_length=100, description="Optional custom filename for ZIP attachment")
+
+    @field_validator("to_email")
+    @classmethod
+    def validate_recipient_email(cls, v: str) -> str:
+        clean = v.strip()
+        import re
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
+            raise ValueError("Invalid recipient email address format.")
+        return clean
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            if "\r" in v or "\n" in v:
+                raise ValueError("Subject line cannot contain carriage return or newline characters.")
+            v_stripped = v.strip()
+            return v_stripped if v_stripped else "Shared Files from Memora AI"
+        return "Shared Files from Memora AI"
+
+    @field_validator("zip_filename")
+    @classmethod
+    def validate_zip_filename(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            if any(c in v for c in ("\r", "\n", "\0", "/", "\\", '"', "'", ";")):
+                raise ValueError("ZIP filename contains invalid characters or path separators.")
+            v_clean = v.strip()
+            if not v_clean or v_clean in (".", "..") or v_clean.lower() == ".zip":
+                raise ValueError("ZIP filename cannot be empty or purely dots.")
+            return v_clean
+        return None
+
+
+class EmailShareResponse(BaseModel):
+    status: str
+    sent_to: str
+    mode: str
+    attachments_count: int
+    total_bytes_sent: int
+    message: str
+
+
+class EmailConfigResponse(BaseModel):
+    """Returns the current email attachment size limits and masked sender identity."""
+    max_raw_mb: float = Field(..., description="Maximum raw attachment size in MB (pre-MIME encoding)")
+    max_message_mb: float = Field(..., description="Maximum total MIME message size in MB")
+    max_raw_bytes: int = Field(..., description="max_raw_mb converted to bytes for frontend comparison")
+    masked_sender_email: Optional[str] = Field(None, description="Masked recovery email (e.g., d***@gmail.com), or null if not configured")
+    sender_display_name: str = Field("Memora AI", description="Display name used in the From header")

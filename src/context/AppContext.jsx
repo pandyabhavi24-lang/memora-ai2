@@ -219,7 +219,7 @@ export const AppProvider = ({ children }) => {
       await refreshSearchHistory();
     } catch (err) {
       console.error('Semantic search service error:', err);
-      setSearchError('An error occurred while querying the local vector database.');
+      setSearchError('An error occurred while searching. Please try again.');
       addToast('Error performing semantic search', 'error');
     } finally {
       setIsSearching(false);

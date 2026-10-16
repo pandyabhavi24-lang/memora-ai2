@@ -66,30 +66,29 @@ const OverviewTab = ({ settings }) => (
 
     <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 space-y-2">
       <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 font-mono uppercase tracking-wider">
-        <Cpu className="w-3.5 h-3.5" /> Local Processing & AES-256-GCM Encryption Guarantee
+        <Cpu className="w-3.5 h-3.5" /> 100% On-Device
       </div>
       <p className="text-[11px] text-emerald-300/90 leading-relaxed">
-        All document indexing, OCR, vector embeddings, local file/folder encryption (AES-256-GCM), and audit logs execute exclusively on your computer.
-        No file contents, encryption keys, OCR text, or search queries leave your local machine.
+        Everything Memora does — scanning, searching, and encrypting files — happens entirely on your computer. Nothing leaves your device.
       </p>
     </div>
 
     <div className="p-4 rounded-xl bg-[#3478F6]/10 border border-[#3478F6]/25 space-y-1">
       <div className="flex items-center gap-2 text-xs font-semibold text-[#38BDF8] font-mono uppercase tracking-wider">
-        <Info className="w-3.5 h-3.5" /> Core Security Action Distinctions
+        <Info className="w-3.5 h-3.5" /> What each action does
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-2 text-[11px]">
         <div className="p-3 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)]">
-          <strong className="text-amber-400 block mb-1">1. Exclude</strong>
-          <span className="text-[#A7B7D0] leading-relaxed">Stops scanning and indexing. Does NOT delete or encrypt the file on disk.</span>
+          <strong className="text-amber-400 block mb-1">Exclude</strong>
+          <span className="text-[#A7B7D0] leading-relaxed">Stops Memora from scanning this file or folder. The file is not deleted or changed.</span>
         </div>
         <div className="p-3 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)]">
-          <strong className="text-[#38BDF8] block mb-1">2. Encrypt</strong>
-          <span className="text-[#A7B7D0] leading-relaxed">Protects actual file contents locally with AES-256-GCM. Unreadable without decryption.</span>
+          <strong className="text-[#38BDF8] block mb-1">Encrypt</strong>
+          <span className="text-[#A7B7D0] leading-relaxed">Locks the file contents so only you can open them. Requires your PIN to decrypt.</span>
         </div>
         <div className="p-3 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)]">
-          <strong className="text-red-400 block mb-1">3. Delete Permanently</strong>
-          <span className="text-[#A7B7D0] leading-relaxed">Permanently removes original file/folder from computer disk with confirmation modal.</span>
+          <strong className="text-red-400 block mb-1">Delete Permanently</strong>
+          <span className="text-[#A7B7D0] leading-relaxed">Removes the file from your computer for good. You'll be asked to confirm first.</span>
         </div>
       </div>
     </div>
@@ -391,7 +390,7 @@ const ExcludedTab = ({ sessionToken, addToast }) => {
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-yellow-950/20 border border-yellow-500/20 text-xs text-yellow-300 leading-relaxed space-y-1">
         <div className="font-bold flex items-center gap-2 text-yellow-400">
-          <Info className="w-4 h-4" /> Understanding Excluded Items
+          <Info className="w-4 h-4" /> About Skipped Items
         </div>
         <p className="text-gray-300 text-[11px]">
           • <strong>Exclusion means:</strong> Memora will NOT scan, index, or show this file/folder in search or indexed results.<br />
@@ -490,7 +489,7 @@ const EncryptionTab = ({ sessionToken, addToast }) => {
       addToast(
         res.is_folder
           ? `Folder encrypted: ${res.encrypted_count} files encrypted.`
-          : 'File encrypted successfully with AES-256-GCM.',
+          : 'File protected successfully.',
         'success'
       );
       handleCheckStatus();
@@ -524,7 +523,7 @@ const EncryptionTab = ({ sessionToken, addToast }) => {
   return (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/20 text-xs text-purple-300 leading-relaxed">
-        <strong className="text-purple-400 font-semibold block mb-1">Local Authenticated AES-256-GCM Encryption</strong>
+        <strong className="text-purple-400 font-semibold block mb-1">File Protection</strong>
         Encrypting a file or folder protects its actual disk contents with a 256-bit key.
         Search index records are atomically purged so plaintext content cannot be queried while encrypted.
         Decryption requires a valid application session. Encryption keys never leave your machine.
@@ -554,7 +553,7 @@ const EncryptionTab = ({ sessionToken, addToast }) => {
               <span className="font-semibold text-gray-300">Status:</span>
               {statusInfo.is_encrypted ? (
                 <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5" /> 🔒 ENCRYPTED (AES-256-GCM)
+                  <Lock className="w-3.5 h-3.5" /> 🔒 Protected
                 </span>
               ) : statusInfo.partially_encrypted ? (
                 <span className="text-yellow-400 font-semibold flex items-center gap-1">
@@ -665,7 +664,7 @@ const DataManagementTab = ({ sessionToken, folders, addToast }) => {
           <h3 className="text-xs font-bold text-white uppercase tracking-wider">A) Remove from Memora</h3>
         </div>
         <p className="text-[11px] text-gray-400 leading-relaxed">
-          Removes Memora's indexed metadata, search records, and vector embeddings.
+          Removes Memora's records for this file. The file itself is not deleted.
           <strong className="text-emerald-400"> Your original files remain untouched on your computer.</strong>
         </p>
 
@@ -673,7 +672,7 @@ const DataManagementTab = ({ sessionToken, folders, addToast }) => {
           <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800">
             <div>
               <h4 className="text-xs font-semibold text-gray-200">Remove All Indexed Metadata</h4>
-              <p className="text-[11px] text-gray-400">Removes all File, Chunk, and Vector records from Memora's database and FAISS index. Original files untouched.</p>
+              <p className="text-[11px] text-gray-400">Clears all of Memora's records. Your original files are not deleted.</p>
             </div>
             <Button variant="danger" size="sm" icon={Database}
               onClick={() => setConfirmRemoveIndex({ scope: 'metadata', folderId: null, label: 'all indexed metadata' })}>
@@ -683,11 +682,11 @@ const DataManagementTab = ({ sessionToken, folders, addToast }) => {
 
           <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800">
             <div>
-              <h4 className="text-xs font-semibold text-gray-200">Reset Vector Index Only</h4>
-              <p className="text-[11px] text-gray-400">Clears the FAISS vector index and VectorMapping table. Chunk text and file records are preserved. Re-index to restore search.</p>
+              <h4 className="text-xs font-semibold text-gray-200">Reset Search Index</h4>
+              <p className="text-[11px] text-gray-400">Resets the search index. Your files and records are preserved.</p>
             </div>
             <Button variant="secondary" size="sm" icon={Cpu}
-              onClick={() => setConfirmRemoveIndex({ scope: 'vectors', folderId: null, label: 'vector index (FAISS + mappings)' })}>
+              onClick={() => setConfirmRemoveIndex({ scope: 'vectors', folderId: null, label: 'search index' })}>
               Reset Vectors
             </Button>
           </div>
@@ -936,7 +935,7 @@ const AuditLogTab = ({ sessionToken, addToast }) => {
       <Modal
         isOpen={showClearModal}
         onClose={() => setShowClearModal(false)}
-        title="Clear Audit Logs"
+        title="Clear Activity History"
         subtitle="This action cannot be undone."
         actions={
           <>
@@ -946,7 +945,7 @@ const AuditLogTab = ({ sessionToken, addToast }) => {
         }
       >
         <p className="text-sm text-gray-300">
-          All audit log entries will be deleted. A single record of this clearing event will be retained.
+          Your activity history will be cleared. A record of this action will be kept.
         </p>
         <p className="text-xs text-gray-500 mt-2">Original user files are not affected.</p>
       </Modal>
@@ -1013,7 +1012,7 @@ const BackupRestoreTab = ({ sessionToken, addToast }) => {
   return (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-gray-900/40 border border-gray-800 text-xs text-gray-400 leading-relaxed">
-        Backup covers: SQLite database, FAISS vector index, and FAISS mapping file.
+        Backup includes all your Memora data and settings.
         <strong className="text-gray-300"> Original user files are NOT backed up.</strong> PIN data is included as a hash (not plaintext).
         Backups are <strong className="text-yellow-300">not encrypted</strong> — store in a secure location you control.
       </div>
@@ -1088,7 +1087,7 @@ const BackupRestoreTab = ({ sessionToken, addToast }) => {
         }
       >
         <p className="text-sm text-gray-300">
-          This will replace Memora's current database and vector index with the backup data.
+          This will restore Memora from your backup file.
           A <strong className="text-white">safety backup</strong> of your current data will be created first.
         </p>
         <p className="text-xs text-yellow-400 mt-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
@@ -1105,11 +1104,11 @@ const BackupRestoreTab = ({ sessionToken, addToast }) => {
 const TABS = [
   { id: 'overview',   label: 'Overview',                icon: ShieldCheck  },
   { id: 'lock',       label: 'Application Lock',        icon: Lock         },
-  { id: 'excluded',   label: 'Excluded Folders & Files',icon: FolderLock   },
-  { id: 'encryption', label: 'File & Folder Encryption',icon: Key          },
-  { id: 'data',       label: 'Data Management',         icon: Database     },
-  { id: 'audit',      label: 'Audit Log',               icon: ClipboardList },
-  { id: 'backup',     label: 'Backup & Restore',        icon: HardDrive    },
+  { id: 'excluded',   label: 'Folders to Skip',         icon: FolderLock   },
+  { id: 'encryption', label: 'File Protection',          icon: Key          },
+  { id: 'data',       label: 'Manage Your Data',         icon: Database     },
+  { id: 'audit',      label: 'Activity History',         icon: ClipboardList },
+  { id: 'backup',     label: 'Backup & Restore',         icon: HardDrive    },
 ];
 
 export const Security = () => {
@@ -1136,9 +1135,8 @@ export const Security = () => {
   return (
     <div className="space-y-6 select-none">
       <PageHeader
-        title="Security, Privacy & Data Management"
-        subtitle="Application lock, excluded items, AES-256-GCM local encryption, permanent deletion, audit trail, and backups."
-        badge={<Badge variant="blue">Module 5</Badge>}
+        title="Privacy & Security"
+        subtitle="Lock your app, protect files, manage backups, and review activity."
       />
 
       <div className="flex items-center gap-2 border-b border-[rgba(139,170,215,0.14)] pb-3 overflow-x-auto custom-scrollbar flex-nowrap">

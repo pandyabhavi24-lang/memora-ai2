@@ -338,23 +338,21 @@ export const MediaIntelligence = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-[#F4F7FF] tracking-wide">
-                Document & Visual Intelligence
+                Media Library
               </h1>
               <span className="text-[11px] text-[#7566F6] font-mono font-semibold">
-                MODULE 3 — Visual Intelligence, AI Descriptions, Dynamic Groups & Tags
               </span>
             </div>
           </div>
           <p className="text-xs text-[#A7B7D0] mt-1 font-medium">
-            Strict pictorial image intelligence, dynamic visual containers, editable tags, and unified integration with Module 1 Search.
+            Browse your images, find similar pictures, and organize files with labels.
           </p>
         </div>
-
         <div className="flex items-center gap-3">
           {overview && (
             <div className="text-xs text-[#A7B7D0] mr-2 font-mono flex items-center gap-2">
               <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                {overview.pictorial_images_count || overview.analyzed_count || 0} Pictorial Indexed
+                {overview.pictorial_images_count || overview.analyzed_count || 0} Images Available
               </span>
               <span className="px-2 py-0.5 rounded-md bg-[#0E1D35] text-[#71839E] border border-[rgba(139,170,215,0.18)]">
                 {overview.text_heavy_excluded_count || 0} Docs Excluded
@@ -370,7 +368,7 @@ export const MediaIntelligence = () => {
             disabled={analyzing}
             onClick={() => handleTriggerAnalysis(false)}
           >
-            {analyzing ? `Analyzing (${status?.processed_media || 0}/${status?.total_media || 0})...` : 'Re-index Visual Library'}
+            {analyzing ? `Analyzing (${status?.processed_media || 0}/${status?.total_media || 0})...` : 'Refresh Library'}
           </Button>
         </div>
       </div>
@@ -406,8 +404,8 @@ export const MediaIntelligence = () => {
       <div className="flex items-center gap-2 border-b border-[rgba(139,170,215,0.14)] pb-1 overflow-x-auto">
         {[
           { id: 'overview', label: 'Media Library & Overview', icon: ImageIcon },
-          { id: 'inspector', label: 'Visual Inspector & Tags', icon: Eye },
-          { id: 'recent', label: `Recently Checked (${recentCheckedList.length})`, icon: Clock },
+          { id: 'inspector', label: 'Inspect & Label', icon: Eye },
+          { id: 'recent', label: `Recently Viewed (${recentCheckedList.length})`, icon: Clock },
           { id: 'similar', label: 'Similar & Duplicates', icon: Copy },
           { id: 'recommendations', label: `Cleanup Suggestions (${overview?.recommendations_count || 0})`, icon: Zap },
           { id: 'groups', label: 'Visual Groups', icon: Layers },
@@ -447,7 +445,7 @@ export const MediaIntelligence = () => {
                     Similar Images
                   </h2>
                   <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[rgba(52,120,246,0.15)] text-[#4B91FF] border border-[rgba(52,120,246,0.3)]">
-                    Local Qwen2.5-VL + MiniLM
+                    Image Analysis
                   </span>
                 </div>
                 <p className="text-xs text-[#A7B7D0]">
@@ -491,7 +489,7 @@ export const MediaIntelligence = () => {
               <div className="p-4 text-center space-y-2 rounded-xl bg-[#06101F] border border-[rgba(52,120,246,0.3)] animate-pulse">
                 <Loader2 className="w-6 h-6 animate-spin text-[#4B91FF] mx-auto" />
                 <p className="text-xs text-blue-200 font-medium">
-                  Understanding query image with Local Qwen2.5-VL & retrieving similar matches...
+                  Searching for similar images...
                 </p>
               </div>
             )}
@@ -592,7 +590,7 @@ export const MediaIntelligence = () => {
                 <ImageIcon className="w-3.5 h-3.5 text-[#4B91FF]" /> Pictorial Images
               </span>
               <p className="text-xl font-bold text-[#F4F7FF]">{overview?.pictorial_images_count ?? overview?.total_images ?? 0}</p>
-              <span className="text-[10px] text-emerald-400">Indexed in Visual FAISS</span>
+              <span className="text-[10px] text-emerald-400">Ready to Search</span>
             </div>
 
             <div className="p-4 rounded-2xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] space-y-1">
@@ -613,7 +611,7 @@ export const MediaIntelligence = () => {
 
             <div className="p-4 rounded-2xl border border-[rgba(139,170,215,0.14)] bg-[#0A1629] space-y-1">
               <span className="text-[11px] text-[#71839E] font-medium flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Analyzed Total
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Files Analyzed
               </span>
               <p className="text-xl font-bold text-emerald-400">
                 {overview?.analyzed_count ?? 0} <span className="text-xs font-normal text-[#71839E]">/ {overview?.total_media ?? 0}</span>
@@ -668,7 +666,7 @@ export const MediaIntelligence = () => {
                 <ImageIcon className="w-10 h-10 text-[#71839E] mx-auto" />
                 <h3 className="text-sm font-bold text-[#F4F7FF]">No media has been analyzed yet.</h3>
                 <p className="text-xs text-[#A7B7D0] max-w-sm mx-auto">
-                  Click "Re-index Visual Library" above to classify pictorial vs text-heavy images and generate AI metadata.
+                  Click "Refresh Library" above to analyze and categorize your images.
                 </p>
                 <div className="pt-2">
                   <Button variant="primary" size="sm" icon={RefreshCw} onClick={() => handleTriggerAnalysis(true)}>
@@ -695,7 +693,7 @@ export const MediaIntelligence = () => {
                       <div
                         onClick={() => handleSelectFile(f.file_id, true)}
                         className="aspect-[4/3] rounded-xl bg-[#06101F] border border-[rgba(139,170,215,0.14)] flex items-center justify-center relative overflow-hidden cursor-pointer"
-                        title="Click to view file in Visual Inspector"
+                        title="Click to inspect this file"
                       >
                         <img
                           src={mediaService.getThumbnailUrl(f.file_id)}
@@ -782,7 +780,7 @@ export const MediaIntelligence = () => {
               </div>
               <h3 className="text-base font-bold text-[#F4F7FF]">No Image Selected</h3>
               <p className="text-xs text-[#A7B7D0] max-w-sm mx-auto">
-                Select any image from the Media Library or Recently Checked to inspect its authentic original image and AI metadata.
+                Select an image from the Media Library or Recently Viewed to view and label it.
               </p>
             </div>
           ) : (
@@ -954,7 +952,7 @@ export const MediaIntelligence = () => {
                       AI Visual Description
                     </h4>
                     <span className="text-[10px] text-[#4B91FF] font-mono bg-[#3478F6]/15 px-2.5 py-0.5 rounded-full border border-[#3478F6]/30">
-                      Qwen2.5-VL 3B Local AI
+                      Image Analysis
                     </span>
                   </div>
                   <p className="text-xs text-[#E2E8F0] leading-relaxed bg-[#06101F]/80 p-3.5 rounded-xl border border-[rgba(139,170,215,0.12)] shadow-inner">
@@ -1186,7 +1184,7 @@ export const MediaIntelligence = () => {
               <Clock className="w-10 h-10 text-[#71839E] mx-auto" />
               <h3 className="text-sm font-bold text-[#F4F7FF]">No recently inspected images.</h3>
               <p className="text-xs text-[#A7B7D0] max-w-sm mx-auto">
-                Inspect any pictorial image in the Visual Inspector or Search Results to record it in your history.
+                Open any image in the inspector or search results to record it here.
               </p>
             </div>
           ) : (

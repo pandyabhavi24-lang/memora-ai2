@@ -550,7 +550,7 @@ export const PDFPropertiesPanel = ({
                   <span>Index with Memora</span>
                 </div>
                 <p className="text-[10px] text-[#A7B7D0] leading-tight">
-                  Automatically chunk and vector index exported PDF for Module 1 search.
+                  Automatically make the exported PDF searchable in Memora.
                 </p>
               </div>
               <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors ${

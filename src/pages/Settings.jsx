@@ -33,29 +33,28 @@ export const Settings = () => {
   };
 
   const handleReindex = () => {
-    addToast('Re-indexing triggered across all watched folders...', 'info');
+    addToast('Refreshing your search index…', 'info');
   };
 
   const handleClearCache = () => {
-    addToast('Local FAISS index cache cleared successfully.', 'success');
+    addToast('Cache cleared.', 'success');
   };
 
   return (
     <div className="space-y-6 select-none">
       <PageHeader
-        title="Settings & System Preferences"
-        subtitle="Manage scanned directories, AI embedding models, theme system, and local privacy."
+        title="Settings"
         badge={<Badge variant="blue">v1.0.0 Desktop</Badge>}
       />
 
       {/* Settings Tab Navigation Bar */}
       <div className="flex items-center gap-2 border-b border-[rgba(139,170,215,0.14)] pb-3 overflow-x-auto custom-scrollbar flex-nowrap shrink-0">
         {[
-          { id: 'general', label: 'General & Theme', icon: Palette },
-          { id: 'folders', label: 'Folder Management', icon: Folder },
-          { id: 'privacy', label: 'Privacy & Security', icon: ShieldCheck },
-          { id: 'ai', label: 'AI & OCR Models', icon: Cpu },
-          { id: 'about', label: 'About & System Info', icon: Info },
+          { id: 'general', label: 'Appearance', icon: Palette },
+          { id: 'folders', label: 'Folders', icon: Folder },
+          { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
+          { id: 'ai', label: 'Advanced', icon: Cpu },
+          { id: 'about', label: 'About', icon: Info },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -79,24 +78,54 @@ export const Settings = () => {
       {/* Tab Panels */}
       {activeTab === 'general' && (
         <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
-          <h3 className="text-sm font-bold text-white">Appearance & Theme System</h3>
+          <h3 className="text-sm font-bold text-white">Theme</h3>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
               <div>
                 <h4 className="text-xs font-semibold text-white">Theme System</h4>
-                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Midnight Navy with Electric Blue & Obsidian Surface (Production Reference)</p>
+                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Dark mode (default)</p>
               </div>
               <Badge variant="blue">Active</Badge>
             </div>
 
             <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
               <div>
-                <h4 className="text-xs font-semibold text-white">Global Quick Search Shortcut</h4>
-                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Trigger intelligent search input anywhere across the desktop app</p>
+                <h4 className="text-xs font-semibold text-white">Quick Search</h4>
+                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Press Ctrl+K anywhere to search.</p>
               </div>
               <span className="px-3 py-1 bg-[#0E1D35] text-xs font-mono text-[#38BDF8] font-bold rounded-lg border border-[rgba(139,170,215,0.2)]">
                 Ctrl + K
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
+              <div>
+                <h4 className="text-xs font-semibold text-white">Open Settings</h4>
+                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Go straight to Settings from anywhere.</p>
+              </div>
+              <span className="px-3 py-1 bg-[#0E1D35] text-xs font-mono text-[#38BDF8] font-bold rounded-lg border border-[rgba(139,170,215,0.2)]">
+                Ctrl + ,
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
+              <div>
+                <h4 className="text-xs font-semibold text-white">Go to Home</h4>
+                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Jump back to the Home screen.</p>
+              </div>
+              <span className="px-3 py-1 bg-[#0E1D35] text-xs font-mono text-[#38BDF8] font-bold rounded-lg border border-[rgba(139,170,215,0.2)]">
+                Alt + H
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
+              <div>
+                <h4 className="text-xs font-semibold text-white">Add Folder</h4>
+                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Open the folder picker from anywhere.</p>
+              </div>
+              <span className="px-3 py-1 bg-[#0E1D35] text-xs font-mono text-[#38BDF8] font-bold rounded-lg border border-[rgba(139,170,215,0.2)]">
+                Ctrl + O
               </span>
             </div>
           </div>
@@ -107,18 +136,18 @@ export const Settings = () => {
         <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-white">Monitored Folders</h3>
-              <p className="text-xs text-[#A7B7D0] mt-0.5">Manage local file directories indexed by Memora AI.</p>
+              <h3 className="text-sm font-bold text-white">Your Folders</h3>
+              <p className="text-xs text-[#A7B7D0] mt-0.5">Folders Memora watches for files.</p>
             </div>
             <Button variant="primary" size="sm" icon={Folder} onClick={handleSelectFolder} className="bg-[#3478F6] hover:bg-[#2563EB] text-white">
-              Add Directory
+              Add Folder
             </Button>
           </div>
 
           <div className="space-y-2.5">
             {folders.length === 0 ? (
               <div className="p-8 text-center text-[#7E93B3] bg-[#06101F]/60 rounded-xl border border-[rgba(139,170,215,0.12)]">
-                No folders currently added. Click "Add Directory" to start monitoring.
+                No folders added yet. Click "Add Folder" to get started.
               </div>
             ) : (
               folders.map((f) => (
@@ -148,16 +177,16 @@ export const Settings = () => {
         <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Local Privacy & Security Architecture</span>
+            <span>Privacy</span>
           </h3>
 
           <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300 leading-relaxed">
-            <strong>100% Offline Processing:</strong> All text extraction, OCR, vector embeddings, and semantic similarity search execute strictly on your local hardware. No file contents or metadata leave your computer.
+            Everything Memora does stays on your device. Nothing is sent to the cloud.
           </div>
 
           <p className="text-xs text-[#A7B7D0] leading-relaxed">
-            Full security features — including Application Lock, PIN management, excluded folders, audit trail,
-            AES-256-GCM encryption, and local backup/restore — are consolidated in the Security page.
+            App Lock, PIN management, ignored folders, activity log, file encryption,
+            and local backup are all in Privacy settings.
           </p>
 
           <Link
@@ -165,52 +194,56 @@ export const Settings = () => {
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#3478F6]/20 border border-[#3478F6]/40 text-[#38BDF8] text-xs font-semibold hover:bg-[#3478F6]/30 transition-colors cursor-pointer"
           >
             <ShieldCheck className="w-4 h-4" />
-            Open Security &amp; Privacy Console
+            Open Privacy Settings
           </Link>
         </div>
       )}
 
       {activeTab === 'ai' && (
         <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
-          <h3 className="text-sm font-bold text-white">AI Engine & Local Model Pipeline</h3>
+          <h3 className="text-sm font-bold text-white">Advanced Settings</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-              <span className="text-[11px] text-[#7E93B3] font-mono uppercase tracking-wider">Embedding Model</span>
+              <span className="text-[11px] text-[#7E93B3] font-mono uppercase tracking-wider">Search Model</span>
               <h4 className="text-sm font-bold text-white font-mono mt-1">all-MiniLM-L6-v2</h4>
-              <p className="text-[11px] text-[#A7B7D0] mt-1">384 Dimensions • PyTorch CPU / ONNX Runtime</p>
             </div>
 
             <div className="p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-              <span className="text-[11px] text-[#7E93B3] font-mono uppercase tracking-wider">Vector Index Engine</span>
+              <span className="text-[11px] text-[#7E93B3] font-mono uppercase tracking-wider">Search Engine</span>
               <h4 className="text-sm font-bold text-white font-mono mt-1">FAISS IndexFlatIP</h4>
-              <p className="text-[11px] text-[#A7B7D0] mt-1">Normalized Inner Product Cosine Search</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 pt-4 border-t border-[rgba(139,170,215,0.14)]">
             <Button variant="secondary" size="sm" icon={RefreshCw} onClick={handleReindex} className="bg-[#0E1D35] hover:bg-[#162746] border-[rgba(139,170,215,0.2)] text-white">
-              Trigger Full Re-index
+              Refresh Search Index
             </Button>
             <Button variant="danger" size="sm" icon={Trash2} onClick={handleClearCache}>
-              Clear Vector Cache
+              Clear Cache
             </Button>
           </div>
         </div>
       )}
 
       {activeTab === 'about' && (
-        <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-4">
-          <h3 className="text-sm font-bold text-white">Memora AI – Platform Information</h3>
-          <p className="text-xs text-[#A7B7D0] leading-relaxed">
-            Memora AI is a desktop intelligence platform engineered to eliminate digital clutter through local semantic vector search, private multi-modal indexers, and local-first storage architecture.
-          </p>
+        <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
+          {/* Logo centered */}
+          <div className="flex flex-col items-center text-center py-4">
+            <img
+              src="/memora-ai-logo.png"
+              alt="Memora AI — Your Files • Smarter • Always"
+              className="w-48 h-48 object-contain drop-shadow-2xl mb-2"
+              draggable={false}
+            />
+            <p className="text-xs text-[#A7B7D0] leading-relaxed max-w-xs">
+              Your personal file assistant — finds, organizes, and manages your files locally, with no cloud required.
+            </p>
+          </div>
 
           <div className="p-4 rounded-xl bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)] text-xs font-mono space-y-1 text-[#DCE5F3]">
             <div>Application: <span className="text-white font-bold">Memora AI Desktop</span></div>
             <div>Version: <span className="text-[#38BDF8]">1.0.0 Production Edition</span></div>
-            <div>Interface: <span className="text-white">React 19 + Electron 43 + Tailwind CSS v4</span></div>
-            <div>Local Intelligence: <span className="text-white">FastAPI + SQLite + FAISS + PyTorch</span></div>
           </div>
         </div>
       )}

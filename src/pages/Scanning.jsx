@@ -52,14 +52,14 @@ export const Scanning = () => {
         {/* Animated Badge Header */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#3478F6]/10 border border-[#3478F6]/25 text-xs font-semibold text-[#38BDF8] mb-6">
           <Sparkles className="w-4 h-4 animate-spin text-[#38BDF8]" />
-          <span>Local Document Indexer Active</span>
+          <span>Preparing Your Files</span>
         </div>
 
         <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">
-          {scanState.percent >= 100 ? 'Indexing Complete!' : 'Building Your Local Document Index'}
+          {scanState.percent >= 100 ? 'Done!' : 'Scanning Your Files'}
         </h1>
         <p className="text-sm text-[#A7B7D0] mb-8">
-          Extracting content, processing documents, and generating semantic vector embeddings.
+          Memora is reading and indexing your documents so you can search them later.
         </p>
 
         {/* Large Progress Card */}
@@ -105,10 +105,10 @@ export const Scanning = () => {
             <div className="p-3.5 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.12)]">
               <div className="flex items-center gap-1.5 text-xs text-[#7E93B3] mb-1 font-mono uppercase">
                 <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                <span>FAISS</span>
+                <span>Indexed</span>
               </div>
               <div className="text-base font-bold text-white font-mono">
-                {scanState.vectorsIndexed} Vectors
+                {scanState.vectorsIndexed} Files
               </div>
             </div>
           </div>

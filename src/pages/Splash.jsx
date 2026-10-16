@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Brain, Cpu, ShieldCheck } from 'lucide-react';
+import { Cpu, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const Splash = () => {
@@ -28,21 +28,18 @@ export const Splash = () => {
 
       {/* Main Logo Card */}
       <div className="flex flex-col items-center text-center z-10 animate-scaleUp">
-        <div className="w-16 h-16 rounded-2xl bg-[#3478F6]/15 border border-[#3478F6]/30 flex items-center justify-center text-[#38BDF8] shadow-xl shadow-blue-900/30 mb-6">
-          <Brain className="w-8 h-8" />
-        </div>
-
-        <h1 className="text-2xl font-bold text-white tracking-tight mb-1.5">
-          MEMORA <span className="text-[#38BDF8] font-mono">AI</span>
-        </h1>
-        <p className="text-xs font-medium text-[#A7B7D0] max-w-sm mb-7">
-          Intelligent Local Digital Memory Assistant
-        </p>
+        {/* Full Memora AI logo — wordmark + tagline included in image */}
+        <img
+          src="/memora-ai-logo.png"
+          alt="Memora AI — Your Files • Smarter • Always"
+          className="w-56 h-56 object-contain mb-4 drop-shadow-2xl"
+          draggable={false}
+        />
 
         {/* Loading Spinner & Status */}
         <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-[#0A1629] border border-[rgba(139,170,215,0.18)] text-xs text-[#DCE5F3] shadow-lg shadow-black/40">
           <Cpu className="w-4 h-4 text-[#38BDF8] animate-spin" />
-          <span>Initializing local vector database & embedding pipeline...</span>
+          <span>Starting up Memora...</span>
         </div>
 
         {/* Local Privacy Pledge */}

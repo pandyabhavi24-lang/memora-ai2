@@ -145,7 +145,7 @@ export const SemanticSearch = () => {
       <div className="text-center">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#3478F6]/10 border border-[#3478F6]/20 text-xs font-semibold text-[#4B91FF] mb-2.5">
           <Sparkles className="w-3.5 h-3.5 text-[#4B91FF]" />
-          <span>Intelligent Digital Memory Assistant</span>
+          <span>Smart Search</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F4F7FF] tracking-tight mb-1.5">
           Search Your Files

@@ -213,11 +213,20 @@ export const LockScreen = () => {
       <div className="relative w-full max-w-sm p-8 rounded-2xl bg-[#0A1629] border border-[rgba(139,170,215,0.18)] shadow-2xl shadow-black/80">
         {/* Logo / branding */}
         <div className="flex flex-col items-center mb-7">
-          <div className="w-14 h-14 rounded-2xl bg-[#3478F6]/15 border border-[#3478F6]/30 flex items-center justify-center shadow-lg shadow-blue-900/20 mb-3.5">
-            <Lock className="w-7 h-7 text-[#38BDF8]" />
+          {/* Logo: M symbol only, cropped from the full logo asset */}
+          <div
+            className="w-16 h-16 rounded-2xl overflow-hidden shadow-xl shadow-blue-900/30 mb-3.5 border border-[rgba(139,170,215,0.15)]"
+          >
+            <img
+              src="/memora-ai-logo.png"
+              alt="Memora AI"
+              className="w-full object-cover"
+              style={{ objectPosition: 'center 18%', height: '195%' }}
+              draggable={false}
+            />
           </div>
           <h1 className="text-xl font-bold text-white tracking-tight">
-            MEMORA <span className="text-[#38BDF8] font-mono">AI</span>
+            Memora <span className="bg-gradient-to-r from-[#38BDF8] to-[#7566F6] bg-clip-text text-transparent">AI</span>
           </h1>
           <p className="text-xs text-[#A7B7D0] mt-1 font-medium">
             {mode === 'setup' && 'Secure your local workspace'}
@@ -558,7 +567,7 @@ export const LockScreen = () => {
 
         {/* Privacy note */}
         <p className="mt-8 text-center text-xs text-[#7E93B3] leading-relaxed px-2">
-          Email recovery requires sending a one-time reset code to your configured recovery email. Your files, OCR data, embeddings, search data and audit data never leave your device.
+          Email recovery requires sending a one-time reset code to your configured recovery email. Your files and all personal data never leave your device.
         </p>
       </div>
     </div>

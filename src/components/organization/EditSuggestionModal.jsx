@@ -124,7 +124,7 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
             </div>
             <div>
               <h3 className="text-lg font-bold text-[#F4F7FF]">Edit Smart Tags</h3>
-              <p className="text-xs text-[#A7B7D0]">Manage descriptive metadata tags for semantic search & filtering</p>
+              <p className="text-xs text-[#A7B7D0]">Add or remove labels to help you find and organize this file</p>
             </div>
           </div>
           <button
