@@ -1,26 +1,136 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  Settings as SettingsIcon, 
-  Folder, 
-  ShieldCheck, 
-  Cpu, 
-  Palette, 
-  HardDrive, 
+import {
+  Palette,
+  Folder,
+  FolderOpen,
+  ShieldCheck,
+  HardDrive,
   Info,
+  Trash2,
   RefreshCw,
-  Trash2
+  ExternalLink,
+  Settings as SettingsIcon,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import { useApp } from '../context/AppContext';
 import { useDataCache } from '../context/DataCacheContext';
+import { useTheme } from '../context/ThemeContext';
 
+// ── Helper sub-components ─────────────────────────────────────────────────────
+
+const SectionHeading = ({ children }) => (
+  <h3
+    className="text-[11px] font-semibold uppercase tracking-wider mb-3"
+    style={{ color: 'var(--text-muted)' }}
+  >
+    {children}
+  </h3>
+);
+
+const SettingsRow = ({ label, description, right }) => (
+  <div
+    className="flex items-center justify-between gap-4 py-3 last:border-0"
+    style={{ borderBottom: '1px solid var(--border-subtle)' }}
+  >
+    <div className="min-w-0">
+      <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
+      {description && (
+        <p className="text-[11px] mt-0.5 leading-snug" style={{ color: 'var(--text-muted)' }}>
+          {description}
+        </p>
+      )}
+    </div>
+    {right && <div className="shrink-0">{right}</div>}
+  </div>
+);
+
+const KbdBadge = ({ children }) => (
+  <span
+    className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg border"
+    style={{
+      backgroundColor: 'var(--bg-surface-secondary)',
+      color: 'var(--accent-bright)',
+      borderColor: 'var(--border-default)',
+    }}
+  >
+    {children}
+  </span>
+);
+
+// ── Theme Selector ─────────────────────────────────────────────────────────────
+const THEME_OPTIONS = [
+  { value: 'system', label: 'System', icon: Monitor, desc: 'Follows your Windows appearance' },
+  { value: 'light',  label: 'Light',  icon: Sun,     desc: 'Clean white interface' },
+  { value: 'dark',   label: 'Dark',   icon: Moon,    desc: "Memora AI's classic dark mode" },
+];
+
+const ThemeSelector = ({ preference, onSelect }) => (
+  <div className="grid grid-cols-3 gap-3">
+    {THEME_OPTIONS.map(({ value, label, icon: Icon, desc }) => {
+      const isActive = preference === value;
+      return (
+        <button
+          key={value}
+          onClick={() => onSelect(value)}
+          className="flex flex-col items-center gap-2 p-4 rounded-xl border transition-all cursor-pointer text-center"
+          style={{
+            backgroundColor: isActive ? 'rgba(52, 120, 246, 0.12)' : 'var(--bg-surface-secondary)',
+            borderColor: isActive ? 'rgba(52, 120, 246, 0.50)' : 'var(--border-subtle)',
+            boxShadow: isActive ? '0 0 0 2px rgba(52, 120, 246, 0.18)' : 'none',
+          }}
+          aria-pressed={isActive}
+          aria-label={`Switch to ${label} theme`}
+        >
+          <Icon
+            className="w-5 h-5"
+            style={{ color: isActive ? 'var(--accent-bright)' : 'var(--text-muted)' }}
+          />
+          <span
+            className="text-xs font-semibold"
+            style={{ color: isActive ? 'var(--accent-bright)' : 'var(--text-primary)' }}
+          >
+            {label}
+          </span>
+          <span
+            className="text-[10px] leading-tight"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {desc}
+          </span>
+          {isActive && (
+            <span className="text-[9px] font-bold text-[#3478F6] bg-[#3478F6]/15 px-2 py-0.5 rounded-full border border-[#3478F6]/30 mt-0.5">
+              Active
+            </span>
+          )}
+        </button>
+      );
+    })}
+  </div>
+);
+
+// ── Tab config ────────────────────────────────────────────────────────────────
+const TABS = [
+  { id: 'appearance',  label: 'Appearance',  icon: Palette },
+  { id: 'preferences', label: 'Preferences', icon: SettingsIcon },
+  { id: 'folders',     label: 'Folders',     icon: Folder },
+  { id: 'security',    label: 'Security',    icon: ShieldCheck },
+  { id: 'storage',     label: 'Storage',     icon: HardDrive },
+  { id: 'about',       label: 'About',       icon: Info },
+];
+
+// ── Main component ────────────────────────────────────────────────────────────
 export const Settings = () => {
   const { folders, removeFolder, selectFolderNative, addToast } = useApp();
   const { invalidateAll } = useDataCache();
-  const [activeTab, setActiveTab] = useState('general'); // 'general' | 'folders' | 'privacy' | 'ai' | 'about'
+  const { preference, setTheme } = useTheme();
+  const [activeTab, setActiveTab] = useState('appearance');
+  const [removingId, setRemovingId] = useState(null);
 
   const handleSelectFolder = async () => {
     await selectFolderNative();
@@ -28,225 +138,374 @@ export const Settings = () => {
   };
 
   const handleRemoveFolder = async (folderId) => {
+    setRemovingId(folderId);
     await removeFolder(folderId);
     invalidateAll();
+    setRemovingId(null);
   };
 
-  const handleReindex = () => {
+  const handleRefreshIndex = () => {
     addToast('Refreshing your search index…', 'info');
   };
 
   const handleClearCache = () => {
-    addToast('Cache cleared.', 'success');
+    invalidateAll();
+    addToast('Application cache cleared.', 'success');
+  };
+
+  const handleThemeChange = (newPref) => {
+    setTheme(newPref);
+    const labels = { system: 'System (auto)', light: 'Light', dark: 'Dark' };
+    addToast(`Theme switched to ${labels[newPref]}.`, 'success');
   };
 
   return (
-    <div className="space-y-6 select-none">
+    <div className="space-y-5 select-none">
       <PageHeader
         title="Settings"
-        badge={<Badge variant="blue">v1.0.0 Desktop</Badge>}
+        subtitle="Manage your Memora AI preferences."
+        badge={<Badge variant="blue">v1.0.0</Badge>}
       />
 
-      {/* Settings Tab Navigation Bar */}
-      <div className="flex items-center gap-2 border-b border-[rgba(139,170,215,0.14)] pb-3 overflow-x-auto custom-scrollbar flex-nowrap shrink-0">
-        {[
-          { id: 'general', label: 'Appearance', icon: Palette },
-          { id: 'folders', label: 'Folders', icon: Folder },
-          { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
-          { id: 'ai', label: 'Advanced', icon: Cpu },
-          { id: 'about', label: 'About', icon: Info },
-        ].map((tab) => {
+      {/* Tab bar */}
+      <div
+        className="flex items-center gap-1.5 pb-3 overflow-x-auto flex-nowrap shrink-0"
+        style={{ borderBottom: '1px solid var(--border-subtle)' }}
+      >
+        {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer border"
+              style={
                 isActive
-                  ? 'bg-[#3478F6]/20 text-[#38BDF8] border border-[#3478F6]/40 shadow-sm'
-                  : 'text-[#7E93B3] hover:text-white hover:bg-[#0E1D35]'
-              }`}
+                  ? {
+                      backgroundColor: 'rgba(52, 120, 246, 0.15)',
+                      color: 'var(--accent-bright)',
+                      borderColor: 'rgba(52, 120, 246, 0.35)',
+                    }
+                  : {
+                      backgroundColor: 'transparent',
+                      color: 'var(--text-muted)',
+                      borderColor: 'transparent',
+                    }
+              }
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                  e.currentTarget.style.backgroundColor = 'var(--bg-surface-secondary)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
             >
-              <Icon className="w-4 h-4" />
-              <span>{tab.label}</span>
+              <Icon className="w-3.5 h-3.5" />
+              {tab.label}
             </button>
           );
         })}
       </div>
 
-      {/* Tab Panels */}
-      {activeTab === 'general' && (
-        <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
-          <h3 className="text-sm font-bold text-white">Theme</h3>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-              <div>
-                <h4 className="text-xs font-semibold text-white">Theme System</h4>
-                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Dark mode (default)</p>
-              </div>
-              <Badge variant="blue">Active</Badge>
-            </div>
+      {/* Tab panels */}
+      <div
+        className="rounded-xl p-5 space-y-5"
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+        }}
+      >
 
-            <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-              <div>
-                <h4 className="text-xs font-semibold text-white">Quick Search</h4>
-                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Press Ctrl+K anywhere to search.</p>
-              </div>
-              <span className="px-3 py-1 bg-[#0E1D35] text-xs font-mono text-[#38BDF8] font-bold rounded-lg border border-[rgba(139,170,215,0.2)]">
-                Ctrl + K
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-              <div>
-                <h4 className="text-xs font-semibold text-white">Open Settings</h4>
-                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Go straight to Settings from anywhere.</p>
-              </div>
-              <span className="px-3 py-1 bg-[#0E1D35] text-xs font-mono text-[#38BDF8] font-bold rounded-lg border border-[rgba(139,170,215,0.2)]">
-                Ctrl + ,
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-              <div>
-                <h4 className="text-xs font-semibold text-white">Go to Home</h4>
-                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Jump back to the Home screen.</p>
-              </div>
-              <span className="px-3 py-1 bg-[#0E1D35] text-xs font-mono text-[#38BDF8] font-bold rounded-lg border border-[rgba(139,170,215,0.2)]">
-                Alt + H
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-              <div>
-                <h4 className="text-xs font-semibold text-white">Add Folder</h4>
-                <p className="text-[11px] text-[#A7B7D0] mt-0.5">Open the folder picker from anywhere.</p>
-              </div>
-              <span className="px-3 py-1 bg-[#0E1D35] text-xs font-mono text-[#38BDF8] font-bold rounded-lg border border-[rgba(139,170,215,0.2)]">
-                Ctrl + O
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'folders' && (
-        <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
-          <div className="flex items-center justify-between">
+        {/* ── APPEARANCE ── */}
+        {activeTab === 'appearance' && (
+          <div className="space-y-6">
             <div>
-              <h3 className="text-sm font-bold text-white">Your Folders</h3>
-              <p className="text-xs text-[#A7B7D0] mt-0.5">Folders Memora watches for files.</p>
+              <SectionHeading>Theme</SectionHeading>
+              <ThemeSelector preference={preference} onSelect={handleThemeChange} />
+              <p className="text-[11px] mt-3 leading-snug" style={{ color: 'var(--text-muted)' }}>
+                Your selection is saved and restored automatically. System mode follows the Windows appearance setting.
+              </p>
             </div>
-            <Button variant="primary" size="sm" icon={Folder} onClick={handleSelectFolder} className="bg-[#3478F6] hover:bg-[#2563EB] text-white">
-              Add Folder
-            </Button>
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem' }}>
+              <SectionHeading>Keyboard Shortcuts</SectionHeading>
+              <SettingsRow label="Quick Search" description="Open Semantic Search from anywhere." right={<KbdBadge>Ctrl + K</KbdBadge>} />
+              <SettingsRow label="Open Settings" description="Jump directly to this Settings page." right={<KbdBadge>Ctrl + ,</KbdBadge>} />
+              <SettingsRow label="Go to Home" description="Return to the Dashboard." right={<KbdBadge>Alt + H</KbdBadge>} />
+              <SettingsRow label="Add Folder" description="Open the native folder picker." right={<KbdBadge>Ctrl + O</KbdBadge>} />
+              <SettingsRow label="Toggle Sidebar" description="Collapse or expand the left navigation panel." right={<KbdBadge>Ctrl + B</KbdBadge>} />
+            </div>
           </div>
+        )}
 
-          <div className="space-y-2.5">
-            {folders.length === 0 ? (
-              <div className="p-8 text-center text-[#7E93B3] bg-[#06101F]/60 rounded-xl border border-[rgba(139,170,215,0.12)]">
-                No folders added yet. Click "Add Folder" to get started.
-              </div>
-            ) : (
-              folders.map((f) => (
-                <div key={f.id} className="flex items-center justify-between p-3.5 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-                  <div>
-                    <h4 className="text-xs font-semibold text-white flex items-center gap-2">
-                      <Folder className="w-3.5 h-3.5 text-[#38BDF8]" />
-                      {f.name}
-                    </h4>
-                    <p className="text-[11px] text-[#7E93B3] font-mono mt-0.5">{f.path}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveFolder(f.id)}
-                    className="p-1.5 text-[#7E93B3] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                    title="Remove folder"
+        {/* ── PREFERENCES ── */}
+        {activeTab === 'preferences' && (
+          <div className="space-y-5">
+            <div>
+              <SectionHeading>Search Engine</SectionHeading>
+              <SettingsRow
+                label="Search Model"
+                description="Embedding model used for semantic file search."
+                right={
+                  <span
+                    className="px-2.5 py-1 text-xs font-mono rounded-lg border"
+                    style={{
+                      backgroundColor: 'var(--bg-surface-secondary)',
+                      color: 'var(--accent-bright)',
+                      borderColor: 'var(--border-default)',
+                    }}
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    all-MiniLM-L6-v2
+                  </span>
+                }
+              />
+              <SettingsRow
+                label="Search Index"
+                description="Nearest-neighbour index powering semantic search."
+                right={
+                  <span
+                    className="px-2.5 py-1 text-xs font-mono rounded-lg border"
+                    style={{
+                      backgroundColor: 'var(--bg-surface-secondary)',
+                      color: 'var(--accent-bright)',
+                      borderColor: 'var(--border-default)',
+                    }}
+                  >
+                    FAISS IndexFlatIP
+                  </span>
+                }
+              />
+            </div>
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem' }}>
+              <SectionHeading>Maintenance</SectionHeading>
+              <SettingsRow
+                label="Refresh Search Index"
+                description="Re-build the search index if results feel stale."
+                right={
+                  <Button variant="secondary" size="sm" icon={RefreshCw} onClick={handleRefreshIndex} className="text-xs">
+                    Refresh
+                  </Button>
+                }
+              />
+              <SettingsRow
+                label="Clear Application Cache"
+                description="Flushes in-memory data cache. The app will reload data on next use."
+                right={
+                  <Button variant="danger" size="sm" icon={Trash2} onClick={handleClearCache} className="text-xs">
+                    Clear
+                  </Button>
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── FOLDERS ── */}
+        {activeTab === 'folders' && (
+          <div className="space-y-5">
+            <div
+              className="px-4 py-3 rounded-xl border text-xs leading-relaxed"
+              style={{
+                backgroundColor: 'rgba(52, 120, 246, 0.06)',
+                borderColor: 'rgba(52, 120, 246, 0.22)',
+                color: 'var(--accent-bright)',
+              }}
+            >
+              Memora scans only the folders you choose. It reads file metadata and content locally to build a searchable index — nothing leaves your device.
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <SectionHeading>Watched Folders</SectionHeading>
+                <button
+                  onClick={handleSelectFolder}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer"
+                  style={{
+                    backgroundColor: 'rgba(52, 120, 246, 0.12)',
+                    borderColor: 'rgba(52, 120, 246, 0.35)',
+                    color: 'var(--accent-bright)',
+                  }}
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  Add Folder
+                </button>
+              </div>
+              {folders.length === 0 ? (
+                <div
+                  className="py-8 text-center text-xs rounded-xl border"
+                  style={{
+                    color: 'var(--text-muted)',
+                    backgroundColor: 'var(--bg-surface-secondary)',
+                    borderColor: 'var(--border-subtle)',
+                  }}
+                >
+                  No folders added yet. Click <span style={{ color: 'var(--accent-bright)' }}>Add Folder</span> to get started.
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'privacy' && (
-        <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Privacy</span>
-          </h3>
-
-          <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300 leading-relaxed">
-            Everything Memora does stays on your device. Nothing is sent to the cloud.
-          </div>
-
-          <p className="text-xs text-[#A7B7D0] leading-relaxed">
-            App Lock, PIN management, ignored folders, activity log, file encryption,
-            and local backup are all in Privacy settings.
-          </p>
-
-          <Link
-            to="/security"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#3478F6]/20 border border-[#3478F6]/40 text-[#38BDF8] text-xs font-semibold hover:bg-[#3478F6]/30 transition-colors cursor-pointer"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            Open Privacy Settings
-          </Link>
-        </div>
-      )}
-
-      {activeTab === 'ai' && (
-        <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
-          <h3 className="text-sm font-bold text-white">Advanced Settings</h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-              <span className="text-[11px] text-[#7E93B3] font-mono uppercase tracking-wider">Search Model</span>
-              <h4 className="text-sm font-bold text-white font-mono mt-1">all-MiniLM-L6-v2</h4>
-            </div>
-
-            <div className="p-4 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.14)] hover:border-[rgba(139,170,215,0.25)] transition-all">
-              <span className="text-[11px] text-[#7E93B3] font-mono uppercase tracking-wider">Search Engine</span>
-              <h4 className="text-sm font-bold text-white font-mono mt-1">FAISS IndexFlatIP</h4>
+              ) : (
+                <div className="space-y-2">
+                  {folders.map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between gap-3 p-3 rounded-lg border transition-all"
+                      style={{
+                        backgroundColor: 'var(--bg-surface-secondary)',
+                        borderColor: 'var(--border-subtle)',
+                      }}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                          <Folder className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent-bright)' }} />
+                          {f.name}
+                        </p>
+                        <p className="text-[10px] font-mono mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>{f.path}</p>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveFolder(f.id)}
+                        disabled={removingId === f.id}
+                        className="p-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                        style={{ color: 'var(--text-muted)' }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = '#f87171';
+                          e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.10)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = 'var(--text-muted)';
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                        title={`Remove ${f.name}`}
+                        aria-label={`Remove ${f.name}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] mt-3 leading-snug" style={{ color: 'var(--text-muted)' }}>
+                Removing a folder stops Memora from scanning it. Existing indexed results may still appear until the index refreshes.
+              </p>
             </div>
           </div>
+        )}
 
-          <div className="flex items-center gap-3 pt-4 border-t border-[rgba(139,170,215,0.14)]">
-            <Button variant="secondary" size="sm" icon={RefreshCw} onClick={handleReindex} className="bg-[#0E1D35] hover:bg-[#162746] border-[rgba(139,170,215,0.2)] text-white">
-              Refresh Search Index
-            </Button>
-            <Button variant="danger" size="sm" icon={Trash2} onClick={handleClearCache}>
-              Clear Cache
-            </Button>
+        {/* ── SECURITY ── */}
+        {activeTab === 'security' && (
+          <div className="space-y-5">
+            <div
+              className="px-4 py-3 rounded-xl border text-xs leading-relaxed text-emerald-600"
+              style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.06)',
+                borderColor: 'rgba(16, 185, 129, 0.25)',
+              }}
+            >
+              Memora is fully offline. All security features — App Lock, PIN, and session management — run entirely on your device.
+            </div>
+            <div>
+              <SectionHeading>Managed on the Security page</SectionHeading>
+              <SettingsRow label="App Lock and PIN" description="Set or change your PIN, enable App Lock, and manage session timeout." />
+              <SettingsRow label="Recovery Options" description="Configure a recovery email in case you forget your PIN." />
+              <SettingsRow label="Activity and Audit Log" description="Review recent security events and access history." />
+            </div>
+            <Link
+              to="/security"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold transition-colors cursor-pointer"
+              style={{
+                backgroundColor: 'rgba(52, 120, 246, 0.12)',
+                borderColor: 'rgba(52, 120, 246, 0.35)',
+                color: 'var(--accent-bright)',
+              }}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Open Security and Privacy
+              <ExternalLink className="w-3 h-3 opacity-60" />
+            </Link>
           </div>
-        </div>
-      )}
+        )}
 
-      {activeTab === 'about' && (
-        <div className="bg-[#0A1629] p-6 rounded-2xl border border-[rgba(139,170,215,0.14)] shadow-xl space-y-6">
-          {/* Logo centered */}
-          <div className="flex flex-col items-center text-center py-4">
-            <img
-              src="/memora-ai-logo.png"
-              alt="Memora AI — Your Files • Smarter • Always"
-              className="w-48 h-48 object-contain drop-shadow-2xl mb-2"
-              draggable={false}
-            />
-            <p className="text-xs text-[#A7B7D0] leading-relaxed max-w-xs">
-              Your personal file assistant — finds, organizes, and manages your files locally, with no cloud required.
-            </p>
+        {/* ── STORAGE ── */}
+        {activeTab === 'storage' && (
+          <div className="space-y-5">
+            <div>
+              <SectionHeading>Storage Optimization features</SectionHeading>
+              <SettingsRow label="Duplicate Detection" description="Find and remove duplicate files to free up disk space." />
+              <SettingsRow label="Large File Review" description="Identify files consuming the most storage." />
+              <SettingsRow label="Old and Unused Files" description="Surface files that have not been accessed in a long time." />
+            </div>
+            <Link
+              to="/storage-optimization"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold transition-colors cursor-pointer"
+              style={{
+                backgroundColor: 'rgba(52, 120, 246, 0.12)',
+                borderColor: 'rgba(52, 120, 246, 0.35)',
+                color: 'var(--accent-bright)',
+              }}
+            >
+              <HardDrive className="w-4 h-4" />
+              Open Storage Optimization
+              <ExternalLink className="w-3 h-3 opacity-60" />
+            </Link>
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem' }}>
+              <SectionHeading>Cache</SectionHeading>
+              <SettingsRow
+                label="Clear Application Cache"
+                description="Flushes Memora's in-memory data cache. No files are deleted from disk."
+                right={
+                  <Button variant="danger" size="sm" icon={Trash2} onClick={handleClearCache} className="text-xs">
+                    Clear Cache
+                  </Button>
+                }
+              />
+            </div>
           </div>
+        )}
 
-          <div className="p-4 rounded-xl bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)] text-xs font-mono space-y-1 text-[#DCE5F3]">
-            <div>Application: <span className="text-white font-bold">Memora AI Desktop</span></div>
-            <div>Version: <span className="text-[#38BDF8]">1.0.0 Production Edition</span></div>
+        {/* ── ABOUT ── */}
+        {activeTab === 'about' && (
+          <div className="space-y-5">
+            <div className="flex flex-col items-center text-center py-3">
+              <img
+                src="/memora-ai-logo.png"
+                alt="Memora AI"
+                className="w-32 h-32 object-contain drop-shadow-xl mb-3"
+                draggable={false}
+              />
+              <p className="text-xs leading-relaxed max-w-xs" style={{ color: 'var(--text-muted)' }}>
+                Your personal file assistant — finds, organises, and manages your files locally, with no cloud required.
+              </p>
+            </div>
+            <div
+              className="rounded-xl border divide-y"
+              style={{
+                backgroundColor: 'var(--bg-surface-secondary)',
+                borderColor: 'var(--border-subtle)',
+                divideColor: 'var(--border-subtle)',
+              }}
+            >
+              {[
+                { label: 'Application', value: 'Memora AI Desktop', mono: false },
+                { label: 'Version',     value: '1.0.0',             mono: true },
+                { label: 'Platform',    value: 'Electron Desktop',  mono: false },
+                { label: 'Data storage',value: '100% Local',        mono: false, highlight: true },
+              ].map(({ label, value, mono, highlight }) => (
+                <div key={label} className="flex items-center justify-between px-4 py-3" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+                  <span
+                    className={mono ? 'text-xs font-mono' : 'text-xs font-semibold'}
+                    style={{ color: highlight ? '#34d399' : 'var(--text-primary)' }}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
     </div>
   );
 };

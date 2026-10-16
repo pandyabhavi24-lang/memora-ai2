@@ -90,8 +90,8 @@ const createInitialDocument = () => {
 export const PDFStudio = () => {
   const { addToast } = useApp();
 
-  // Document Workspace State (Initialized to safe blank A4 document)
-  const [activeDocument, setActiveDocument] = useState(createInitialDocument);
+  // Document Workspace State (null = no document open, show welcome screen)
+  const [activeDocument, setActiveDocument] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [selectedPageIndices, setSelectedPageIndices] = useState([0]);
   const [selectedElementId, setSelectedElementId] = useState(null);
@@ -291,7 +291,7 @@ export const PDFStudio = () => {
         setExportedPdfPath(res.output_path);
         setIsSaveShareMenuOpen(true);
         addToast(
-          `Export Successful!\n• Output PDF: ${res.file_name}\n• Page Count: ${res.page_count}\n• Size: ${(res.file_size_bytes / 1024).toFixed(1)} KB\n• Memora Indexing: ${res.indexed ? 'SUCCESS' : 'Local Only'}`,
+          `Export Successful!\n• Output PDF: ${res.file_name}\n• Page Count: ${res.page_count}\n• Size: ${(res.file_size_bytes / 1024).toFixed(1)} KB${res.indexed ? '\n• Saved to Memora search' : ''}`,
           'success'
         );
       }
@@ -1196,8 +1196,7 @@ export const PDFStudio = () => {
   };
 
   const handleCloseDocument = () => {
-    const blankDoc = createInitialDocument();
-    setActiveDocument(blankDoc);
+    setActiveDocument(null);
     setActivePageIndex(0);
     setSelectedPageIndices([0]);
     setSelectedElementId(null);
@@ -1206,7 +1205,7 @@ export const PDFStudio = () => {
     setZoomLevel(100);
     setZoomMode('fit-page');
     setViewMode('edit');
-    addToast('Reset workspace to blank document.', 'info');
+    addToast('Document closed. PDF Studio is ready.', 'info');
   };
 
   // --------------------------------------------------------------------------
@@ -1448,7 +1447,7 @@ export const PDFStudio = () => {
 
       setIsExtractModalOpen(false);
       addToast(
-        `Page Extraction Complete!\n• File Name: ${res.file_name}\n• Extracted Pages: ${res.page_count}\n• Output Location: ${res.output_path}\n• Memora Indexing: ${res.indexed ? 'Indexed' : 'Local Only'}`,
+        `Page Extraction Complete!\n• File Name: ${res.file_name}\n• Extracted Pages: ${res.page_count}\n• Output Location: ${res.output_path}${res.indexed ? '\n• Saved to Memora search' : ''}`,
         'success'
       );
     } catch (err) {

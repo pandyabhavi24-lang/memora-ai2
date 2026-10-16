@@ -539,7 +539,7 @@ export const StorageOptimization = () => {
             <HardDrive className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-[#F4F7FF] tracking-tight">Free Up Space</h1>
+            <h1 className="text-xl font-bold text-[#F4F7FF] tracking-tight">Storage Optimization</h1>
             <p className="text-xs text-[#A7B7D0]">Reduce file sizes and combine files into ZIP archives.</p>
           </div>
         </div>
@@ -780,7 +780,7 @@ export const StorageOptimization = () => {
                     <div className="flex justify-between text-[10px] text-[#7E93B3] font-mono">
                       <span>50% (Max savings)</span><span>75% (Balanced)</span><span>95% (Near lossless)</span>
                     </div>
-                    <p className="text-[10px] text-amber-400/90 font-medium">Applies to embedded images only. Vector text and layout stay crisp.</p>
+                    <p className="text-[10px] text-amber-400/90 font-medium">Applies to embedded images only. Text and layout stay crisp.</p>
                   </div>
                 )}
 
@@ -946,7 +946,7 @@ export const StorageOptimization = () => {
                   <div className="p-5 rounded-xl bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)] text-center space-y-2">
                     <Info className="w-6 h-6 text-[#38BDF8] mx-auto" />
                     <h4 className="text-sm font-bold text-white">No Meaningful Savings</h4>
-                    <p className="text-xs text-[#A7B7D0]">Already well-compressed. Below 20 KB / 3% threshold.</p>
+                    <p className="text-xs text-[#A7B7D0]">The file is already small enough — no benefit from compressing it further.</p>
                     <p className="text-[11px] text-emerald-400 font-medium">Original left untouched.</p>
                   </div>
                 ) : (

@@ -11,7 +11,7 @@ export const OrganizationHeader = ({ onAnalyze, isAnalyzing, isAnalyzed }) => {
           </div>
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-[#F4F7FF] tracking-tight">
-              Organize
+              Organization
             </h1>
             <span className="text-[11px] font-semibold text-[#4B91FF]">
               Suggestions are yours to approve

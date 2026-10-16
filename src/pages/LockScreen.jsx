@@ -315,7 +315,7 @@ export const LockScreen = () => {
             </button>
 
             <p className="text-[11px] text-[#7E93B3] text-center leading-relaxed mt-2">
-              Your PIN is hashed locally with PBKDF2-HMAC-SHA256 and cannot be recovered without a recovery email.
+              Your PIN is stored securely on your device and is never sent anywhere. Keep your recovery email safe in case you forget it.
             </p>
           </form>
         )}

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { DataCacheProvider } from './context/DataCacheContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { MainLayout } from './components/layout/MainLayout';
 
 // Screen Component Imports
@@ -33,7 +34,10 @@ function AppRoutes() {
   // While security settings are being loaded, show nothing (avoids flash)
   if (securityLoading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#0b0f19]">
+      <div
+        className="flex h-screen w-screen items-center justify-center"
+        style={{ backgroundColor: 'var(--bg-page)' }}
+      >
         <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -157,12 +161,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <DataCacheProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </DataCacheProvider>
-    </AppProvider>
+    <ThemeProvider>
+      <AppProvider>
+        <DataCacheProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </DataCacheProvider>
+      </AppProvider>
+    </ThemeProvider>
   );
-}
+}

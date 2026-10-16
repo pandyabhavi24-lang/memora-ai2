@@ -429,7 +429,7 @@ export const MemoraFilePickerModal = ({
               <Layers className="w-8 h-8 text-gray-500 mx-auto mb-1" />
               <h4 className="text-xs font-semibold text-gray-300">No Files Found</h4>
               <p className="text-[11px] text-gray-500 max-w-xs mx-auto">
-                No indexed files or images match the current filter. Add document folders or upload images to see them here.
+                No files or images match the current filter. Add document folders or upload images to see them here.
               </p>
             </div>
           )}

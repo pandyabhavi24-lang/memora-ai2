@@ -83,7 +83,7 @@ export const FilePreviewModal = ({ file, onClose }) => {
           <span>Memora AI Local File Inspector</span>
           <span className="text-[#38BDF8] font-semibold flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse"></span>
-            [Indexed & Verified]
+            [Saved & Ready]
           </span>
         </div>
 
@@ -155,7 +155,7 @@ export const FilePreviewModal = ({ file, onClose }) => {
                 <span>AI Content Summary & Snippet</span>
               </h4>
               <p className="text-xs text-[#CBD5E1] leading-relaxed">
-                {file.aiSummary || file.extractedSnippet || 'Document content indexed locally.'}
+                {file.aiSummary || file.extractedSnippet || 'No summary available for this file.'}
               </p>
             </div>
 
@@ -170,7 +170,7 @@ export const FilePreviewModal = ({ file, onClose }) => {
               <div>
                 <h4 className="text-xs font-semibold text-[#8BAAD7] mb-2 flex items-center gap-1.5">
                   <Tag className="w-3.5 h-3.5 text-[#8BAAD7]" />
-                  <span>Indexed Tags</span>
+                  <span>Smart Tags</span>
                 </h4>
                 <div className="flex flex-wrap gap-1.5">
                   {file.tags.map((tag, idx) => (

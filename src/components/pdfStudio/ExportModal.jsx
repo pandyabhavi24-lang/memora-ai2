@@ -118,10 +118,10 @@ export const ExportModal = ({
         <div className="flex items-start gap-2.5 p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 text-blue-300">
           <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
-            <h4 className="font-semibold text-blue-200">Save vs. Export Concept</h4>
+            <h4 className="font-semibold text-blue-200">How Save and Export Work</h4>
             <p className="text-[11px] text-gray-300 leading-relaxed">
-              <strong>Save</strong> preserves your active document state & draft overlays inside PDF Studio.<br />
-              <strong>Export</strong> compiles and outputs the final file to your specified output folder.
+              <strong>Save</strong> keeps your work open inside PDF Studio so you can continue editing.<br />
+              <strong>Export</strong> saves the finished file to your chosen folder on your computer.
             </p>
           </div>
         </div>

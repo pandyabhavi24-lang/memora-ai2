@@ -195,7 +195,7 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
 
       <SettingRow
         label="PIN"
-        description="Stored as a secure PBKDF2-HMAC-SHA256 hash. Never stored as plaintext."
+        description="Your PIN is stored securely on your device and is never sent to any server or external service."
       >
         <span className="font-mono text-gray-400 text-xs tracking-widest mr-3">••••••••</span>
       </SettingRow>
@@ -227,8 +227,7 @@ const LockTab = ({ settings, sessionToken, onRefresh, addToast }) => {
       <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-4">
         <h3 className="text-xs font-bold text-white">{settings?.has_pin ? 'Change PIN' : 'Set PIN'}</h3>
         <p className="text-[11px] text-gray-400 leading-relaxed">
-          PIN is stored only as a PBKDF2-HMAC-SHA256 hash with a random salt (260,000 iterations).
-          It is never stored as plaintext and never transmitted to any external service.
+          Your PIN is stored securely on your device only. It is never sent to any server or external service.
         </p>
         <form onSubmit={handleSetPin} className="space-y-3">
           {settings?.has_pin && (
@@ -393,9 +392,8 @@ const ExcludedTab = ({ sessionToken, addToast }) => {
           <Info className="w-4 h-4" /> About Skipped Items
         </div>
         <p className="text-gray-300 text-[11px]">
-          • <strong>Exclusion means:</strong> Memora will NOT scan, index, or show this file/folder in search or indexed results.<br />
-          • <strong>Original file safety:</strong> The original file/folder remains intact on your computer.<br />
-          • <strong>Exclusion is NOT Encryption:</strong> Excluding an item stops indexing; it does not encrypt file contents on disk.
+          Files and folders added here will be ignored by Memora — they will not appear in search results or be read by the app.
+          Your original files are never deleted or changed. Skipping a file does <strong>not</strong> lock or protect it.
         </p>
       </div>
 
@@ -433,7 +431,7 @@ const ExcludedTab = ({ sessionToken, addToast }) => {
                     )}
                     <span className="text-xs font-mono text-gray-200 truncate">{item.path}</span>
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
-                      Excluded from Memora indexing
+                      Skipped by Memora
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 ml-6 mt-0.5">
@@ -457,7 +455,7 @@ const ExcludedTab = ({ sessionToken, addToast }) => {
 };
 
 // ---------------------------------------------------------------------------
-// Tab: File & Folder Encryption (AES-256-GCM)
+// Tab: File & Folder Encryption
 // ---------------------------------------------------------------------------
 const EncryptionTab = ({ sessionToken, addToast }) => {
   const [targetPath, setTargetPath] = useState('');
@@ -524,9 +522,8 @@ const EncryptionTab = ({ sessionToken, addToast }) => {
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/20 text-xs text-purple-300 leading-relaxed">
         <strong className="text-purple-400 font-semibold block mb-1">File Protection</strong>
-        Encrypting a file or folder protects its actual disk contents with a 256-bit key.
-        Search index records are atomically purged so plaintext content cannot be queried while encrypted.
-        Decryption requires a valid application session. Encryption keys never leave your machine.
+        Locking a file scrambles its contents so no one else can read it — not even Memora. Only you can unlock it using your PIN.
+        Your encryption keys never leave your computer.
       </div>
 
       <div className="space-y-3 glass-panel p-5 rounded-2xl border-gray-800/80">
@@ -561,7 +558,7 @@ const EncryptionTab = ({ sessionToken, addToast }) => {
                 </span>
               ) : (
                 <span className="text-gray-400 font-semibold flex items-center gap-1">
-                  <Unlock className="w-3.5 h-3.5" /> Plaintext (Unencrypted)
+                  <Unlock className="w-3.5 h-3.5" /> Not Protected
                 </span>
               )}
             </div>
@@ -671,7 +668,7 @@ const DataManagementTab = ({ sessionToken, folders, addToast }) => {
         <div className="space-y-3">
           <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800">
             <div>
-              <h4 className="text-xs font-semibold text-gray-200">Remove All Indexed Metadata</h4>
+              <h4 className="text-xs font-semibold text-gray-200">Clear All Memora Records</h4>
               <p className="text-[11px] text-gray-400">Clears all of Memora's records. Your original files are not deleted.</p>
             </div>
             <Button variant="danger" size="sm" icon={Database}
@@ -687,13 +684,13 @@ const DataManagementTab = ({ sessionToken, folders, addToast }) => {
             </div>
             <Button variant="secondary" size="sm" icon={Cpu}
               onClick={() => setConfirmRemoveIndex({ scope: 'vectors', folderId: null, label: 'search index' })}>
-              Reset Vectors
+              Reset Search
             </Button>
           </div>
 
           {folders.length > 0 && (
             <div className="space-y-2 pt-2">
-              <p className="text-xs text-gray-400 font-semibold">Remove indexed metadata for a specific folder:</p>
+              <p className="text-xs text-gray-400 font-semibold">Clear Memora's records for a specific folder:</p>
               {folders.map(f => (
                 <div key={f.id} className="flex items-center justify-between p-3.5 rounded-xl bg-gray-900/60 border border-gray-800">
                   <div className="min-w-0">
@@ -746,8 +743,8 @@ const DataManagementTab = ({ sessionToken, folders, addToast }) => {
       <Modal
         isOpen={!!confirmRemoveIndex}
         onClose={() => setConfirmRemoveIndex(null)}
-        title="Confirm Index Data Removal"
-        subtitle="This removes Memora's indexed search records only — original files are safe."
+        title="Confirm Record Removal"
+        subtitle="This removes Memora's search records only — your original files are safe."
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={() => setConfirmRemoveIndex(null)}>Cancel</Button>
@@ -761,7 +758,7 @@ const DataManagementTab = ({ sessionToken, folders, addToast }) => {
           You are about to remove <strong className="text-white">{confirmRemoveIndex?.label}</strong> from Memora's database.
         </p>
         <p className="text-xs text-yellow-400 mt-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
-          Original user files on disk will NOT be deleted. Only Memora's indexed metadata will be removed.
+          Original files on your computer will NOT be deleted. Only Memora's saved records will be removed.
         </p>
       </Modal>
 
@@ -1012,9 +1009,9 @@ const BackupRestoreTab = ({ sessionToken, addToast }) => {
   return (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-gray-900/40 border border-gray-800 text-xs text-gray-400 leading-relaxed">
-        Backup includes all your Memora data and settings.
-        <strong className="text-gray-300"> Original user files are NOT backed up.</strong> PIN data is included as a hash (not plaintext).
-        Backups are <strong className="text-yellow-300">not encrypted</strong> — store in a secure location you control.
+        A backup saves all your Memora settings and records.
+        <strong className="text-gray-300"> Your original files on disk are not included.</strong>
+        Store backups in a safe location that only you can access.
       </div>
 
       <div className="glass-panel p-5 rounded-2xl border-gray-800/80 space-y-3">
@@ -1135,7 +1132,7 @@ export const Security = () => {
   return (
     <div className="space-y-6 select-none">
       <PageHeader
-        title="Privacy & Security"
+        title="Security & Privacy"
         subtitle="Lock your app, protect files, manage backups, and review activity."
       />
 

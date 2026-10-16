@@ -32,29 +32,46 @@ export const TopNav = () => {
   };
 
   return (
-    <header className="h-14 border-b border-[rgba(139,170,215,0.14)] bg-[#0A1629]/95 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 select-none">
+    <header
+      className="h-14 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 select-none backdrop-blur-md"
+      style={{
+        backgroundColor: 'var(--topnav-bg)',
+        borderBottom: '1px solid var(--topnav-border)',
+      }}
+    >
       {/* Quick Search Field */}
       <form onSubmit={handleGlobalSearchSubmit} className="relative w-72 sm:w-96 max-w-full">
-        <Search className="w-3.5 h-3.5 text-[#71839E] absolute left-3 top-1/2 -translate-y-1/2" />
+        <Search
+          className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2"
+          style={{ color: 'var(--text-muted)' }}
+        />
         <input
           ref={inputRef}
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search files & documents (Ctrl+K)..."
-          className="w-full pl-9 pr-16 py-1.5 text-xs rounded-xl glass-input placeholder-[#71839E] text-[#F4F7FF] font-normal"
+          className="w-full pl-9 pr-16 py-1.5 text-xs rounded-xl glass-input font-normal"
         />
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {searchQuery && (
             <button
               type="button"
               onClick={handleClear}
-              className="p-0.5 text-[#A7B7D0] hover:text-[#F4F7FF] rounded hover:bg-[#0E1D35] cursor-pointer"
+              className="p-0.5 rounded hover:opacity-80 cursor-pointer transition-opacity"
+              style={{ color: 'var(--text-secondary)' }}
             >
               <X className="w-3 h-3" />
             </button>
           )}
-          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#06101F] text-[10px] text-[#A7B7D0] border border-[rgba(139,170,215,0.14)] font-mono">
+          <div
+            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono border"
+            style={{
+              backgroundColor: 'var(--bg-surface-secondary)',
+              color: 'var(--text-muted)',
+              borderColor: 'var(--border-subtle)',
+            }}
+          >
             <Command className="w-2.5 h-2.5" />
             <span>K</span>
           </div>
@@ -66,7 +83,14 @@ export const TopNav = () => {
         <button
           type="button"
           onClick={() => navigate('/scan')}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#4B91FF] bg-[#3478F6]/10 hover:bg-[#3478F6]/20 border border-[#3478F6]/30 rounded-xl transition-all cursor-pointer active:scale-95 shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer active:scale-95 shadow-sm border"
+          style={{
+            color: 'var(--accent-bright)',
+            backgroundColor: 'rgba(52, 120, 246, 0.10)',
+            borderColor: 'rgba(52, 120, 246, 0.30)',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(52, 120, 246, 0.18)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(52, 120, 246, 0.10)'; }}
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Rescan Folders</span>

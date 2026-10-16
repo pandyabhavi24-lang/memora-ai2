@@ -243,7 +243,7 @@ export const Dashboard = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm sm:text-base font-bold text-[#F4F7FF] tracking-tight truncate">
-                Your Files at a Glance
+                Home
               </h1>
               <span className={`text-[9px] font-semibold px-2 py-0.2 rounded-full border shrink-0 ${systemOperationalColor}`}>
                 {systemOperationalLabel}
@@ -352,7 +352,7 @@ export const Dashboard = () => {
                         </span>
                       </div>
                       <p className="text-[10px] text-[#A7B7D0] leading-snug">
-                        Identical or high-similarity files identified in your local folders.
+                        Memora found files with very similar or identical content.
                       </p>
                       <button 
                         onClick={() => { setShowNotifications(false); navigate('/organize'); }}
@@ -372,7 +372,7 @@ export const Dashboard = () => {
                         </span>
                       </div>
                       <p className="text-[10px] text-[#A7B7D0] leading-snug">
-                        Important certificates, contracts, or IDs require attention.
+                        Some documents are expiring or due for renewal soon.
                       </p>
                       <button 
                         onClick={() => { setShowNotifications(false); navigate('/expiry'); }}
@@ -432,7 +432,7 @@ export const Dashboard = () => {
           <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
             {stats.files !== undefined ? stats.files : '—'}
           </div>
-          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Documents &amp; media</p>
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Your tracked files</p>
         </div>
 
         {/* Stat 2: Storage Used */}
@@ -449,7 +449,7 @@ export const Dashboard = () => {
           <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
             {stats.total_size_bytes ? formatBytes(stats.total_size_bytes) : '—'}
           </div>
-          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Scanned local space</p>
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Total size on disk</p>
         </div>
 
         {/* Stat 3: Monitored Folders */}
@@ -466,7 +466,7 @@ export const Dashboard = () => {
           <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
             {stats.folders !== undefined ? stats.folders : folders.length}
           </div>
-          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Monitored roots</p>
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Watched folders</p>
         </div>
 
         {/* Stat 4: Duplicate Groups */}
@@ -483,7 +483,7 @@ export const Dashboard = () => {
           <div className="text-lg sm:text-xl font-black text-[#F4F7FF] font-mono tracking-tight leading-tight">
             {duplicateCount !== undefined ? duplicateCount : '—'}
           </div>
-          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Detected clusters</p>
+          <p className="text-[9px] text-[#A7B7D0] font-medium truncate">Duplicate groups</p>
         </div>
       </div>
 

@@ -158,7 +158,7 @@ export const EditSuggestionModal = ({ isOpen, onClose, suggestion, onSave }) => 
               <span>Smart Tags vs. Physical Folders</span>
             </div>
             <p className="text-[11px] leading-relaxed text-indigo-200/90">
-              <strong>Smart Tags</strong> describe file content for quick search filtering and indexing. Multiple Smart Tags can be attached to a single file. They do <strong>not</strong> restrict or determine physical hard drive folder names.
+              <strong>Smart Tags</strong> describe what a file is about, making it easier to find in search. Multiple Smart Tags can be attached to a single file. They do <strong>not</strong> move or rename files on your computer.
             </p>
           </div>
 

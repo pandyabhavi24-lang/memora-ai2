@@ -14,7 +14,7 @@ export const Button = ({
   type = 'button',
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3478F6]/50 active:scale-[0.98]';
+  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none focus-visible:outline-none focus-visible:ring-2 active:scale-[0.98]';
 
   const sizeStyles = {
     sm: 'px-3 py-1.5 text-xs gap-1.5',
@@ -22,12 +22,31 @@ export const Button = ({
     lg: 'px-5 py-2.5 text-sm sm:text-base gap-2.5'
   };
 
+  // Variants use inline CSS variables that adapt automatically to the active theme
   const variantStyles = {
-    primary: 'bg-[#3478F6] hover:bg-[#4B91FF] text-[#F4F7FF] shadow-sm shadow-[#3478F6]/25 border border-[#4B91FF]/30 font-semibold',
-    secondary: 'bg-[#0E1D35] hover:bg-[#182F50] text-[#F4F7FF] border border-[rgba(139,170,215,0.18)] hover:border-[rgba(139,170,215,0.30)] shadow-sm',
-    ghost: 'bg-transparent hover:bg-[#0E1D35] text-[#A7B7D0] hover:text-[#F4F7FF]',
-    outline: 'bg-transparent hover:bg-[#3478F6]/10 text-[#4B91FF] border border-[#3478F6]/40 hover:border-[#3478F6]/70',
-    danger: 'bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 hover:border-red-500/50'
+    primary:   'bg-[#3478F6] hover:bg-[#4B91FF] text-white shadow-sm border border-[rgba(52,120,246,0.40)] font-semibold focus-visible:ring-[#3478F6]/50',
+    secondary: 'border font-medium focus-visible:ring-[rgba(139,170,215,0.40)]',
+    ghost:     'bg-transparent font-medium focus-visible:ring-[rgba(139,170,215,0.40)]',
+    outline:   'bg-transparent border font-medium focus-visible:ring-[#3478F6]/40',
+    danger:    'bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 hover:border-red-500/50 font-medium focus-visible:ring-red-500/40'
+  };
+
+  // For non-primary variants, use inline style to reference CSS vars
+  const variantInlineStyle = {
+    primary:   {},
+    secondary: {
+      backgroundColor: 'var(--bg-surface-secondary)',
+      color: 'var(--text-primary)',
+      borderColor: 'var(--border-default)',
+    },
+    ghost: {
+      color: 'var(--text-secondary)',
+    },
+    outline: {
+      color: 'var(--accent-bright)',
+      borderColor: 'rgba(52, 120, 246, 0.40)',
+    },
+    danger: {},
   };
 
   const IconComponent = Icon;
@@ -38,6 +57,7 @@ export const Button = ({
       onClick={onClick}
       disabled={disabled || loading}
       className={`${baseStyles} ${sizeStyles[size] || sizeStyles.md} ${variantStyles[variant] || variantStyles.primary} ${className}`}
+      style={variantInlineStyle[variant] || {}}
       {...props}
     >
       {loading ? (

@@ -9,16 +9,16 @@ export const ToastContainer = () => {
 
   const icons = {
     success: <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />,
-    error: <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />,
+    error:   <AlertCircle  className="w-4 h-4 text-red-400   shrink-0" />,
     warning: <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />,
-    info: <Info className="w-4 h-4 text-[#4B91FF] shrink-0" />
+    info:    <Info          className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-bright)' }} />,
   };
 
-  const borders = {
-    success: 'border-emerald-500/30',
-    error: 'border-red-500/30',
-    warning: 'border-amber-500/30',
-    info: 'border-[#3478F6]/30'
+  const borderColors = {
+    success: 'rgba(34, 197, 94,  0.35)',
+    error:   'rgba(239, 68,  68,  0.35)',
+    warning: 'rgba(245, 158, 11,  0.35)',
+    info:    'rgba(52,  120, 246, 0.35)',
   };
 
   return (
@@ -26,19 +26,34 @@ export const ToastContainer = () => {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 bg-[#0A1629]/95 border ${borders[toast.type] || 'border-[rgba(139,170,215,0.20)]'} rounded-xl shadow-2xl backdrop-blur-md transition-all`}
+          className="pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md transition-all"
+          style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: `1px solid ${borderColors[toast.type] || 'var(--border-default)'}`,
+          }}
           role="status"
           aria-live="polite"
         >
           <div className="flex items-center gap-3 min-w-0">
             {icons[toast.type] || icons.info}
-            <span className="text-xs font-medium text-[#F4F7FF] truncate">{toast.message}</span>
+            <span className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+              {toast.message}
+            </span>
           </div>
           <button
             type="button"
             onClick={() => removeToast(toast.id)}
             aria-label="Dismiss notification"
-            className="p-1 text-[#A7B7D0] hover:text-[#F4F7FF] rounded-lg hover:bg-[#0E1D35] transition-colors shrink-0 cursor-pointer"
+            className="p-1 rounded-lg transition-colors shrink-0 cursor-pointer"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--text-primary)';
+              e.currentTarget.style.backgroundColor = 'var(--bg-surface-secondary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-muted)';
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <X className="w-3.5 h-3.5" />
           </button>

@@ -46,7 +46,7 @@ export const WorkflowPipeline = ({
       borderColor: 'hover:border-purple-500/50',
       accentBg: 'bg-purple-500/10 border-purple-500/20',
       topLine: 'bg-gradient-to-r from-[#7566F6] to-purple-500',
-      statusText: `${fileCount} file${fileCount === 1 ? '' : 's'} indexed`,
+      statusText: `${fileCount} file${fileCount === 1 ? '' : 's'} read`,
       statusState: fileCount > 0 ? 'ready' : 'idle',
       description: 'Reads and understands your documents and photos, all locally on your device.',
       actionPath: '/media'

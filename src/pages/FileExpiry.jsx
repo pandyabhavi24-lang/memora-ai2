@@ -298,7 +298,7 @@ export const FileExpiry = () => {
               <div className="w-10 h-10 rounded-xl bg-[#3478F6]/15 border border-[#3478F6]/30 flex items-center justify-center text-[#38BDF8]">
                 <CalendarClock className="w-5 h-5" />
               </div>
-              Document Reminders
+              Expiry & Reminders
             </h1>
             {ollamaStatus.available ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -496,7 +496,7 @@ export const FileExpiry = () => {
               <p className="text-sm text-[#A7B7D0] mt-1 max-w-md mx-auto">
                 {searchQuery || statusFilter !== 'all' || docTypeFilter !== 'all'
                   ? 'No documents match your filter criteria. Try resetting search or filters.'
-                  : 'Click "Scan Documents" to analyze your indexed files for expiration and renewal dates.'}
+                  : 'Click "Scan Documents" to check your saved files for expiration and renewal dates.'}
               </p>
             </div>
             {!(searchQuery || statusFilter !== 'all' || docTypeFilter !== 'all') && (

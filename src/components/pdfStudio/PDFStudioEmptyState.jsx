@@ -106,9 +106,9 @@ export const PDFStudioEmptyState = ({
             <FileOutput className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-[#F4F7FF]">Memora Pipeline Sync</h4>
+            <h4 className="text-sm font-semibold text-[#F4F7FF]">Save &amp; Find Later</h4>
             <p className="text-xs text-[#A7B7D0] mt-1 leading-relaxed">
-              Exported PDFs can be automatically registered and indexed into Memora's search system.
+              Exported PDFs are saved to your computer and can be made searchable inside Memora.
             </p>
           </div>
         </div>

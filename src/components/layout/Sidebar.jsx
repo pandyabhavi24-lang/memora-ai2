@@ -3,14 +3,13 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Search,
-  FolderSearch,
   FolderTree,
-  Settings,
   ShieldCheck,
   Sparkles,
   FileText,
   HardDrive,
   CalendarClock,
+  Settings,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -42,14 +41,13 @@ export const Sidebar = () => {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Skip shortcuts when user is typing in an input, textarea, or contenteditable
       const tag = document.activeElement?.tagName?.toLowerCase();
       const isEditing =
         tag === "input" ||
         tag === "textarea" ||
         document.activeElement?.isContentEditable;
 
-      // Ctrl+B — toggle sidebar (existing)
+      // Ctrl+B — toggle sidebar
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
         toggleSidebar();
@@ -90,50 +88,44 @@ export const Sidebar = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [navigate, selectFolderNative]);
 
-  const navSections = [
-    {
-      title: "Core",
-      items: [
-        { label: "Home", path: "/dashboard", icon: LayoutDashboard },
-        { label: "Find", path: "/search", icon: Search },
-        { label: "Files", path: "/folders", icon: FolderSearch },
-      ],
-    },
-    {
-      title: "Tools",
-      items: [
-        { label: "Organize", path: "/organize", icon: FolderTree },
-        { label: "Media", path: "/media", icon: Sparkles },
-        { label: "PDF Studio", path: "/pdf-studio", icon: FileText },
-        { label: "Free Up Space", path: "/storage-optimization", icon: HardDrive },
-        { label: "Reminders", path: "/expiry", icon: CalendarClock },
-      ],
-    },
-    {
-      title: "System",
-      items: [
-        { label: "Privacy", path: "/security", icon: ShieldCheck },
-        { label: "Settings", path: "/settings", icon: Settings },
-      ],
-    },
+  // Flat nav — 9 items
+  const navItems = [
+    { label: "Home",                 path: "/dashboard",            icon: LayoutDashboard },
+    { label: "Search",               path: "/search",               icon: Search },
+    { label: "Organization",         path: "/organize",             icon: FolderTree },
+    { label: "Media Intelligence",   path: "/media",                icon: Sparkles,      dividerBefore: true },
+    { label: "Expiry & Reminders",   path: "/expiry",               icon: CalendarClock },
+    { label: "Security & Privacy",   path: "/security",             icon: ShieldCheck },
+    { label: "PDF Studio",           path: "/pdf-studio",           icon: FileText },
+    { label: "Storage Optimization", path: "/storage-optimization", icon: HardDrive },
+    { label: "Settings",             path: "/settings",             icon: Settings,      dividerBefore: true },
   ];
 
   return (
     <aside
       className={`${
         isCollapsed ? "w-[72px]" : "w-64"
-      } h-screen bg-[#0A1629] border-r border-[rgba(139,170,215,0.14)] flex flex-col justify-between p-3 shrink-0 select-none transition-all duration-200 ease-in-out relative z-40`}
+      } h-screen flex flex-col justify-between p-3 shrink-0 select-none transition-all duration-200 ease-in-out relative z-40`}
+      style={{
+        backgroundColor: 'var(--bg-sidebar)',
+        borderRight: '1px solid var(--border-subtle)',
+      }}
       aria-label="Main Navigation"
     >
       <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
         {/* Brand Header */}
-        <div className="flex items-center justify-between px-1.5 py-1.5 mb-3 border-b border-[rgba(139,170,215,0.14)] pb-3 shrink-0">
+        <div
+          className="flex items-center justify-between px-1.5 py-1.5 mb-3 pb-3 shrink-0"
+          style={{ borderBottom: '1px solid var(--border-subtle)' }}
+        >
           <div className="flex items-center gap-2 min-w-0">
-            {/* Logo: collapsed = M symbol only, expanded = full logo */}
             {isCollapsed ? (
-              /* Collapsed: show just the M symbol (top ~55% of square image) */
               <div
-                className="w-9 h-9 rounded-xl overflow-hidden shrink-0 border border-[rgba(139,170,215,0.15)] shadow-md shadow-[#3478F6]/20"
+                className="w-9 h-9 rounded-xl overflow-hidden shrink-0 shadow-md"
+                style={{
+                  border: '1px solid var(--border-subtle)',
+                  boxShadow: '0 4px 12px rgba(52, 120, 246, 0.20)',
+                }}
                 title="Memora AI"
               >
                 <img
@@ -145,7 +137,6 @@ export const Sidebar = () => {
                 />
               </div>
             ) : (
-              /* Expanded: full logo image, letterbox contained */
               <div className="h-12 w-auto flex items-center shrink-0">
                 <img
                   src="/memora-ai-logo.png"
@@ -170,7 +161,16 @@ export const Sidebar = () => {
                 ? "Expand sidebar (Ctrl+B)"
                 : "Collapse sidebar (Ctrl+B)"
             }
-            className="p-1 rounded-lg text-[#A7B7D0] hover:text-[#F4F7FF] hover:bg-[#0E1D35] transition-colors cursor-pointer"
+            className="p-1 rounded-lg transition-colors cursor-pointer"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--text-primary)';
+              e.currentTarget.style.backgroundColor = 'var(--bg-surface-secondary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-muted)';
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             {isCollapsed ? (
               <ChevronRight className="w-4 h-4" />
@@ -180,67 +180,110 @@ export const Sidebar = () => {
           </button>
         </div>
 
-        {/* Navigation Sections */}
-        <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-0.5">
-          {navSections.map((section, idx) => (
-            <div key={section.title || idx} className="space-y-1">
-              {!isCollapsed ? (
-                <div className="px-2.5 py-1 text-[10px] uppercase tracking-wider font-semibold text-[#71839E] font-mono">
-                  {section.title}
-                </div>
-              ) : (
-                idx > 0 && <div className="my-1.5 border-t border-[rgba(139,170,215,0.12)] mx-2" />
-              )}
+        {/* Navigation — flat list */}
+        <div className="flex-1 overflow-y-auto space-y-0.5 custom-scrollbar pr-0.5">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              location.pathname === item.path ||
+              (item.path === "/search" && location.pathname === "/results");
 
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const isActive =
-                  location.pathname === item.path ||
-                  (item.path === "/search" && location.pathname === "/results");
-
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    title={isCollapsed ? item.label : undefined}
-                    className={({ isActive: isLinkActive }) => {
-                      const active =
-                        isLinkActive ||
-                        (item.path === "/search" &&
-                          location.pathname === "/results");
-                      return `group flex items-center ${
-                        isCollapsed ? "justify-center px-0 py-2.5" : "px-2.5 py-2"
-                      } rounded-xl text-xs font-medium transition-all duration-150 relative ${
-                        active
-                          ? "bg-[#3478F6]/15 text-[#4B91FF] border border-[#3478F6]/30 shadow-xs font-semibold"
-                          : "text-[#A7B7D0] hover:text-[#F4F7FF] hover:bg-[#0E1D35] border border-transparent"
-                      }`;
-                    }}
-                  >
-                    <Icon
-                      className={`w-4 h-4 shrink-0 transition-colors ${
-                        isActive ? "text-[#4B91FF]" : "text-[#71839E] group-hover:text-[#F4F7FF]"
-                      }`}
-                    />
-                    {!isCollapsed && (
-                      <span className="ml-2.5 truncate">{item.label}</span>
-                    )}
-                  </NavLink>
-                );
-              })}
-            </div>
-          ))}
+            return (
+              <React.Fragment key={item.path}>
+                {item.dividerBefore && (
+                  <div
+                    className="my-2 mx-1"
+                    style={{ borderTop: '1px solid var(--border-subtle)' }}
+                  />
+                )}
+                <NavLink
+                  to={item.path}
+                  title={isCollapsed ? item.label : undefined}
+                  style={({ isActive: isLinkActive }) => {
+                    const active =
+                      isLinkActive ||
+                      (item.path === "/search" && location.pathname === "/results");
+                    if (active) {
+                      return {
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: isCollapsed ? 'center' : undefined,
+                        padding: isCollapsed ? '10px 0' : '8px 10px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        transition: 'all 150ms',
+                        position: 'relative',
+                        color: 'var(--accent-bright)',
+                        backgroundColor: 'var(--bg-sidebar-item-active)',
+                        border: '1px solid rgba(52, 120, 246, 0.30)',
+                      };
+                    }
+                    return {
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: isCollapsed ? 'center' : undefined,
+                      padding: isCollapsed ? '10px 0' : '8px 10px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      transition: 'all 150ms',
+                      position: 'relative',
+                      color: 'var(--text-muted)',
+                      backgroundColor: 'transparent',
+                      border: '1px solid transparent',
+                    };
+                  }}
+                  onMouseEnter={(e) => {
+                    const active =
+                      location.pathname === item.path ||
+                      (item.path === "/search" && location.pathname === "/results");
+                    if (!active) {
+                      e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-item-hover)';
+                      e.currentTarget.style.color = 'var(--text-primary)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const active =
+                      location.pathname === item.path ||
+                      (item.path === "/search" && location.pathname === "/results");
+                    if (!active) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = 'var(--text-muted)';
+                    }
+                  }}
+                >
+                  <Icon className="w-4 h-4 shrink-0 transition-colors" />
+                  {!isCollapsed && (
+                    <span className="ml-2.5 truncate">{item.label}</span>
+                  )}
+                </NavLink>
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
 
       {/* Footer Status Widget */}
-      <div className="pt-3 border-t border-[rgba(139,170,215,0.14)] space-y-2 shrink-0">
+      <div
+        className="pt-3 space-y-2 shrink-0"
+        style={{ borderTop: '1px solid var(--border-subtle)' }}
+      >
         {!isCollapsed ? (
-          <div className="px-2.5 py-2 rounded-xl bg-[#0E1D35] border border-[rgba(139,170,215,0.14)]">
+          <div
+            className="px-2.5 py-2 rounded-xl"
+            style={{
+              backgroundColor: 'var(--bg-surface-secondary)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span className="text-[11px] font-semibold text-[#F4F7FF]">
+                <span
+                  className="text-[11px] font-semibold"
+                  style={{ color: 'var(--text-primary)' }}
+                >
                   Private & Local
                 </span>
               </div>
@@ -248,13 +291,17 @@ export const Sidebar = () => {
                 100% Offline
               </span>
             </div>
-            <p className="text-[10px] text-[#A7B7D0] leading-tight">
+            <p className="text-[10px] leading-tight" style={{ color: 'var(--text-muted)' }}>
               Your data stays on your device.
             </p>
           </div>
         ) : (
           <div
-            className="flex justify-center p-2 rounded-xl bg-[#0E1D35] border border-[rgba(139,170,215,0.14)] text-emerald-400"
+            className="flex justify-center p-2 rounded-xl text-emerald-400"
+            style={{
+              backgroundColor: 'var(--bg-surface-secondary)',
+              border: '1px solid var(--border-subtle)',
+            }}
             title="Private & Local"
           >
             <ShieldCheck className="w-4 h-4" />
@@ -264,7 +311,12 @@ export const Sidebar = () => {
         <div
           className={`flex items-center ${
             isCollapsed ? "justify-center px-0 py-1.5" : "justify-between px-2.5 py-1.5"
-          } text-[11px] text-[#A7B7D0] bg-[#06101F] rounded-lg border border-[rgba(139,170,215,0.14)] font-mono`}
+          } text-[11px] rounded-lg font-mono`}
+          style={{
+            color: 'var(--text-muted)',
+            backgroundColor: 'var(--bg-page)',
+            border: '1px solid var(--border-subtle)',
+          }}
           title="Memora is ready"
         >
           <span className="flex items-center gap-1.5">

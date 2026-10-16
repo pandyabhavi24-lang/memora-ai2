@@ -338,7 +338,7 @@ export const MediaIntelligence = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-[#F4F7FF] tracking-wide">
-                Media Library
+                Media Intelligence
               </h1>
               <span className="text-[11px] text-[#7566F6] font-mono font-semibold">
               </span>

@@ -59,7 +59,7 @@ export const Scanning = () => {
           {scanState.percent >= 100 ? 'Done!' : 'Scanning Your Files'}
         </h1>
         <p className="text-sm text-[#A7B7D0] mb-8">
-          Memora is reading and indexing your documents so you can search them later.
+          Memora is reading your documents so you can search them later.
         </p>
 
         {/* Large Progress Card */}
@@ -77,7 +77,7 @@ export const Scanning = () => {
           {/* Current File Activity */}
           <div className="p-3.5 rounded-xl bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)] text-xs font-mono text-[#DCE5F3] truncate flex items-center justify-between mb-6">
             <span className="text-[#7E93B3] shrink-0 mr-2">Processing:</span>
-            <span className="truncate text-[#38BDF8]">{scanState.currentFile || 'Indexing...'}</span>
+            <span className="truncate text-[#38BDF8]">{scanState.currentFile || 'Reading files...'}</span>
           </div>
 
           {/* Detailed Statistics Grid */}
@@ -95,7 +95,7 @@ export const Scanning = () => {
             <div className="p-3.5 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.12)]">
               <div className="flex items-center gap-1.5 text-xs text-[#7E93B3] mb-1 font-mono uppercase">
                 <Eye className="w-3.5 h-3.5 text-purple-400" />
-                <span>OCR</span>
+                <span>Image Text</span>
               </div>
               <div className="text-base font-bold text-white font-mono">
                 {scanState.ocrProcessed} Files
@@ -105,7 +105,7 @@ export const Scanning = () => {
             <div className="p-3.5 rounded-xl bg-[#06101F]/70 border border-[rgba(139,170,215,0.12)]">
               <div className="flex items-center gap-1.5 text-xs text-[#7E93B3] mb-1 font-mono uppercase">
                 <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Indexed</span>
+                <span>Searchable</span>
               </div>
               <div className="text-base font-bold text-white font-mono">
                 {scanState.vectorsIndexed} Files
@@ -130,7 +130,7 @@ export const Scanning = () => {
             onClick={() => navigate('/dashboard')}
             className="text-xs font-medium text-[#A7B7D0] hover:text-white transition-colors cursor-pointer"
           >
-            Run indexing in background &rarr;
+            Run in background &rarr;
           </button>
         )}
       </div>

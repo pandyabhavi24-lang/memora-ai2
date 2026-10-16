@@ -48,7 +48,7 @@ export const FolderSelection = () => {
           <ShieldCheck className="w-5 h-5 text-[#38BDF8] shrink-0 mt-0.5" />
           <div className="text-xs leading-relaxed text-[#DCE5F3]">
             <strong className="text-white block font-semibold mb-0.5">Privacy Assurance:</strong>
-            You are granting local indexing permissions for the folders below. System folders and unselected drives remain completely untouched and unindexed.
+            Memora will only read the folders you choose. Your other files and system folders will not be touched.
           </div>
         </div>
 
@@ -134,7 +134,7 @@ export const FolderSelection = () => {
             disabled={folders.length === 0}
             className="bg-[#3478F6] hover:bg-[#2563EB] text-white font-semibold shadow-lg shadow-blue-900/40"
           >
-            Start Indexing ({folders.length} Folders)
+            Scan {folders.length} {folders.length === 1 ? 'Folder' : 'Folders'}
           </Button>
         </div>
       </div>

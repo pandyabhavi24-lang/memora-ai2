@@ -70,6 +70,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
   const [fileToDelete, setFileToDelete] = useState(null); // { id, filename, path }
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState(null);
+  const [showMatchDetails, setShowMatchDetails] = useState(false);
 
   // One-click Open Both Files state
   const [isOpeningBoth, setIsOpeningBoth] = useState(false);
@@ -121,6 +122,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
     setDeleteMessage(null);
     setFileToDelete(null);
     setOpenBothError(null);
+    setShowMatchDetails(false);
   };
 
   const handleCloseReview = () => {
@@ -378,7 +380,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                     </span>
                   </h3>
                   <p className="text-[11px] text-[#A7B7D0]">
-                    Review duplicate details or launch both original files simultaneously in your desktop applications.
+                    Review both files and choose which copy to keep or delete.
                   </p>
                 </div>
               </div>
@@ -399,10 +401,10 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className={`px-2.5 py-0.5 rounded-full font-mono text-[11px] font-bold border ${getDetectionBadge(activeDuplicate.detectionType)}`}>
-                      {activeDuplicate.detectionType}
+                      {friendlyDetectionType(activeDuplicate.detectionType)}
                     </span>
                     <span className="text-xs text-[#F4F7FF] font-semibold">
-                      {activeDuplicate.reason || 'Calculated based on binary hash and extracted content.'}
+                      {activeDuplicate.reason && activeDuplicate.reason !== 'Calculated based on binary hash and extracted content.' ? activeDuplicate.reason : 'These files were found to have matching or highly similar content.'}
                     </span>
                   </div>
 
@@ -425,39 +427,51 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                   </div>
                 </div>
 
-                {/* Evidence Metrics Breakdown */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[rgba(139,170,215,0.1)] text-[11px] font-mono">
-                  <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
-                    <span className="text-[#71839E]">Exact File Match:</span>
-                    <span className={activeDuplicate.is_hash_match ? "text-emerald-400 font-bold" : "text-[#71839E]"}>
-                      {activeDuplicate.is_hash_match ? "Yes" : "No"}
-                    </span>
-                  </div>
+                {/* Collapsible Evidence Metrics */}
+                <div className="pt-2 border-t border-[rgba(139,170,215,0.1)]">
+                  <button
+                    type="button"
+                    onClick={() => setShowMatchDetails(prev => !prev)}
+                    className="flex items-center gap-1.5 text-[10px] font-semibold text-[#71839E] hover:text-[#A7B7D0] transition-colors cursor-pointer"
+                  >
+                    <span>{showMatchDetails ? '▾' : '▸'} {showMatchDetails ? 'Hide Details' : 'Show Details'}</span>
+                  </button>
 
-                  <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
-                    <span className="text-[#71839E]">Text Content Match:</span>
-                    <span className={activeDuplicate.is_text_match ? "text-cyan-400 font-bold" : "text-[#71839E]"}>
-                      {activeDuplicate.is_text_match ? "Identical" : "Different"}
-                    </span>
-                  </div>
+                  {showMatchDetails && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px] font-mono">
+                      <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
+                        <span className="text-[#71839E]">Identical Files:</span>
+                        <span className={activeDuplicate.is_hash_match ? "text-emerald-400 font-bold" : "text-[#71839E]"}>
+                          {activeDuplicate.is_hash_match ? "Yes" : "No"}
+                        </span>
+                      </div>
 
-                  <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
-                    <span className="text-[#71839E]">Text Match:</span>
-                    <span className="text-[#A7B7D0] font-bold">
-                      {activeDuplicate.lexical_similarity !== null && activeDuplicate.lexical_similarity !== undefined
-                        ? `${activeDuplicate.lexical_similarity}%`
-                        : (activeDuplicate.is_hash_match ? "100%" : "N/A")}
-                    </span>
-                  </div>
+                      <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
+                        <span className="text-[#71839E]">Same Content:</span>
+                        <span className={activeDuplicate.is_text_match ? "text-cyan-400 font-bold" : "text-[#71839E]"}>
+                          {activeDuplicate.is_text_match ? "Identical" : "Different"}
+                        </span>
+                      </div>
 
-                  <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
-                    <span className="text-[#71839E]">Content Similarity:</span>
-                    <span className="text-[#A7B7D0] font-bold">
-                      {activeDuplicate.semantic_similarity !== null && activeDuplicate.semantic_similarity !== undefined
-                        ? `${activeDuplicate.semantic_similarity}%`
-                        : (activeDuplicate.is_hash_match ? "100%" : "N/A")}
-                    </span>
-                  </div>
+                      <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
+                        <span className="text-[#71839E]">Word Similarity:</span>
+                        <span className="text-[#A7B7D0] font-bold">
+                          {activeDuplicate.lexical_similarity !== null && activeDuplicate.lexical_similarity !== undefined
+                            ? `${activeDuplicate.lexical_similarity}%`
+                            : (activeDuplicate.is_hash_match ? "100%" : "N/A")}
+                        </span>
+                      </div>
+
+                      <div className="p-2 rounded-lg bg-[#0A1629] border border-[rgba(139,170,215,0.1)] flex items-center justify-between">
+                        <span className="text-[#71839E]">Overall Similarity:</span>
+                        <span className="text-[#A7B7D0] font-bold">
+                          {activeDuplicate.semantic_similarity !== null && activeDuplicate.semantic_similarity !== undefined
+                            ? `${activeDuplicate.semantic_similarity}%`
+                            : (activeDuplicate.is_hash_match ? "100%" : "N/A")}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -542,10 +556,10 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                         type="button"
                         onClick={() => setFileToDelete(activeDuplicate.fileA)}
                         className="py-1.5 px-3 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                        title="Delete Copy A"
+                        title="Delete this copy"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete Copy A</span>
+                        <span>Delete</span>
                       </button>
                     </div>
 
@@ -555,7 +569,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                       className="w-full py-2 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Keep File A</span>
+                      <span>Keep This Copy — Delete File B</span>
                     </button>
                   </div>
                 </div>
@@ -622,10 +636,10 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                         type="button"
                         onClick={() => setFileToDelete(activeDuplicate.fileB)}
                         className="py-1.5 px-3 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                        title="Delete Copy B"
+                        title="Delete this copy"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete Copy B</span>
+                        <span>Delete</span>
                       </button>
                     </div>
 
@@ -635,7 +649,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                       className="w-full py-2 px-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Keep File B</span>
+                      <span>Keep This Copy — Delete File A</span>
                     </button>
                   </div>
                 </div>
@@ -652,7 +666,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
                         Confirm Permanent Deletion of Duplicate Copy
                       </h4>
                       <p className="text-[11px] text-red-300/90 mt-0.5">
-                        This action will permanently delete this physical file from your local disk storage. This cannot be undone.
+                        This will permanently delete the file from your computer. This cannot be undone.
                       </p>
                     </div>
                   </div>
@@ -685,7 +699,7 @@ export const DuplicatesSection = ({ refreshTrigger, onFileDeleted }) => {
             {/* Sticky Actions Footer */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 bg-[#0E1D35] border-t border-[rgba(139,170,215,0.14)] shrink-0">
               <span className="text-[11px] text-[#71839E]">
-                Both files are preserved until you explicitly confirm deletion.
+                Both files remain safe until you choose to delete one.
               </span>
 
               <div className="flex flex-wrap items-center gap-2">
