@@ -254,6 +254,11 @@ export const StorageOptimization = () => {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailResult, setEmailResult] = useState(null);
   const [emailError, setEmailError] = useState(null);
+  const [emailConfig, setEmailConfig] = useState(null);
+
+  // Dynamic limit — falls back to 18 MB if config not yet loaded
+  const emailMaxRawBytes = emailConfig?.max_raw_bytes || (18 * 1024 * 1024);
+  const emailMaxRawMb = emailConfig?.max_raw_mb || 18;
 
   // Large file audit custom MB input
   const [isCustomMinSize, setIsCustomMinSize] = useState(false);
@@ -415,7 +420,7 @@ export const StorageOptimization = () => {
     } finally { setCreatingZip(false); }
   };
 
-  const handleOpenEmailModal = () => {
+  const handleOpenEmailModal = async () => {
     if (!selectedFileIds.length) return;
     setEmailRecipient('');
     setEmailSubject(selectedList.length === 1 ? `Shared: ${selectedList[0].name}` : `Shared Files (${selectedList.length}) from Memora AI`);
@@ -430,6 +435,14 @@ export const StorageOptimization = () => {
     setEmailResult(null);
     setEmailError(null);
     setShowEmailModal(true);
+
+    // Fetch current email config (size limits + masked sender)
+    try {
+      const cfg = await storageService.getEmailConfig();
+      setEmailConfig(cfg);
+    } catch {
+      // Non-critical — modal will use fallback defaults
+    }
   };
 
   const handleCloseEmailModal = () => {
@@ -465,8 +478,8 @@ export const StorageOptimization = () => {
         return;
       }
     }
-    if (selectedBytes > 18 * 1024 * 1024) {
-      setEmailError('Selected files exceed the 18 MB raw attachment limit. Please select fewer files.');
+    if (selectedBytes > emailMaxRawBytes) {
+      setEmailError(`Selected files exceed the ${emailMaxRawMb} MB raw attachment limit. Please select fewer files.`);
       return;
     }
 
@@ -1072,7 +1085,7 @@ export const StorageOptimization = () => {
             </Button>
             {!emailResult ? (
               <Button variant="primary" size="sm" icon={Send} onClick={handleSendEmail}
-                disabled={sendingEmail || !emailRecipient.trim() || selectedBytes > 18 * 1024 * 1024}
+                disabled={sendingEmail || !emailRecipient.trim() || selectedBytes > emailMaxRawBytes}
                 className="bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/30 text-white shadow-lg shadow-indigo-950/30">
                 <span>{sendingEmail ? 'Sending...' : 'Send Email'}</span>
               </Button>
@@ -1095,17 +1108,25 @@ export const StorageOptimization = () => {
                 </div>
                 <div className="text-right">
                   <span className="text-xs font-semibold text-[#7E93B3] uppercase tracking-wider">Total Raw Size</span>
-                  <div className={`text-xs font-mono font-bold mt-0.5 ${selectedBytes > 18 * 1024 * 1024 ? 'text-red-400' : 'text-indigo-400'}`}>
+                  <div className={`text-xs font-mono font-bold mt-0.5 ${selectedBytes > emailMaxRawBytes ? 'text-red-400' : 'text-indigo-400'}`}>
                     {(selectedBytes / (1024 * 1024)).toFixed(2)} MB
                   </div>
                 </div>
               </div>
 
               {/* Payload ceiling warning */}
-              {selectedBytes > 18 * 1024 * 1024 && (
+              {selectedBytes > emailMaxRawBytes && (
                 <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-500/30 text-xs text-amber-300 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  <span>The selected files ({ (selectedBytes / (1024*1024)).toFixed(2) } MB) exceed the 18 MB email attachment ceiling. Please deselect some files before sharing.</span>
+                  <span>The selected files ({ (selectedBytes / (1024*1024)).toFixed(2) } MB) exceed the {emailMaxRawMb} MB email attachment ceiling. Please deselect some files before sharing.</span>
+                </div>
+              )}
+
+              {/* Sending from display */}
+              {emailConfig?.masked_sender_email && (
+                <div className="p-3 rounded-lg bg-[#06101F]/80 border border-[rgba(139,170,215,0.14)] text-xs text-[#A7B7D0] flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>Sending from <span className="font-mono text-white font-medium">{emailConfig.masked_sender_email}</span> as <span className="text-white font-medium">{emailConfig.sender_display_name}</span></span>
                 </div>
               )}
 

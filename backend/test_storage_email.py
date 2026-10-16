@@ -686,6 +686,153 @@ def run_tests():
                     break
             check("Read timeout tagged as waiting_for_server_response", logged_detail)
 
+        # -----------------------------------------------------------------
+        # TEST 20: Configurable EMAIL_MAX_RAW_MB in storage_service
+        # -----------------------------------------------------------------
+        print("\n[Test 20] Testing configurable EMAIL_MAX_RAW_MB env var in prepare_email_attachments...")
+
+        # Create a 2 MB test file
+        big_content = b"X" * (2 * 1024 * 1024)
+        f_big = make_test_file("big_file.bin", big_content)
+
+        # With EMAIL_MAX_RAW_MB=1, a 2 MB file should be rejected
+        with patch.dict(os.environ, {"EMAIL_MAX_RAW_MB": "1"}):
+            try:
+                storage_service.prepare_email_attachments(db=db, file_ids=[f_big.id], mode="originals")
+                check("2 MB file rejected when EMAIL_MAX_RAW_MB=1", False)
+            except Exception as e:
+                check("2 MB file rejected when EMAIL_MAX_RAW_MB=1", "exceeds" in str(e).lower())
+
+        # With EMAIL_MAX_RAW_MB=10, same 2 MB file should pass
+        with patch.dict(os.environ, {"EMAIL_MAX_RAW_MB": "10"}):
+            try:
+                items, _, total = storage_service.prepare_email_attachments(db=db, file_ids=[f_big.id], mode="originals")
+                check("2 MB file accepted when EMAIL_MAX_RAW_MB=10", len(items) == 1)
+            except Exception as e:
+                check("2 MB file accepted when EMAIL_MAX_RAW_MB=10", False, str(e))
+
+        # Invalid env value falls back to 18 MB default
+        with patch.dict(os.environ, {"EMAIL_MAX_RAW_MB": "not_a_number"}):
+            try:
+                items, _, total = storage_service.prepare_email_attachments(db=db, file_ids=[f_big.id], mode="originals")
+                check("Invalid EMAIL_MAX_RAW_MB falls back to 18 MB default (2 MB file accepted)", len(items) == 1)
+            except Exception as e:
+                check("Invalid EMAIL_MAX_RAW_MB falls back to 18 MB default", False, str(e))
+
+        # Explicit param overrides env var
+        with patch.dict(os.environ, {"EMAIL_MAX_RAW_MB": "10"}):
+            try:
+                storage_service.prepare_email_attachments(db=db, file_ids=[f_big.id], mode="originals", max_raw_bytes=1 * 1024 * 1024)
+                check("Explicit max_raw_bytes=1MB overrides env EMAIL_MAX_RAW_MB=10", False)
+            except Exception as e:
+                check("Explicit max_raw_bytes=1MB overrides env EMAIL_MAX_RAW_MB=10", "exceeds" in str(e).lower())
+
+        db.delete(f_big)
+        db.commit()
+        big_path = os.path.join(test_dir, "big_file.bin")
+        if os.path.exists(big_path):
+            os.remove(big_path)
+
+        # -----------------------------------------------------------------
+        # TEST 21: Configurable EMAIL_MAX_MESSAGE_MB in email_service
+        # -----------------------------------------------------------------
+        print("\n[Test 21] Testing configurable EMAIL_MAX_MESSAGE_MB env var in send_file_sharing_email...")
+
+        with patch("smtplib.SMTP") as mock_smtp, \
+             patch.dict(os.environ, {"SMTP_USER": "test@memora.ai", "SMTP_PASS": "testpassword", "SMTP_PORT": "587", "EMAIL_MAX_MESSAGE_MB": "25"}):
+            mock_smtp.return_value.__enter__.return_value = MagicMock()
+
+            # Sending a small file with default 25 MB MIME limit should succeed
+            result = email_service.send_file_sharing_email(
+                to_email="test@example.com",
+                subject="Test",
+                message_body="Test body",
+                attachments=[(f1.path, f1.name, "text/plain")],
+            )
+            check("Small file accepted with EMAIL_MAX_MESSAGE_MB=25", result["status"] == "success")
+
+        # Test with very restrictive MIME limit (1 byte) — should fail on MIME size check
+        with patch("smtplib.SMTP") as mock_smtp, \
+             patch.dict(os.environ, {"SMTP_USER": "test@memora.ai", "SMTP_PASS": "testpassword", "SMTP_PORT": "587", "EMAIL_MAX_MESSAGE_MB": "0.0001"}):
+            mock_smtp.return_value.__enter__.return_value = MagicMock()
+
+            try:
+                email_service.send_file_sharing_email(
+                    to_email="test@example.com",
+                    subject="Test",
+                    message_body="Test body",
+                    attachments=[(f1.path, f1.name, "text/plain")],
+                )
+                check("File rejected when EMAIL_MAX_MESSAGE_MB is near-zero", False)
+            except ValueError as e:
+                check("File rejected when EMAIL_MAX_MESSAGE_MB is near-zero", "exceeds" in str(e).lower())
+
+        # Invalid env value falls back to 25 MB default (small file should pass)
+        with patch("smtplib.SMTP") as mock_smtp, \
+             patch.dict(os.environ, {"SMTP_USER": "test@memora.ai", "SMTP_PASS": "testpassword", "SMTP_PORT": "587", "EMAIL_MAX_MESSAGE_MB": "invalid"}):
+            mock_smtp.return_value.__enter__.return_value = MagicMock()
+
+            result = email_service.send_file_sharing_email(
+                to_email="test@example.com",
+                subject="Test",
+                message_body="Test body",
+                attachments=[(f1.path, f1.name, "text/plain")],
+            )
+            check("Invalid EMAIL_MAX_MESSAGE_MB falls back to 25 MB default", result["status"] == "success")
+
+        # -----------------------------------------------------------------
+        # TEST 22: GET /share/email-config Endpoint
+        # -----------------------------------------------------------------
+        print("\n[Test 22] Testing GET /share/email-config endpoint...")
+        from app.routes.storage import get_email_config
+
+        # Test with specific env values
+        with patch.dict(os.environ, {"EMAIL_MAX_RAW_MB": "20", "EMAIL_MAX_MESSAGE_MB": "30"}):
+            config = get_email_config(db=db)
+            check("email-config returns max_raw_mb from env", config.max_raw_mb == 20.0)
+            check("email-config returns max_message_mb from env", config.max_message_mb == 30.0)
+            check("email-config max_raw_bytes matches MB conversion", config.max_raw_bytes == int(20 * 1024 * 1024))
+            check("email-config sender_display_name is 'Memora AI'", config.sender_display_name == "Memora AI")
+
+        # Test with default values (env vars unset)
+        with patch.dict(os.environ, {}, clear=False):
+            env_backup_raw = os.environ.pop("EMAIL_MAX_RAW_MB", None)
+            env_backup_msg = os.environ.pop("EMAIL_MAX_MESSAGE_MB", None)
+            try:
+                config = get_email_config(db=db)
+                check("email-config defaults max_raw_mb to 18", config.max_raw_mb == 18.0)
+                check("email-config defaults max_message_mb to 25", config.max_message_mb == 25.0)
+            finally:
+                if env_backup_raw is not None:
+                    os.environ["EMAIL_MAX_RAW_MB"] = env_backup_raw
+                if env_backup_msg is not None:
+                    os.environ["EMAIL_MAX_MESSAGE_MB"] = env_backup_msg
+
+        # Test masked_sender_email when recovery email is configured
+        from app.models import SecuritySettings as SecSettings
+        settings = db.query(SecSettings).filter(SecSettings.id == 1).first()
+        had_email = None
+        if settings:
+            had_email = settings.recovery_email
+            settings.recovery_email = "testuser@example.com"
+            db.commit()
+        else:
+            settings = SecSettings(id=1, lock_enabled=False, pin_iterations=260000, recovery_email="testuser@example.com")
+            db.add(settings)
+            db.commit()
+
+        try:
+            config = get_email_config(db=db)
+            check("email-config returns masked_sender_email when recovery email set", config.masked_sender_email is not None)
+            check("masked_sender_email does not expose full address", "testuser@example.com" != config.masked_sender_email)
+            check("masked_sender_email contains domain", "example.com" in (config.masked_sender_email or ""))
+        finally:
+            if had_email is not None:
+                settings.recovery_email = had_email
+            else:
+                settings.recovery_email = None
+            db.commit()
+
         print("\n==================================================")
         print(f"TEST RESULTS: {passed} PASSED, {failed} FAILED")
         print("==================================================")

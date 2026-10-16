@@ -1168,7 +1168,7 @@ class StorageService:
         file_ids: List[int],
         mode: str = "zip",
         zip_filename: Optional[str] = None,
-        max_raw_bytes: int = 18 * 1024 * 1024,
+        max_raw_bytes: Optional[int] = None,
     ) -> Tuple[List[Tuple[str, str, str]], Optional[str], int]:
         """
         Validates database-indexed files for email sharing and prepares attachments.
@@ -1179,7 +1179,7 @@ class StorageService:
         3. File must be within authorized storage folders (security_service.validate_path_in_approved).
         4. File must NOT be in security-excluded folders (_is_file_excluded).
         5. File must NOT be encrypted.
-        6. Total raw attachment size must not exceed max_raw_bytes (18 MB).
+        6. Total raw attachment size must not exceed max_raw_bytes (configurable via EMAIL_MAX_RAW_MB env var, default 18 MB).
 
         Returns:
             Tuple of:
@@ -1187,6 +1187,12 @@ class StorageService:
             - temp_zip_path: Optional path to created temporary ZIP (needs cleanup after send)
             - total_bytes: Total payload size in bytes
         """
+        # Resolve configurable limit: explicit param > env var > 18 MB default
+        if max_raw_bytes is None:
+            try:
+                max_raw_bytes = int(float(os.getenv("EMAIL_MAX_RAW_MB", "18")) * 1024 * 1024)
+            except (ValueError, TypeError):
+                max_raw_bytes = 18 * 1024 * 1024
         if not file_ids:
             raise StorageServiceError("At least one file must be selected for email sharing.")
 

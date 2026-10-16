@@ -524,7 +524,7 @@ class EmailService:
         sender_name: str = "Memora AI",
         cc_emails: Optional[List[str]] = None,
         bcc_emails: Optional[List[str]] = None,
-        max_message_bytes: int = 25 * 1024 * 1024,
+        max_message_bytes: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Sends an email with attached files (individual files or ZIP archive) via configured SMTP.
@@ -534,6 +534,13 @@ class EmailService:
         Enforces total outgoing message size (headers + body + base64 attachments) <= max_message_bytes.
         Never reveals passwords or credentials in logs or returned data.
         """
+        # Resolve configurable limit: explicit param > env var > 25 MB default
+        if max_message_bytes is None:
+            try:
+                max_message_bytes = int(float(os.getenv("EMAIL_MAX_MESSAGE_MB", "25")) * 1024 * 1024)
+            except (ValueError, TypeError):
+                max_message_bytes = 25 * 1024 * 1024
+
         if not to_email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", to_email.strip()):
             raise ValueError(f"Invalid recipient email address: '{to_email}'")
 

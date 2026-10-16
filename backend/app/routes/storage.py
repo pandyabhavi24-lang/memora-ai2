@@ -18,9 +18,12 @@ from ..schemas import (
     ZipArchiveResponse,
     EmailShareRequest,
     EmailShareResponse,
+    EmailConfigResponse,
 )
+from ..models import SecuritySettings
 from ..services.storage_service import storage_service, StorageServiceError
 from ..services.email_service import email_service
+from ..services.security_service import security_service
 
 logger = logging.getLogger("memora.storage_route")
 
@@ -246,6 +249,41 @@ def create_zip_archive(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal error creating ZIP archive."
         )
+
+
+@router.get("/share/email-config", response_model=EmailConfigResponse)
+def get_email_config(db: Session = Depends(get_db)):
+    """
+    Returns the current email attachment size limits and masked sender identity.
+    The frontend uses this to enforce matching pre-flight checks and display sender info.
+    """
+    try:
+        max_raw_mb = float(os.getenv("EMAIL_MAX_RAW_MB", "18"))
+    except (ValueError, TypeError):
+        max_raw_mb = 18.0
+    try:
+        max_message_mb = float(os.getenv("EMAIL_MAX_MESSAGE_MB", "25"))
+    except (ValueError, TypeError):
+        max_message_mb = 25.0
+
+    max_raw_bytes = int(max_raw_mb * 1024 * 1024)
+
+    # Retrieve masked recovery email for sender display
+    masked_sender = None
+    try:
+        settings = db.query(SecuritySettings).filter(SecuritySettings.id == 1).first()
+        if settings and settings.recovery_email:
+            masked_sender = security_service.mask_email(settings.recovery_email)
+    except Exception:
+        pass  # Non-critical — return null if unavailable
+
+    return EmailConfigResponse(
+        max_raw_mb=max_raw_mb,
+        max_message_mb=max_message_mb,
+        max_raw_bytes=max_raw_bytes,
+        masked_sender_email=masked_sender,
+        sender_display_name="Memora AI",
+    )
 
 
 @router.post("/share/email", response_model=EmailShareResponse)

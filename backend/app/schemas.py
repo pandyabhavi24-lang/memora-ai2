@@ -944,3 +944,12 @@ class EmailShareResponse(BaseModel):
     attachments_count: int
     total_bytes_sent: int
     message: str
+
+
+class EmailConfigResponse(BaseModel):
+    """Returns the current email attachment size limits and masked sender identity."""
+    max_raw_mb: float = Field(..., description="Maximum raw attachment size in MB (pre-MIME encoding)")
+    max_message_mb: float = Field(..., description="Maximum total MIME message size in MB")
+    max_raw_bytes: int = Field(..., description="max_raw_mb converted to bytes for frontend comparison")
+    masked_sender_email: Optional[str] = Field(None, description="Masked recovery email (e.g., d***@gmail.com), or null if not configured")
+    sender_display_name: str = Field("Memora AI", description="Display name used in the From header")

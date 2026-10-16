@@ -126,6 +126,14 @@ class StorageService {
   }
 
   /**
+   * Retrieves email attachment configuration: size limits and masked sender identity.
+   * GET /api/storage/share/email-config
+   */
+  async getEmailConfig() {
+    return await this._fetch('/api/storage/share/email-config');
+  }
+
+  /**
    * Sends selected database-indexed files as email attachments via configured Gmail SMTP.
    * POST /api/storage/share/email
    * @param {Object} payload - { file_ids: number[], to_email: string, mode?: 'zip'|'originals', subject?: string, body?: string, zip_filename?: string }
